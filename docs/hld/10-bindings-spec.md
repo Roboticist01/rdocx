@@ -559,7 +559,10 @@ projection, including when a nested control precedes a link owned by its
 ancestor item. Returned records are detached snapshots, so later document
 mutation cannot alter an earlier result. Each `story_items` or `hyperlinks`
 accessor materializes one native source and owner inventory for the complete
-tuple instead of rebuilding it per returned record.
+tuple instead of rebuilding it per returned record. Hyperlink discovery also
+inventories every exact link namespace scope in one source pass, then extracts
+display text from bounded namespace-complete fragments rather than reparsing
+the story prefix for each record.
 
 `Document::rebuild_toc()` is an additive pre-1.0 native Rust operation. It
 updates only supported existing main-story TOC fields with deterministic

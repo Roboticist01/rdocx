@@ -1519,10 +1519,14 @@ complete rich notes, ranges, fragments, and building blocks.
 | F-275 | Cross-story bookmarks, ranges, and annotations | L |
 | F-276 | Complete fragment conflict and dependency policy | L |
 | F-277 | Glossary and building-block creation | L |
+| F-X133 | Stop rebinding a canonical prefix on every retained element | S |
+| F-X134 | Keep Python story hyperlink snapshots linear | S |
 
 Footnotes precede the parallel endnote surface, then F-274 composes both with
 section policy. F-276 and F-277 land after all related-story dependencies can
-be remapped transactionally.
+be remapped transactionally. F-X133 carries the namespace-bloat correction
+already assigned to S75. F-X134 precedes the feature wave because the hosted
+Python binding gate must be green before new story surfaces expand.
 
 #### Sprint S76, Fields, navigation, and stable templating
 

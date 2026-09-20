@@ -16261,3 +16261,38 @@ ceiling check, and the full workspace verification gate also passed.
 command, date, machine or tool identity, and validation bound can be checked.
 Keep generated Cargo VCS dirtiness out of archive-content comparisons, but do
 not normalize any declared package member.
+
+### F-X134, Keep Python story hyperlink snapshots linear
+
+**Sprint.** S75
+**Completed.** 2026-09-20
+**Size.** S, estimated 1 day, actual 1 day
+
+**What was built.** Native story hyperlink snapshots now batch item and link
+namespace scopes per physical source and extract each link's text from its
+bounded namespace-complete fragment. Both one-story and all-story Python
+snapshot routes retain physical order, nested-owner isolation, relationship
+resolution, and deduplication without reparsing the full story prefix for every
+link.
+
+**Non-obvious choices.** Scope inventory remains native and source-wide, while
+text extraction is fragment-local. A test-only byte counter measures repeated
+prefix work deterministically, so the regression does not depend on machine
+timing.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/10-bindings-spec.md`, `docs/hld/12-testing-strategy.md`, and
+`docs/hld/14-development-backlog.md`.
+
+**Tests.** `story_link_snapshots_do_not_rescan_story_prefix_per_link` is the
+named gate. The unchanged `test_python_story_inventory_scales_linearly` test
+passed twenty consecutive runs, the complete installed Python suite passed 67
+tests, and the pinned Linux `rdocx` and workspace gates passed.
+
+**Hash harness.** Unchanged, 49 of 49.
+
+**Notes for future sessions.** Hyperlink materialization requires the exact
+namespace scope at the link start. Keep that scope in the source-wide batch if
+new story snapshot routes are added.

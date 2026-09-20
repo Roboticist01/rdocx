@@ -5976,6 +5976,33 @@ plain save of a document carrying producer root attributes emits no redundant
 canonical declaration, that the retained attributes still round-trip, and that
 a genuinely new binding is still written.
 
+### F-X134, Keep Python story hyperlink snapshots linear (S)
+
+The owned story hyperlink projection batches story owners, items, and namespace
+scopes, but hyperlink text extraction reparses the complete physical story from
+byte zero for every link. A document with one hyperlink per paragraph therefore
+does quadratic prefix work even though the public Python snapshot API promises
+one bounded native inventory per accessor.
+
+Collect hyperlink spans before materializing their public records, inventory
+the exact namespace scope at every hyperlink start in one source pass, and
+extract each hyperlink text from its namespace-complete bounded fragment. Keep
+relationship resolution, physical source order, nested-owner isolation, and
+deduplication unchanged.
+**Depends on**: F-X116.
+**Test gate**: regression.
+`story_link_snapshots_do_not_rescan_story_prefix_per_link` counts skipped story
+prefix work and proves that doubling a hyperlink-rich story does not restart a
+full-document scan for each link. The installed Python
+`test_python_story_inventory_scales_linearly` gate must pass on the hosted
+macOS binding runner without relaxing its scaling bound.
+
+**Delivered.** Story hyperlink snapshots now inventory each physical source's
+item and hyperlink namespace scopes in bounded passes, then extract link text
+from the namespace-complete hyperlink fragment. The native regression reports
+zero repeated prefix bytes, the unchanged Python scaling test passed twenty
+consecutive runs, and the complete installed Python suite passed 67 tests.
+
 ### F-X021, The hash harness should cover PDF output (M)
 The output-stability harness records `page1.png` and three `word/*.xml` parts
 for each of the seven samples, and no PDF. PDF is a first-class output of this

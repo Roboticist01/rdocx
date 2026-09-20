@@ -1214,9 +1214,10 @@ text boxes remain separate owners and are not folded into the enclosing item.
 and returns each existing `LinkInfo` with its checked `ContentLocation`. This
 keeps nested content-control ownership without reordering interleaved links.
 Owned story-item and story-link snapshots build the package source and owner
-inventory once per accessor. Namespace scopes for all selected owners are
-collected in one source pass, then item text and links are projected from that
-bounded inventory without restarting discovery for each returned value.
+inventory once per accessor. Namespace scopes for all selected owners, items,
+and hyperlink starts are collected in bounded source passes. Item and hyperlink
+text is then projected from namespace-complete fragments without restarting at
+the physical story root for each returned value.
 
 The Python projection materializes each story item as a frozen value with its
 exact XML bytes and the binding revision that produced it. Story mutation

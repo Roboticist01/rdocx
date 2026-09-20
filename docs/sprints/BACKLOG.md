@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)            | 143 | 138 | 0 | 1  |
-| **Total** | **468** | **400** | **0** | **64** |
+| X, Cross-cutting (opportunistic)            | 144 | 139 | 0 | 1  |
+| **Total** | **469** | **401** | **0** | **64** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -687,4 +687,5 @@ regenerated, never hand-edited.
 | F-X131 | Retain only the namespace declarations a root attribute uses | S74 | S | done |
 | F-X132 | Match a retained namespace owner by structure, not by identity | S74 | S | done |
 | F-X133 | Stop rebinding a canonical prefix on every retained element | S75 | S | pending |
+| F-X134 | Keep Python story hyperlink snapshots linear | S75 | S | done |
 <!-- AUTOGEN:backlog-MX END -->

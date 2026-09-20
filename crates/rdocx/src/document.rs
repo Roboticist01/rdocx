@@ -1153,12 +1153,27 @@ impl<'a> StoryItemRef<'a> {
     /// Return modeled hyperlinks in source order with story-scoped targets.
     pub fn links(&self) -> Result<Vec<LinkInfo>> {
         let (source, item) = self.document.story_item_source(&self.location)?;
-        let links = scan_story_item_links(source.xml.as_ref(), &item)?;
+        let item_scopes = story_namespace_scopes_at(source.xml.as_ref(), [item.scan.start])?;
+        let item_scope = item_scopes.get(&item.scan.start).ok_or_else(|| {
+            Error::Other("story item namespace scope was not inventoried".to_owned())
+        })?;
+        let links = scan_story_item_links_with_scope(source.xml.as_ref(), &item, item_scope)?;
+        let link_scopes = story_namespace_scopes_at(
+            source.xml.as_ref(),
+            links.iter().map(|link| link.full.start),
+        )?;
         links
             .into_iter()
             .map(|link| {
-                self.document
-                    .story_link_info(&self.location.story, source.xml.as_ref(), link)
+                let scope = link_scopes.get(&link.full.start).ok_or_else(|| {
+                    Error::Other("story hyperlink namespace scope was not inventoried".to_owned())
+                })?;
+                self.document.story_link_info(
+                    &self.location.story,
+                    source.xml.as_ref(),
+                    link,
+                    scope,
+                )
             })
             .collect()
     }
@@ -4921,6 +4936,7 @@ thread_local! {
     static LAYOUT_INVOCATIONS: Cell<usize> = const { Cell::new(0) };
     static FAIL_NEXT_HEADER_FOOTER_SERIALIZATION: Cell<bool> = const { Cell::new(false) };
     static STORY_SOURCE_BUILDS: Cell<usize> = const { Cell::new(0) };
+    static STORY_TEXT_PREFIX_BYTES: Cell<usize> = const { Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -7827,6 +7843,8 @@ fn story_item_text(xml: &[u8], item: &StoryItemSpan) -> Result<Option<String>> {
         let after = reader.buffer_position() as usize;
         if !active {
             if before != item.scan.start {
+                #[cfg(test)]
+                STORY_TEXT_PREFIX_BYTES.set(STORY_TEXT_PREFIX_BYTES.get() + after - before);
                 if matches!(event, Event::Eof) {
                     break;
                 }
@@ -13141,6 +13159,7 @@ impl Document {
         story: &StoryId,
         xml: &[u8],
         link: StoryLinkSpan,
+        scope: &BTreeMap<String, String>,
     ) -> Result<LinkInfo> {
         let text_item = StoryItemSpan {
             kind: StoryItemKind::Paragraph,
@@ -13151,7 +13170,7 @@ impl Document {
             complex_ancestors: Vec::new(),
             sdt_context: None,
         };
-        let text = story_item_text(xml, &text_item)?.unwrap_or_default();
+        let text = story_item_text_with_scope(xml, &text_item, scope)?.unwrap_or_default();
         let url = link
             .rel_id
             .as_deref()
@@ -13170,13 +13189,19 @@ impl Document {
     pub fn story_links(&self, story: &StoryId) -> Result<Vec<(ContentLocation, LinkInfo)>> {
         let (source, owner) = self.story_source_and_owner(story)?;
         let items = scan_story_items(source.xml.as_ref(), &owner)?;
+        let item_scopes = story_namespace_scopes_at(
+            source.xml.as_ref(),
+            items.iter().map(|item| item.scan.start),
+        )?;
         let mut links = Vec::new();
         for (index, item) in items.into_iter().enumerate() {
-            for link in scan_story_item_links(source.xml.as_ref(), &item)? {
+            let scope = item_scopes.get(&item.scan.start).ok_or_else(|| {
+                Error::Other("story item namespace scope was not inventoried".to_owned())
+            })?;
+            for link in scan_story_item_links_with_scope(source.xml.as_ref(), &item, scope)? {
                 let source_position = link.full.start;
                 let source_end = link.full.end;
                 let owner_width = item.full.end - item.full.start;
-                let info = self.story_link_info(story, source.xml.as_ref(), link)?;
                 links.push((
                     source_position,
                     source_end,
@@ -13187,10 +13212,28 @@ impl Document {
                         index_path: vec![index],
                         is_end: false,
                     },
-                    info,
+                    link,
                 ));
             }
         }
+        let link_scopes = story_namespace_scopes_at(
+            source.xml.as_ref(),
+            links.iter().map(|(_, _, _, _, link)| link.full.start),
+        )?;
+        let mut links = links
+            .into_iter()
+            .map(
+                |(source_position, source_end, owner_width, location, link)| {
+                    let scope = link_scopes.get(&link.full.start).ok_or_else(|| {
+                        Error::Other(
+                            "story hyperlink namespace scope was not inventoried".to_owned(),
+                        )
+                    })?;
+                    let info = self.story_link_info(story, source.xml.as_ref(), link, scope)?;
+                    Ok((source_position, source_end, owner_width, location, info))
+                },
+            )
+            .collect::<Result<Vec<_>>>()?;
         links.sort_by_key(|(source_position, _, owner_width, _, _)| {
             (*source_position, *owner_width)
         });
@@ -13235,6 +13278,7 @@ impl Document {
                     .iter()
                     .flat_map(|(_, items)| items.iter().map(|item| item.scan.start)),
             )?;
+            let mut link_inventories = Vec::new();
             for (story, items) in inventories {
                 let mut links = Vec::new();
                 for (index, item) in items.into_iter().enumerate() {
@@ -13246,7 +13290,6 @@ impl Document {
                         let source_position = link.full.start;
                         let source_end = link.full.end;
                         let owner_width = item.full.end - item.full.start;
-                        let info = self.story_link_info(&story, source.xml.as_ref(), link)?;
                         links.push((
                             source_position,
                             source_end,
@@ -13257,10 +13300,35 @@ impl Document {
                                 index_path: vec![index],
                                 is_end: false,
                             },
-                            info,
+                            link,
                         ));
                     }
                 }
+                link_inventories.push((story, links));
+            }
+            let link_scopes = story_namespace_scopes_at(
+                source.xml.as_ref(),
+                link_inventories
+                    .iter()
+                    .flat_map(|(_, links)| links.iter().map(|(_, _, _, _, link)| link.full.start)),
+            )?;
+            for (story, links) in link_inventories {
+                let mut links = links
+                    .into_iter()
+                    .map(
+                        |(source_position, source_end, owner_width, location, link)| {
+                            let scope = link_scopes.get(&link.full.start).ok_or_else(|| {
+                                Error::Other(
+                                    "story hyperlink namespace scope was not inventoried"
+                                        .to_owned(),
+                                )
+                            })?;
+                            let info =
+                                self.story_link_info(&story, source.xml.as_ref(), link, scope)?;
+                            Ok((source_position, source_end, owner_width, location, info))
+                        },
+                    )
+                    .collect::<Result<Vec<_>>>()?;
                 links.sort_by_key(|(source_position, _, owner_width, _, _)| {
                     (*source_position, *owner_width)
                 });
@@ -24694,6 +24762,25 @@ mod tests {
             assert!(document.story_link_snapshots().unwrap().is_empty());
             assert_eq!(STORY_SOURCE_BUILDS.get(), 1);
         }
+    }
+
+    #[test]
+    fn story_link_snapshots_do_not_rescan_story_prefix_per_link() {
+        let mut document = Document::new();
+        let relationship_id = document.add_hyperlink_relationship("https://example.com");
+        for index in 0..64 {
+            document
+                .add_paragraph("")
+                .add_hyperlink(&format!("link {index}"), &relationship_id);
+        }
+
+        STORY_TEXT_PREFIX_BYTES.set(0);
+        let links = document.story_link_snapshots().unwrap();
+
+        assert_eq!(links.len(), 64);
+        assert_eq!(links.first().unwrap().1.text, "link 0");
+        assert_eq!(links.last().unwrap().1.text, "link 63");
+        assert_eq!(STORY_TEXT_PREFIX_BYTES.get(), 0);
     }
 
     #[test]
