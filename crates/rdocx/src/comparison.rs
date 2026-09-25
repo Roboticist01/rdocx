@@ -398,10 +398,12 @@ impl Document {
                 normalized_package(&original, &original_stories, options, &text_box_markers)?.0;
         }
         if accepted_body != edited_package {
-            return Err(Error::Other(format!(
-                "comparison acceptance does not reproduce the edited stories at {}",
-                first_normalized_mismatch(&accepted_body, &edited_package)
-            )));
+            return Err(comparison_postcondition_error(
+                "acceptance",
+                "edited",
+                &accepted_body,
+                &edited_package,
+            ));
         }
         let mut rejected = candidate.clone_for_staging();
         rejected.reject_all()?;
@@ -410,10 +412,12 @@ impl Document {
         let original_package =
             normalized_package(&original, &original_stories, options, &text_box_markers)?;
         if rejected_package != original_package {
-            return Err(Error::Other(format!(
-                "comparison rejection does not reproduce the original stories at {}",
-                first_normalized_mismatch(&rejected_package, &original_package)
-            )));
+            return Err(comparison_postcondition_error(
+                "rejection",
+                "original",
+                &rejected_package,
+                &original_package,
+            ));
         }
 
         self.commit_staged_mutation(candidate);
@@ -609,6 +613,9 @@ fn remap_equivalent_owner_relationships(
     let mut used = HashSet::new();
     let mut remap = HashMap::new();
     for right in &edited_relationships.items {
+        if right.rel_type != rel_types::IMAGE {
+            continue;
+        }
         let right_payload = relationship_payload(edited, edited_owner, right);
         let Some((index, left)) =
             original_relationships
@@ -632,15 +639,51 @@ fn remap_equivalent_owner_relationships(
     if remap.is_empty() {
         return Ok(());
     }
+    let mut occupied = edited_relationships
+        .items
+        .iter()
+        .map(|relationship| relationship.id.clone())
+        .chain(remap.values().cloned())
+        .collect::<HashSet<_>>();
+    let mut collision_remap = HashMap::new();
+    let remapped_sources = remap.keys().cloned().collect::<HashSet<_>>();
+    for target in remap.values() {
+        if remapped_sources.contains(target)
+            || edited_relationships
+                .items
+                .iter()
+                .all(|relationship| relationship.id != *target)
+        {
+            continue;
+        }
+        let mut ordinal = collision_remap.len() + 1;
+        let replacement = loop {
+            let candidate = format!("rdocxComparison{ordinal}");
+            if occupied.insert(candidate.clone()) {
+                break candidate;
+            }
+            ordinal += 1;
+        };
+        collision_remap.insert(target.clone(), replacement);
+    }
+    collision_remap.extend(remap);
     let source = edited
         .package
         .get_part(edited_owner)
         .ok_or_else(|| Error::Other(format!("missing comparison story {edited_owner}")))?;
-    let updated = crate::document::remap_xml_relationship_ids(source, &remap)?;
+    let updated = crate::document::remap_xml_relationship_ids(source, &collision_remap)?;
     if edited_owner == edited.doc_part_name {
         edited.document = CT_Document::from_xml(&updated)?;
     }
     edited.package.set_part(edited_owner, updated);
+    if let Some(relationships) = edited.package.get_part_rels_mut(edited_owner) {
+        for relationship in &mut relationships.items {
+            if let Some(updated) = collision_remap.get(&relationship.id) {
+                relationship.id.clone_from(updated);
+            }
+        }
+        relationships.to_xml()?;
+    }
     Ok(())
 }
 
@@ -1932,6 +1975,18 @@ pub(crate) fn reopen_staged(candidate: Document) -> Result<Document> {
 }
 
 type NormalizedPackage = (Vec<String>, Vec<(ComparisonStoryKind, String, Vec<String>)>);
+
+fn comparison_postcondition_error(
+    outcome: &str,
+    expected: &str,
+    actual: &NormalizedPackage,
+    wanted: &NormalizedPackage,
+) -> Error {
+    Error::Other(format!(
+        "comparison {outcome} does not reproduce the {expected} stories at {}",
+        first_normalized_mismatch(actual, wanted)
+    ))
+}
 
 fn first_normalized_mismatch(left: &NormalizedPackage, right: &NormalizedPackage) -> String {
     let main_count = left.0.len().min(right.0.len());
@@ -6191,7 +6246,7 @@ fn utf8_error(error: impl std::fmt::Display) -> Error {
 mod tests {
     use super::{
         ComparisonGranularity, ComparisonOptions, FAIL_AFTER_COMPARISON_STAGING,
-        attributed_run_units, story_document, word_fragments,
+        attributed_run_units, comparison_postcondition_error, story_document, word_fragments,
     };
     use crate::Document;
     use rdocx_oxml::document::BodyContent;
@@ -6307,5 +6362,23 @@ mod tests {
         );
         assert_eq!(original.to_bytes().unwrap(), before);
         assert!(std::sync::Arc::ptr_eq(&layout, &original.layout().unwrap()));
+    }
+
+    #[test]
+    fn comparison_postcondition_diagnostic_names_one_item_without_model_bytes() {
+        let actual = (
+            vec!["Drawing(CT_Drawing { huge model })".to_owned()],
+            Vec::new(),
+        );
+        let wanted = (vec!["different".to_owned()], Vec::new());
+        let message =
+            comparison_postcondition_error("acceptance", "edited", &actual, &wanted).to_string();
+
+        assert_eq!(
+            message,
+            "comparison acceptance does not reproduce the edited stories at body story item[0]"
+        );
+        assert!(!message.contains("CT_Drawing"));
+        assert!(message.len() < 1_000);
     }
 }

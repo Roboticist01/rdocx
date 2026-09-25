@@ -30061,23 +30061,63 @@ fn reordered_drawing_paragraphs_accept_without_model_dump() {
         document
     }
 
-    let mut original = picture_document(false, false);
-    let edited = picture_document(true, true);
-    let result = original.compare(&edited, "Ada", "2026-09-25T09:00:00Z");
-    if let Err(error) = &result {
-        let message = error.to_string();
-        assert!(
-            message.contains("story") && message.contains("item"),
-            "{message}"
+    fn producer_relationship_ids(
+        mut document: Document,
+        picture_id: &str,
+        unused_id: Option<&str>,
+    ) -> Document {
+        let bytes = document.to_bytes().unwrap();
+        let mut package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(bytes)).unwrap();
+        let owner = "/word/document.xml";
+        let relationships = package.get_part_rels(owner).unwrap().items.clone();
+        let image_id = |payload: &[u8]| {
+            relationships
+                .iter()
+                .find(|relationship| {
+                    relationship.rel_type == oxml_opc::relationship::rel_types::IMAGE
+                        && package.get_part(&oxml_opc::OpcPackage::resolve_rel_target(
+                            owner,
+                            &relationship.target,
+                        )) == Some(payload)
+                })
+                .unwrap()
+                .id
+                .clone()
+        };
+        let old_picture_id = image_id(b"same image");
+        let old_unused_id = unused_id.map(|_| image_id(b"unused image"));
+        let document_xml = String::from_utf8(package.get_part(owner).unwrap().to_vec()).unwrap();
+        package.set_part(
+            owner,
+            document_xml
+                .replace(
+                    &format!(r#"r:embed="{old_picture_id}""#),
+                    &format!(r#"r:embed="{picture_id}""#),
+                )
+                .into_bytes(),
         );
-        assert!(!message.contains("CT_Drawing"), "{message}");
-        assert!(
-            message.len() < 1_000,
-            "comparison diagnostic was {} bytes",
-            message.len()
-        );
+        for relationship in &mut package.get_part_rels_mut(owner).unwrap().items {
+            if relationship.id == old_picture_id {
+                relationship.id = picture_id.to_owned();
+            } else if old_unused_id.as_ref() == Some(&relationship.id) {
+                relationship.id = unused_id.unwrap().to_owned();
+            }
+        }
+        let mut output = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut output).unwrap();
+        Document::from_bytes(output.get_ref()).unwrap()
     }
-    result.expect("relationship-backed drawing paragraphs must compare by semantics");
+
+    let mut original =
+        producer_relationship_ids(picture_document(false, false), "producerImage", None);
+    let edited = producer_relationship_ids(
+        picture_document(true, true),
+        "producerEditedImage",
+        Some("producerImage"),
+    );
+    original
+        .compare(&edited, "Ada", "2026-09-25T09:00:00Z")
+        .expect("relationship-backed drawing paragraphs must compare by semantics");
 
     let mut accepted = Document::from_bytes(&original.to_bytes().unwrap()).unwrap();
     accepted.accept_all().unwrap();
@@ -30104,16 +30144,6 @@ fn nil_border_tokens_survive_unrelated_document_edits() {
     let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
     let reopened = document_xml(&mut reopened);
     assert_eq!(reopened.matches(r#"w:val="nil""#).count(), 4, "{reopened}");
-}
-
-fn zip_entry_bytes(package: &[u8], name: &str) -> Vec<u8> {
-    use std::io::Read;
-
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).unwrap();
-    let mut entry = archive.by_name(name).unwrap();
-    let mut bytes = Vec::new();
-    entry.read_to_end(&mut bytes).unwrap();
-    bytes
 }
 
 fn zip_entries(package: &[u8]) -> BTreeMap<String, Vec<u8>> {
@@ -30159,22 +30189,16 @@ fn no_op_save_preserves_every_unchanged_part() {
 
     let mut document = Document::from_bytes(&source).unwrap();
     let saved = document.to_bytes().unwrap();
-    modeled_parts.extend([
-        "_rels/.rels".to_owned(),
-        "word/_rels/document.xml.rels".to_owned(),
-    ]);
-    for part in modeled_parts {
-        assert_eq!(
-            zip_entry_bytes(&saved, &part),
-            zip_entry_bytes(&source, &part),
-            "unchanged part {part} was rewritten"
-        );
-    }
+    assert_eq!(zip_entries(&saved), zip_entries(&source));
 
     let mut edited = Document::from_bytes(&source).unwrap();
     edited.add_paragraph("changed");
     let edited = zip_entries(&edited.to_bytes().unwrap());
     let source = zip_entries(&source);
+    assert_eq!(
+        edited.keys().collect::<Vec<_>>(),
+        source.keys().collect::<Vec<_>>()
+    );
     let changed = source
         .iter()
         .filter_map(|(name, value)| (edited.get(name) != Some(value)).then_some(name.as_str()))
