@@ -6003,6 +6003,32 @@ from the namespace-complete hyperlink fragment. The native regression reports
 zero repeated prefix bytes, the unchanged Python scaling test passed twenty
 consecutive runs, and the complete installed Python suite passed 67 tests.
 
+### F-X135, Integrate PRs 146 through 151 and resolve unassigned reports (L)
+
+Integrate the exact reviewed heads of contributor PRs 146 through 151 after
+F-X134 restores the hosted Python gate. Preserve the contributor's focused
+commits where their behavior remains correct, reconcile the overlapping
+PowerPoint facade and binding surfaces as one coherent API, and re-record
+combined package measurements only after the integrated tree is final. PR 148
+also requires the deterministic golden-PNG baseline that its current head did
+not update even though its intentional layout change moves three reviewed
+rasters.
+
+Resolve open Issues 134, 135, 136, 139, and 140, which have no implementation
+pull request. Comparison must track paragraph formatting when producer revision
+identities are present, treat an empty paragraph-property shell as absence, and
+accept a reordered drawing paragraph without printing raw model bytes in a
+failure. A save must retain an authored `nil` border token and preserve every
+unchanged modeled part and relationship part byte for byte. Issue 138 remains
+open because PR 148 addresses only paragraph spacing, cell margins, and border
+bands. It does not implement the reported line-height and row-splitting gaps.
+
+**Depends on**: F-X134.
+**Test gate**: regression.
+`no_op_save_preserves_every_unchanged_part` proves DOCX and PPTX saves retain
+the exact bytes of modeled parts and relationship parts whose typed state did
+not change, while a targeted edit rewrites only its owned part and graph edges.
+
 ### F-X021, The hash harness should cover PDF output (M)
 The output-stability harness records `page1.png` and three `word/*.xml` parts
 for each of the seven samples, and no PDF. PDF is a first-class output of this

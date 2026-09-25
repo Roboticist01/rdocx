@@ -4938,7 +4938,9 @@ impl CT_P {
                 Ok(Event::Empty(ref e)) => {
                     let name = e.name();
                     let prefixes = word_prefixes_at(e, word_prefixes)?;
-                    if is_word_element(name.as_ref(), b"commentRangeStart", &prefixes)
+                    if is_word_element(name.as_ref(), b"pPr", &prefixes) {
+                        properties = Some(CT_PPr::default());
+                    } else if is_word_element(name.as_ref(), b"commentRangeStart", &prefixes)
                         || is_word_element(name.as_ref(), b"commentRangeEnd", &prefixes)
                     {
                         let id = required_word_i32_attribute(e, b"id", &prefixes)?;

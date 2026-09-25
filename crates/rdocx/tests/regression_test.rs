@@ -29968,6 +29968,220 @@ fn settings_part_text(bytes: &[u8]) -> String {
 }
 
 /// F-265, complete run property and inline authoring.
+#[test]
+fn comparison_tracks_paragraph_properties_with_revision_identities() {
+    for attributes in [
+        r#"w:rsidR="00112233""#,
+        r#"w:rsidRDefault="00112234""#,
+        r#"w:rsidP="00112235""#,
+        r#"w:rsidR="00112233" w:rsidRDefault="00112234" w:rsidP="00112235" w:rsidRPr="00112236""#,
+    ] {
+        let original_xml = wrap_word_body(&format!(
+            r#"<w:p {attributes}><w:pPr><w:keepNext/></w:pPr><w:r><w:t>same</w:t></w:r></w:p>"#,
+        ));
+        let edited_xml = wrap_word_body(&format!(
+            r#"<w:p {attributes}><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>same</w:t></w:r></w:p>"#,
+        ));
+        let edited = document_with_content_controls(&edited_xml);
+        let mut compared = document_with_content_controls(&original_xml);
+
+        let diagnostics = compared
+            .compare(&edited, "Ada", "2026-09-25T09:00:00Z")
+            .expect("revision identities must not block paragraph formatting comparison");
+        assert!(diagnostics.is_empty(), "{attributes}: {diagnostics:?}");
+        assert!(document_xml(&mut compared).contains("<w:pPrChange"));
+
+        let tracked = compared.to_bytes().unwrap();
+        let mut accepted = Document::from_bytes(&tracked).unwrap();
+        accepted.accept_all().unwrap();
+        assert!(
+            accepted
+                .compare(&edited, "postcondition", "2026-09-25T09:01:00Z")
+                .unwrap()
+                .is_empty()
+        );
+        let original = document_with_content_controls(&original_xml);
+        let mut rejected = Document::from_bytes(&tracked).unwrap();
+        rejected.reject_all().unwrap();
+        assert!(
+            rejected
+                .compare(&original, "postcondition", "2026-09-25T09:01:00Z")
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn comparison_treats_empty_paragraph_properties_as_absent() {
+    let absent_xml = wrap_word_body(r#"<w:p><w:r><w:t>same</w:t></w:r></w:p>"#);
+    let empty_xml = wrap_word_body(r#"<w:p><w:pPr/><w:r><w:t>same</w:t></w:r></w:p>"#);
+    let formatted_xml = wrap_word_body(
+        r#"<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>same</w:t></w:r></w:p>"#,
+    );
+
+    let empty = document_with_content_controls(&empty_xml);
+    let mut absent = document_with_content_controls(&absent_xml);
+    assert!(
+        absent
+            .compare(&empty, "Ada", "2026-09-25T09:00:00Z")
+            .expect("an empty property shell is semantically absent")
+            .is_empty()
+    );
+
+    let formatted = document_with_content_controls(&formatted_xml);
+    let mut empty = document_with_content_controls(&empty_xml);
+    let diagnostics = empty
+        .compare(&formatted, "Ada", "2026-09-25T09:00:00Z")
+        .expect("an empty property shell must not block a formatting revision");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(document_xml(&mut empty).contains("<w:pPrChange"));
+}
+
+#[test]
+fn reordered_drawing_paragraphs_accept_without_model_dump() {
+    fn picture_document(text_first: bool, reserve_relationship: bool) -> Document {
+        let mut document = Document::new();
+        if reserve_relationship {
+            document.embed_image(b"unused image", "unused.png");
+        }
+        let picture = document.embed_image(b"same image", "same.png");
+        if text_first {
+            document.add_paragraph("text paragraph");
+        }
+        {
+            let mut paragraph = document.add_paragraph("");
+            paragraph
+                .add_run("")
+                .add_picture(&picture, Length::pt(12.0), Length::pt(12.0));
+        }
+        if !text_first {
+            document.add_paragraph("text paragraph");
+        }
+        document
+    }
+
+    let mut original = picture_document(false, false);
+    let edited = picture_document(true, true);
+    let result = original.compare(&edited, "Ada", "2026-09-25T09:00:00Z");
+    if let Err(error) = &result {
+        let message = error.to_string();
+        assert!(
+            message.contains("story") && message.contains("item"),
+            "{message}"
+        );
+        assert!(!message.contains("CT_Drawing"), "{message}");
+        assert!(
+            message.len() < 1_000,
+            "comparison diagnostic was {} bytes",
+            message.len()
+        );
+    }
+    result.expect("relationship-backed drawing paragraphs must compare by semantics");
+
+    let mut accepted = Document::from_bytes(&original.to_bytes().unwrap()).unwrap();
+    accepted.accept_all().unwrap();
+    assert!(
+        accepted
+            .compare(&edited, "postcondition", "2026-09-25T09:01:00Z")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn nil_border_tokens_survive_unrelated_document_edits() {
+    let xml = wrap_word_body(
+        r#"<w:tbl><w:tblPr><w:tblBorders><w:top w:val="nil"/><w:insideH w:val="nil"/></w:tblBorders></w:tblPr><w:tblGrid/><w:tr><w:tc><w:tcPr><w:tcBorders><w:left w:val="nil"/><w:bottom w:val="nil"/></w:tcBorders></w:tcPr><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+    );
+    let mut document = document_with_content_controls(&xml);
+    document.add_paragraph("unrelated edit");
+
+    let saved = document_xml(&mut document);
+    assert_eq!(saved.matches(r#"w:val="nil""#).count(), 4, "{saved}");
+    assert!(!saved.contains(r#"w:val="none""#), "{saved}");
+
+    let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    let reopened = document_xml(&mut reopened);
+    assert_eq!(reopened.matches(r#"w:val="nil""#).count(), 4, "{reopened}");
+}
+
+fn zip_entry_bytes(package: &[u8], name: &str) -> Vec<u8> {
+    use std::io::Read;
+
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).unwrap();
+    let mut entry = archive.by_name(name).unwrap();
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes).unwrap();
+    bytes
+}
+
+fn zip_entries(package: &[u8]) -> BTreeMap<String, Vec<u8>> {
+    use std::io::Read;
+
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).unwrap();
+    let mut entries = BTreeMap::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).unwrap();
+        let name = entry.name().to_owned();
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        entries.insert(name, bytes);
+    }
+    entries
+}
+
+#[test]
+fn no_op_save_preserves_every_unchanged_part() {
+    let mut seed = Document::new();
+    seed.add_paragraph("unchanged");
+    let seed = seed.to_bytes().unwrap();
+    let mut package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed)).unwrap();
+    let mut modeled_parts = Vec::new();
+    for part in [
+        "/word/document.xml",
+        "/word/styles.xml",
+        "/word/numbering.xml",
+        "/docProps/core.xml",
+        "/docProps/app.xml",
+    ] {
+        if let Some(source) = package.get_part(part) {
+            let source = String::from_utf8(source.to_vec()).unwrap();
+            package.set_part(part, source.replacen("><", ">\n<", 1).into_bytes());
+            modeled_parts.push(part.trim_start_matches('/').to_owned());
+        }
+    }
+    assert!(modeled_parts.contains(&"word/document.xml".to_owned()));
+    assert!(modeled_parts.contains(&"word/styles.xml".to_owned()));
+    let mut source = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut source).unwrap();
+    let source = source.into_inner();
+
+    let mut document = Document::from_bytes(&source).unwrap();
+    let saved = document.to_bytes().unwrap();
+    modeled_parts.extend([
+        "_rels/.rels".to_owned(),
+        "word/_rels/document.xml.rels".to_owned(),
+    ]);
+    for part in modeled_parts {
+        assert_eq!(
+            zip_entry_bytes(&saved, &part),
+            zip_entry_bytes(&source, &part),
+            "unchanged part {part} was rewritten"
+        );
+    }
+
+    let mut edited = Document::from_bytes(&source).unwrap();
+    edited.add_paragraph("changed");
+    let edited = zip_entries(&edited.to_bytes().unwrap());
+    let source = zip_entries(&source);
+    let changed = source
+        .iter()
+        .filter_map(|(name, value)| (edited.get(name) != Some(value)).then_some(name.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(changed, ["word/document.xml"]);
+}
+
 mod f265_run_property_regressions {
     use super::*;
     use rdocx::RunFontSlot;

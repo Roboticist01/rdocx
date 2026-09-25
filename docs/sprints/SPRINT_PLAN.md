@@ -1505,29 +1505,16 @@ F-X130 follows F-264 through F-270 so all 27 package READMEs and both PyPI long
 descriptions can present the completed S74 surface with reproducible feature,
 footprint, and performance evidence.
 
-#### Sprint S75, Restore the hosted Python gate
+#### Sprint S75, Related stories and contribution intake
 
-**Goal**: restore the hosted Python binding gate by keeping story hyperlink
-inventory linear, then close the correction onto `main` so independent
-contributor pull requests can be evaluated against a green baseline.
+**Goal**: restore the hosted Python binding gate, integrate the open
+contribution wave and its unassigned issue reports, then complete rich story,
+note, range, fragment, and glossary authoring in one reviewed sprint.
 
 | F-ID | Title | Size |
 |------|-------|------|
 | F-X134 | Keep Python story hyperlink snapshots linear | S |
-
-F-X134 is the dependency prefix originally planned ahead of the related-story
-wave. The remaining S75 stories moved to S75.1 when the default-branch timing
-failure blocked six independent pull requests from obtaining meaningful CI
-results.
-
-#### Sprint S75.1, Related stories, notes, and fragments
-
-**Goal**: make every non-main Word story a first-class authoring location and
-complete rich notes, ranges, fragments, and building blocks after the hosted
-Python gate is restored on `main`.
-
-| F-ID | Title | Size |
-|------|-------|------|
+| F-X135 | Integrate PRs 146 through 151 and resolve unassigned reports | L |
 | F-271 | Uniform rich header and footer editing | L |
 | F-272 | Rich footnote authoring | L |
 | F-273 | Rich endnote authoring | L |
@@ -1537,12 +1524,12 @@ Python gate is restored on `main`.
 | F-277 | Glossary and building-block creation | L |
 | F-X133 | Stop rebinding a canonical prefix on every retained element | S |
 
-Footnotes precede the parallel endnote surface, then F-274 composes both with
-section policy. F-276 and F-277 land after all related-story dependencies can
-be remapped transactionally. F-X133 carries the namespace-bloat correction
-originally assigned to S75. F-X134 landed in S75 and precedes this feature wave
-because the hosted Python binding gate must be green before new story surfaces
-expand.
+F-X134 restores the hosted Python binding gate before F-X135 integrates the
+six remaining contributor branches and repairs open reports without a pull
+request. Footnotes precede the parallel endnote surface, then F-274 composes
+both with section policy. F-276 and F-277 land after all related-story
+dependencies can be remapped transactionally. F-X133 remains the independent
+namespace-bloat correction at the front of the related-story wave.
 
 #### Sprint S76, Fields, navigation, and stable templating
 

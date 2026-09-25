@@ -1329,14 +1329,12 @@ requires identical dimensions and a zero-pixel-difference digest, then reports
 the first differing sample precisely. Reviewed updates use `--update --reason
 <text>`, and an empty reason is rejected.
 
-The gate deliberately compares pixels rather than PDF bytes. The operator
-stream legitimately changes when the per-element Y flip becomes one global
-CTM. The reviewed Poppler 26.01.0 baseline includes exactly four
-stroke-antialias changes. In `invoice`, pixels `(112, 397)` and `(112, 398)`
-swap `fcf5f5ff` and `ffffffff`. In `quote`, pixels `(112, 303)` and
-`(112, 304)` swap `f4fafaff` and `ffffffff`. The other five samples remain
-exact. This is a baseline, not a tolerance, so check mode still requires exact
-equality for all seven buffers. The regression proof runs `--check
+The gate deliberately compares pixels rather than PDF bytes. The reviewed
+Poppler 26.01.0 baseline includes the intended paragraph-spacing, cell-margin,
+and horizontal-table-border layout for `contract`, `invoice`, and `quote`.
+The other four samples remain exact. This is a baseline, not a tolerance, so
+check mode still requires exact equality for all seven buffers. The regression
+proof runs `--check
 --inject-one-pixel <sample>`, copies that generated PNG to a temporary
 directory, changes exactly one decoded pixel, and requires check mode to fail
 with the sample name.

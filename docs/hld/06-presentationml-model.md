@@ -536,7 +536,10 @@ Placeholder type and `idx` remain unchanged through the mutation.
 slide, and notes roots back to their relationship-resolved part names, and uses
 the deterministic OPC writer. Typed edits retain unmodelled attributes and
 children in their raw slots and preserve schema child order. Parts outside
-those owned roots remain the exact source bytes.
+those owned roots remain the exact source bytes. An owned root whose typed
+state is unchanged also retains its exact source bytes. A targeted text edit
+therefore rewrites its slide part and leaves the presentation root, other
+slides, notes, and relationship parts byte-identical.
 
 ## `presentation.xml`
 

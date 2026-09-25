@@ -887,6 +887,9 @@ every `w:cnfStyle` on the row, the cell and the cell's paragraphs. Direct table
 and cell properties remain the final overlay. An explicit
 cell `nil` or `none` border yields to a visible table border only on the exact
 outer edge. The same value remains suppressive on an interior edge.
+The model retains `nil` and `none` as distinct source tokens because an
+unrelated table or document edit must not normalize producer XML. Both tokens
+have the same invisible-border layout behavior.
 
 A table without an explicit style uses the authored default table style.
 Its modeled base width, alignment, indent, borders, shading, look, and cell

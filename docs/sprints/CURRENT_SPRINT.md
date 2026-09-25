@@ -2,11 +2,9 @@
 
 **Milestone**: M24 Modern DOCX authoring completeness.
 
-**Goal**: restore the hosted Python binding gate by keeping story hyperlink
-inventory linear, then close that correction onto `main`. The remaining rich
-story, note, range, fragment, and glossary wave continues intact in S75.1 after
-independent contributor pull requests can be evaluated against a green
-default-branch baseline.
+**Goal**: restore the hosted Python binding gate, integrate the open
+contribution wave and its unassigned issue reports, then complete rich story,
+note, range, fragment, and glossary authoring in one reviewed sprint.
 
 ## Spec references
 
@@ -25,7 +23,7 @@ default-branch baseline.
 - `docs/hld/12-testing-strategy.md`, for public integration, round-trip, and
   pinned differential gates in deterministic font mode.
 - `docs/hld/14-development-backlog.md`, for the F-271 through F-277 and F-X133
-  through F-X134 acceptance contracts, dependencies, sizes, and named test
+  through F-X135 acceptance contracts, dependencies, sizes, and named test
   gates.
 
 ## The wave
@@ -33,6 +31,7 @@ default-branch baseline.
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
 | F-X134 | Keep Python story hyperlink snapshots linear | S | done | - |
+| F-X135 | Integrate PRs 146 through 151 and resolve unassigned reports | L | in-progress | codex |
 | F-X133 | Stop rebinding a canonical prefix on every retained element | S | pending | - |
 | F-271 | Uniform rich header and footer editing | L | pending | - |
 | F-272 | Rich footnote authoring | L | pending | - |
@@ -47,8 +46,10 @@ default-branch baseline.
 Rows are listed in dependency order, not F-ID order.
 
 F-X134 runs first because it repairs the hosted Python binding gate inherited
-from the completed story inventory work. F-X133 is independent and follows the
-completed F-X131 and F-X132 namespace-retention corrections.
+from the completed story inventory work. F-X135 then integrates the six
+remaining contributor branches and repairs Issues 134, 135, 136, 139, and 140,
+which have no implementation pull request. F-X133 is independent and follows
+the completed F-X131 and F-X132 namespace-retention corrections.
 
 F-271, F-272, and F-275 can begin from the completed common story,
 relationship, and annotation foundations. F-273 follows F-272 so endnotes
@@ -61,22 +62,19 @@ every newly modeled related-story dependency and conflict. F-277 follows
 F-276 so public-created glossary entries and building blocks use the completed
 transactional import and remapping policy.
 
-## Carry record
-
-F-271 through F-277 and F-X133 are carried to S75.1 before implementation.
-The completed F-X134 correction is the dependency prefix for that wave and is
-needed on `main` because its predecessor timing defect blocks six independent
-pull requests in the hosted Python binding job. No source, design, review, or
-worker state exists for the carried stories, so S75.1 resumes them from their
-pending backlog contracts.
-
 ## Definition of done for this sprint
 
 - Story hyperlink snapshots inventory namespace scopes once per physical
   source and pass the hosted Python linear-scaling gate without weakening its
   bound.
-- F-271 through F-277 and F-X133 remain pending with their exact contracts and
-  dependency order preserved in S75.1.
+- PRs 146 through 151 are integrated at their pinned reviewed heads with
+  overlaps reconciled, PR 148's missing deterministic golden baseline repaired,
+  and stale per-branch archive measurements replaced by one combined record.
+- Issues 134, 135, 136, 139, and 140 have source-built regressions and complete
+  fixes. Issue 138 stays open unless its remaining line-height and row-splitting
+  gaps are implemented and verified.
+- F-271 through F-277 and F-X133 complete with their exact dependency order and
+  acceptance contracts intact.
 - The full workspace, deterministic hash harness, pinned differential oracles,
   package gates, bindings, and documentation checks pass without unexplained
   output changes.

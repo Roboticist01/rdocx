@@ -1208,6 +1208,12 @@ allocate a collision-safe part only on the first authored value, and the part,
 its relationship and its content-type override are pruned together when the
 last value is removed from a part this facade created.
 
+Facade serialization compares each relationship-resolved typed root with the
+typed state parsed from its current package part. An equal root keeps the exact
+source bytes, including producer formatting and namespace choices. A changed
+root serializes only its owned part. Relationship collections apply the same
+rule to their source `.rels` bytes.
+
 Container-neutral Word story editing also belongs to the `rdocx` facade.
 Concrete `StoryKind`, `StoryId`, `ContentLocation`, `StoryItemKind`, and
 `StoryItemRef` values address the body, cells, headers, footers, ordinary

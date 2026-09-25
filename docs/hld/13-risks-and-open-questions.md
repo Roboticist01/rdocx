@@ -276,6 +276,12 @@ limited to facade-owned graph nodes that are unreachable from modeled and
 opaque references. The document-wide even-page setting is an explicit typed
 operation, and first-page creation enables the section title-page state.
 
+Package save uses typed equality as part of the same invariant boundary.
+Unchanged modeled roots and relationship collections keep their exact source
+bytes. A targeted edit serializes only its owner and any graph edge that the
+operation actually changes. Regression gates compare every ZIP entry after a
+no-op save and enumerate the entries changed by one targeted edit.
+
 Style graph mutations use the same rule. Adding or updating one side of a
 legal paragraph and character link updates the reciprocal edge in the staged
 candidate. Missing targets, incompatible types, duplicate defaults, cycles,

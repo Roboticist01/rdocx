@@ -942,11 +942,11 @@ pub(crate) fn resolved_cell_edge<'a>(
     outer_edge: bool,
 ) -> Option<&'a CT_BorderEdge> {
     let edge = match cell_edge {
-        Some(edge) if edge.val == ST_Border::None && outer_edge => table_edge?,
+        Some(edge) if edge.val.is_none() && outer_edge => table_edge?,
         Some(edge) => edge,
         None => table_edge?,
     };
-    (edge.val != ST_Border::None).then_some(edge)
+    (!edge.val.is_none()).then_some(edge)
 }
 
 /// The height in points a horizontal border takes between two rows. A double

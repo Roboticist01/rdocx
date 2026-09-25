@@ -306,6 +306,13 @@ it clamps a traversal that escapes the root rather than allowing zip-slip.
 
 **`rels_path_to_part_name`** and its inverse are generic path algebra.
 
+`Relationships::from_xml` retains the complete source bytes beside the parsed
+relationship list. `to_xml` returns those bytes while the semantic list is
+unchanged and validates identifiers before either path. Adding, removing, or
+editing a relationship switches to schema-ordered serialization. This keeps a
+no-op package save byte-preserving without allowing stale relationship XML
+after a graph mutation.
+
 ## Relationship types
 
 `rel_types` stays one flat module, grouped by comment. The existing thirteen

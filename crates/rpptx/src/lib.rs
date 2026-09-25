@@ -1026,14 +1026,9 @@ impl Presentation {
             "invalid presentation at byte save boundary: {:?}",
             self.validate()
         );
-        let preserve_signed_parts = self
-            .package
-            .package_rels
-            .get_by_type(rel_types::DIGITAL_SIGNATURE_ORIGIN)
-            .is_some();
         let package_signatures_invalidated = self.package_signatures_invalidated
             || self.retained_package_signature_would_be_invalidated()?;
-        let mut package = self.staged_package(preserve_signed_parts)?;
+        let mut package = self.staged_package(true)?;
         embedded::persist_invalidated_package_signature(
             &mut package,
             package_signatures_invalidated,

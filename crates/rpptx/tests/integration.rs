@@ -22930,3 +22930,60 @@ fn setting_notes_text_creates_the_notes_slide_and_a_missing_notes_master() {
             .starts_with(b"%PDF")
     );
 }
+
+#[test]
+fn no_op_save_preserves_every_unchanged_part() {
+    fn entries(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
+        use std::io::Read;
+
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut entries = BTreeMap::new();
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).unwrap();
+            let name = entry.name().to_owned();
+            let mut value = Vec::new();
+            entry.read_to_end(&mut value).unwrap();
+            entries.insert(name, value);
+        }
+        entries
+    }
+
+    let mut presentation = Presentation::new().unwrap();
+    presentation.add_slide(6).unwrap();
+    presentation
+        .slide_mut(0)
+        .unwrap()
+        .add_textbox(Emu(10), Emu(20), Emu(300), Emu(400))
+        .unwrap()
+        .set_text("unchanged")
+        .unwrap();
+    let mut package = open_opc(&presentation.to_bytes().unwrap(), "preservation source");
+    for part in ["/ppt/presentation.xml", "/ppt/slides/slide1.xml"] {
+        let source = String::from_utf8(package.get_part(part).unwrap().to_vec()).unwrap();
+        package.set_part(part, source.replacen("><", ">\n<", 1).into_bytes());
+    }
+    let source = package_bytes(package);
+
+    let no_op = Presentation::from_bytes(&source)
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    assert_eq!(entries(&no_op), entries(&source));
+
+    let mut edited = Presentation::from_bytes(&source).unwrap();
+    let shape_index = edited.slide(0).unwrap().shapes().count() - 1;
+    edited
+        .slide_mut(0)
+        .unwrap()
+        .shape_mut(shape_index)
+        .unwrap()
+        .set_text("changed")
+        .unwrap();
+    let edited = entries(&edited.to_bytes().unwrap());
+    let source = entries(&source);
+    let changed = source
+        .iter()
+        .filter_map(|(name, value)| (edited.get(name) != Some(value)).then_some(name.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(changed, ["ppt/slides/slide1.xml"]);
+}

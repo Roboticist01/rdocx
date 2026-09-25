@@ -4754,7 +4754,7 @@ fn render_border_edges(
                        start: Point,
                        end: Point,
                        elements: &mut Vec<PositionedElement>| {
-        if edge.val == ST_Border::None {
+        if edge.val.is_none() {
             return;
         }
         let thickness = edge.sz.unwrap_or(4) as f64 / 8.0; // sz is in eighths of a point
