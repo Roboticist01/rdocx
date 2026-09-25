@@ -7390,11 +7390,6 @@ impl<'a> ShapeRef<'a> {
         Some((extent.cx, extent.cy))
     }
 
-    /// Returns the direct clockwise rotation when the shape has a transform.
-    pub fn rotation(&self) -> Option<Angle> {
-        Some(shape_transform(self.child)?.rotation)
-    }
-
     /// Returns the producer-facing non-visual shape id.
     pub fn non_visual_id(&self) -> Option<u32> {
         self.child.non_visual_id()
