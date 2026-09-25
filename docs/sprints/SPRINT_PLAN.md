@@ -1505,10 +1505,26 @@ F-X130 follows F-264 through F-270 so all 27 package READMEs and both PyPI long
 descriptions can present the completed S74 surface with reproducible feature,
 footprint, and performance evidence.
 
-#### Sprint S75, Related stories, notes, and fragments
+#### Sprint S75, Restore the hosted Python gate
+
+**Goal**: restore the hosted Python binding gate by keeping story hyperlink
+inventory linear, then close the correction onto `main` so independent
+contributor pull requests can be evaluated against a green baseline.
+
+| F-ID | Title | Size |
+|------|-------|------|
+| F-X134 | Keep Python story hyperlink snapshots linear | S |
+
+F-X134 is the dependency prefix originally planned ahead of the related-story
+wave. The remaining S75 stories moved to S75.1 when the default-branch timing
+failure blocked six independent pull requests from obtaining meaningful CI
+results.
+
+#### Sprint S75.1, Related stories, notes, and fragments
 
 **Goal**: make every non-main Word story a first-class authoring location and
-complete rich notes, ranges, fragments, and building blocks.
+complete rich notes, ranges, fragments, and building blocks after the hosted
+Python gate is restored on `main`.
 
 | F-ID | Title | Size |
 |------|-------|------|
@@ -1520,13 +1536,13 @@ complete rich notes, ranges, fragments, and building blocks.
 | F-276 | Complete fragment conflict and dependency policy | L |
 | F-277 | Glossary and building-block creation | L |
 | F-X133 | Stop rebinding a canonical prefix on every retained element | S |
-| F-X134 | Keep Python story hyperlink snapshots linear | S |
 
 Footnotes precede the parallel endnote surface, then F-274 composes both with
 section policy. F-276 and F-277 land after all related-story dependencies can
 be remapped transactionally. F-X133 carries the namespace-bloat correction
-already assigned to S75. F-X134 precedes the feature wave because the hosted
-Python binding gate must be green before new story surfaces expand.
+originally assigned to S75. F-X134 landed in S75 and precedes this feature wave
+because the hosted Python binding gate must be green before new story surfaces
+expand.
 
 #### Sprint S76, Fields, navigation, and stable templating
 

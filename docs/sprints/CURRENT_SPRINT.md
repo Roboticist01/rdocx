@@ -2,10 +2,11 @@
 
 **Milestone**: M24 Modern DOCX authoring completeness.
 
-**Goal**: make every non-main Word story a first-class authoring location
-through the same rich, relationship-safe public surface as the main story.
-The sprint completes notes, cross-story ranges, transactional fragments, and
-glossary building blocks with deterministic package ownership and rendering.
+**Goal**: restore the hosted Python binding gate by keeping story hyperlink
+inventory linear, then close that correction onto `main`. The remaining rich
+story, note, range, fragment, and glossary wave continues intact in S75.1 after
+independent contributor pull requests can be evaluated against a green
+default-branch baseline.
 
 ## Spec references
 
@@ -60,26 +61,22 @@ every newly modeled related-story dependency and conflict. F-277 follows
 F-276 so public-created glossary entries and building blocks use the completed
 transactional import and remapping policy.
 
+## Carry record
+
+F-271 through F-277 and F-X133 are carried to S75.1 before implementation.
+The completed F-X134 correction is the dependency prefix for that wave and is
+needed on `main` because its predecessor timing defect blocks six independent
+pull requests in the hosted Python binding job. No source, design, review, or
+worker state exists for the carried stories, so S75.1 resumes them from their
+pending backlog contracts.
+
 ## Definition of done for this sprint
 
-- The same rich subtree can be authored in every header and footer variant and
-  reopens with the correct part-scoped relationships.
-- Rich footnotes and endnotes support public creation, editing, ordering, and
-  removal, retain independent identities, and match the pinned placement and
-  round-trip evidence.
-- Note separators, continuation stories, custom markers, number formats,
-  starts, placement, and section restart policy produce the pinned result
-  without disturbing unrelated numbering.
-- Bookmarks and supported paired ranges work in every valid story and nested
-  container, retain exact endpoints, and reject invalid crossings atomically.
-- Full-story fragment import deterministically remaps every supported package
-  dependency under conflict and leaves no dangling identity or relationship.
-- Public-created glossary entries and building blocks retain classification,
-  behavior, rich content, relationships, and unsupported siblings after
-  insertion and reopen.
 - Story hyperlink snapshots inventory namespace scopes once per physical
   source and pass the hosted Python linear-scaling gate without weakening its
   bound.
+- F-271 through F-277 and F-X133 remain pending with their exact contracts and
+  dependency order preserved in S75.1.
 - The full workspace, deterministic hash harness, pinned differential oracles,
   package gates, bindings, and documentation checks pass without unexplained
   output changes.

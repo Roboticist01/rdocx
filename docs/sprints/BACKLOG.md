@@ -495,13 +495,13 @@ regenerated, never hand-edited.
 | F-268b | Floating table placement and wrap | S74 | M | done |
 | F-269 | Complete section page semantics | S74 | L | done |
 | F-270 | Complete settings and web settings authoring | S74 | L | done |
-| F-271 | Uniform rich header and footer editing | S75 | L | pending |
-| F-272 | Rich footnote authoring | S75 | L | pending |
-| F-273 | Rich endnote authoring | S75 | L | pending |
-| F-274 | Note separators, markers, and restart policy | S75 | L | pending |
-| F-275 | Cross-story bookmarks, ranges, and annotations | S75 | L | pending |
-| F-276 | Complete fragment conflict and dependency policy | S75 | L | pending |
-| F-277 | Glossary and building-block creation | S75 | L | pending |
+| F-271 | Uniform rich header and footer editing | S75.1 | L | pending |
+| F-272 | Rich footnote authoring | S75.1 | L | pending |
+| F-273 | Rich endnote authoring | S75.1 | L | pending |
+| F-274 | Note separators, markers, and restart policy | S75.1 | L | pending |
+| F-275 | Cross-story bookmarks, ranges, and annotations | S75.1 | L | pending |
+| F-276 | Complete fragment conflict and dependency policy | S75.1 | L | pending |
+| F-277 | Glossary and building-block creation | S75.1 | L | pending |
 | F-278 | General simple and complex field builder | S76 | L | pending |
 | F-279 | Pagination field materialization across stories | S76 | L | pending |
 | F-280 | Captions, sequences, and complete cross-references | S76 | M | pending |
@@ -686,6 +686,6 @@ regenerated, never hand-edited.
 | F-X130 | Show package depth, footprint, and speed | S74 | L | done |
 | F-X131 | Retain only the namespace declarations a root attribute uses | S74 | S | done |
 | F-X132 | Match a retained namespace owner by structure, not by identity | S74 | S | done |
-| F-X133 | Stop rebinding a canonical prefix on every retained element | S75 | S | pending |
+| F-X133 | Stop rebinding a canonical prefix on every retained element | S75.1 | S | pending |
 | F-X134 | Keep Python story hyperlink snapshots linear | S75 | S | done |
 <!-- AUTOGEN:backlog-MX END -->
