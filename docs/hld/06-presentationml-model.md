@@ -259,6 +259,11 @@ row-major cell text with tabs between cells and newlines between rows. Other
 shape kinds have no direct text. `ShapeRef` equality is node identity. Two
 handles compare equal only when they borrow the same underlying shape-tree
 child, rather than when separate shapes happen to contain equal XML.
+`ShapeRef::rotation` reads the rotation of the child's own transform and
+returns `None` when the child has none, as a placeholder that inherits its
+geometry does. `ShapeRef::placeholder_type` returns the explicit
+`ST_PlaceholderType` token and `None` when the placeholder omits its type,
+without applying an inherited or default type.
 
 `ShapeRef` also reads the classification and direct formatting the Python
 binding exposes:
