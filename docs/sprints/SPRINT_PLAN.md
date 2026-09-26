@@ -6,7 +6,7 @@ Sprints are dependency and review boundaries, not fixed two-week containers.
 Sprint clocks start at the first `/start-feature` of that sprint, not at a fixed
 calendar date.
 
-The active roadmap runs through S90, with earlier deferred cutover boundaries
+The active roadmap runs through S91, with earlier deferred cutover boundaries
 retained in place. The sizing rationale and compression options are in
 `docs/hld/14-development-backlog.md`.
 
@@ -754,9 +754,9 @@ against `14-development-backlog.md` M14 through M24.
 The order is deliberate and each boundary is a stopping point. Stopping after
 S45 leaves one chart engine serving both families. Stopping after S51 leaves a
 document-automation product. S69 closes the first Word-depth programme. S73
-closes from-scratch generation for the five private business documents, and S80
+closes from-scratch generation for the five private business documents, and S81
 closes the broader modern DOCX authoring boundary. The advanced spreadsheet
-programme starts only after S80 and only if its feasibility gate confirms a gap
+programme starts only after S81 and only if its feasibility gate confirms a gap
 worth filling in the Rust ecosystem.
 
 | Sprints | Milestone | Stories | Days |
@@ -770,8 +770,8 @@ worth filling in the Rust ecosystem.
 | S59 to S64 | M21, presentation depth | 15 | 60 |
 | S65 to S69 | M22, Word depth | 12 | 44 |
 | S70 to S73 | M23, from-scratch business documents | 24 | 112 |
-| S74 to S80 | M24, modern DOCX authoring completeness | 47 | 219 |
-| S81 to S90 | M19, advanced spreadsheets | 21 | 85 |
+| S74 to S81 | M24, modern DOCX authoring completeness | 47 | 219 |
+| S82 to S91 | M19, advanced spreadsheets | 21 | 85 |
 
 The table counts milestone stories only. S70 also carries four cross-cutting
 Issue 67 and Issue 69 stories estimated at 12 developer-days.
@@ -1326,8 +1326,8 @@ F-X083 lands first so Issue 67 is not reimplemented and the live Issue 69
 evidence is attributed correctly. F-X084 through F-X086 are independent after
 that intake and may run in parallel, but only one story may own a rendering
 baseline change. F-240 is the planning authority. F-241 and F-242 consume its
-approved matrix, and F-240 updates the provisional S71 through S80 contents
-before S70 closes.
+approved matrix, and F-240 updates the provisional sprint contents before
+S70 closes. The M24 end gate is S81.
 
 #### Sprint S71, Fresh package, styles, and numbering
 
@@ -1524,11 +1524,11 @@ report after F-X135's spacing and table-margin changes. F-X133 and F-271
 through F-277 carry to S76 at the approved cutoff rather than being described
 as complete in S75.
 
-#### Sprint S76, Related stories, fields, and stable templating
+#### Sprint S76, Rich related-story foundations
 
-**Goal**: finish rich related stories, notes, ranges, fragments, and glossary
-authoring, then build the field-driven navigation and automation structures
-that depend on them.
+**Goal**: establish rich header, footer, and note authoring on the existing
+story model, while removing repeated canonical-prefix rebinding from retained
+elements. Complete the footnote substrate before extending it to endnotes.
 
 | F-ID | Title | Size |
 |------|-------|------|
@@ -1536,6 +1536,19 @@ that depend on them.
 | F-271 | Uniform rich header and footer editing | L |
 | F-272 | Rich footnote authoring | L |
 | F-273 | Rich endnote authoring | L |
+
+F-X133 is independent and may proceed alongside F-271. F-272 establishes
+the note-authoring model that F-273 extends. The other 11 stories from the
+original S76 inventory move together to S77 in dependency order.
+
+#### Sprint S77, Related-story completion, fields, and stable templating
+
+**Goal**: complete note policy, cross-story ranges, fragment transactions,
+and glossary authoring, then build the field-driven navigation and stable
+templating structures that depend on them.
+
+| F-ID | Title | Size |
+|------|-------|------|
 | F-274 | Note separators, markers, and restart policy | L |
 | F-275 | Cross-story bookmarks, ranges, and annotations | L |
 | F-276 | Complete fragment conflict and dependency policy | L |
@@ -1548,15 +1561,16 @@ that depend on them.
 | F-283 | Complete numbering-aware navigation fields | L |
 | F-284 | Stable container-wide template grammar | L |
 
-F-X133 remains independent. F-272 precedes F-273, and F-274 composes both
-note families with section policy. F-276 follows the related-story work, and
-F-277 uses its transactional remapping. F-278 is the shared field construction
-substrate after those carried stories. F-283 integrates numbering only after
-the other navigation structures are complete. F-284 freezes the template
-grammar against the completed container and fragment model. The enlarged S76
-inventory needs a dependency-aware split before implementation starts.
+F-274 composes the S76 note families with section policy. F-276 follows the
+related-story work, and F-277 uses its transactional remapping. F-278 is the
+shared field construction substrate after those stories. F-283 integrates
+numbering only after the other navigation structures are complete. F-284
+freezes the template grammar against the completed container and fragment
+model. This 11-story wave is intentionally larger than the usual sprint
+cadence. Reassess its capacity and split it again before implementation if
+the dependency work cannot be completed within one sprint.
 
-#### Sprint S77, Content controls, forms, and data binding
+#### Sprint S78, Content controls, forms, and data binding
 
 **Goal**: create rather than only fill modern and legacy forms, including
 repeating controls, custom XML bindings, and mail-merge package state.
@@ -1574,7 +1588,7 @@ The generic control lifecycle precedes typed controls and bindings. F-289 is
 the composed form gate. Mail merge remains offline by default and never treats
 unavailable external data as an empty successful result.
 
-#### Sprint S78, Collaboration authoring
+#### Sprint S79, Collaboration authoring
 
 **Goal**: create complete Word revisions, comments, permission ranges, and
 comparison results rather than limiting the facade to existing-content
@@ -1593,7 +1607,7 @@ F-291 establishes revision ownership. F-292 and F-293 can then proceed in
 parallel. F-295 composes the complete model, and F-296 closes ambient identity
 and clock inputs before the sprint gate.
 
-#### Sprint S79, Drawings, diagrams, and embedded content
+#### Sprint S80, Drawings, diagrams, and embedded content
 
 **Goal**: complete the visible and packaged Word object surface across every
 valid insertion point without raw compatibility wrappers or executable payload
@@ -1613,7 +1627,7 @@ F-297 through F-302 build independent object families on the shared
 relationship model. F-303 is their integrated deterministic layout and render
 gate.
 
-#### Sprint S80, Package extensibility and modern DOCX end gate
+#### Sprint S81, Package extensibility and modern DOCX end gate
 
 **Goal**: close package extension, accessibility, conformance, determinism,
 resource, binding, documentation, and stability boundaries for modern DOCX
@@ -1636,7 +1650,7 @@ separate from completing this sprint.
 
 ### M19, Advanced spreadsheets
 
-#### Sprint S81, Spreadsheet decision, corpus and core model
+#### Sprint S82, Spreadsheet decision, corpus and core model
 
 **Goal**: decide whether a material Rust ecosystem gap still exists, then build
 the ownership model only if that decision is affirmative.
@@ -1648,12 +1662,12 @@ the ownership model only if that decision is affirmative.
 | F-185 | Workbook and worksheet model | L |
 
 F-184 is a true go or no-go gate. It reassesses Calamine,
-`rust_xlsxwriter`, `umya-spreadsheet`, `xls`, and any credible successor at S81,
+`rust_xlsxwriter`, `umya-spreadsheet`, `xls`, and any credible successor at S82,
 then classifies each proposed feature as preserved, modeled and editable, or
 executable. If the ecosystem provides the complete required lifecycle by then,
 M19 is archived rather than implemented.
 
-#### Sprint S82, Styles, tables and structured references
+#### Sprint S83, Styles, tables and structured references
 
 **Goal**: model the indexed formatting and structured data semantics that
 ordinary business workbooks rely on.
@@ -1668,7 +1682,7 @@ F-189 lands here because structured table references are part of the formula
 grammar rather than a string convention. The sprint does not yet calculate
 formulas.
 
-#### Sprint S83, Advanced worksheet objects
+#### Sprint S84, Advanced worksheet objects
 
 **Goal**: cover the visible and interactive worksheet surface before the
 streaming package boundary freezes it.
@@ -1681,7 +1695,7 @@ This includes comments, hyperlinks, rich text, drawings, grouping, panes,
 sparklines, page breaks, and modern image cells. External content stays offline
 unless an explicit bounded policy allows retrieval.
 
-#### Sprint S84, Streaming read and write
+#### Sprint S85, Streaming read and write
 
 **Goal**: prove that advanced workbooks remain bounded at the package boundary.
 
@@ -1694,7 +1708,7 @@ Both carry an asserted memory ceiling rather than a hoped-for one. A 100 MB
 fixture is the gate, not a smoke test. Unsupported package parts and
 relationships remain attached through unrelated typed edits.
 
-#### Sprint S85, Calculation and sheet features
+#### Sprint S86, Calculation and sheet features
 
 **Goal**: calculate ordinary and modern formulas, then expose the features that
 depend on their results.
@@ -1710,7 +1724,7 @@ including dynamic arrays, spill ranges, and structured references. Unsupported
 functions retain cached values with diagnostics. F-191 reuses `oxml-chart`
 rather than creating a spreadsheet-only chart engine.
 
-#### Sprint S86, Pivots and the Data Model boundary
+#### Sprint S87, Pivots and the Data Model boundary
 
 **Goal**: move PivotTables from opaque preservation to typed local refresh and
 define the boundary around proprietary analytical models.
@@ -1726,7 +1740,7 @@ and visible cells. Slicers and pivot charts follow that refresh. OLAP, Power
 Pivot, VertiPaq, and DAX state is preserved and inspectable but is not executed
 under this milestone.
 
-#### Sprint S87, Power Query language and package model
+#### Sprint S88, Power Query language and package model
 
 **Goal**: understand and evaluate M independently of external data access.
 
@@ -1739,7 +1753,7 @@ refresh metadata. The language boundary covers the pure transformations needed
 by the corpus before credentials, connectors, or network policy enter the
 runtime.
 
-#### Sprint S88, Power Query execution
+#### Sprint S89, Power Query execution
 
 **Goal**: refresh a bounded, useful connector set without weakening privacy or
 offline determinism.
@@ -1753,7 +1767,7 @@ privacy levels, source combination, timeouts, byte limits, caching, and query
 folding are explicit contracts. Proprietary and tenant-bound connectors remain
 preserved with diagnostics.
 
-#### Sprint S89, Office Scripts-compatible automation
+#### Sprint S90, Office Scripts-compatible automation
 
 **Goal**: automate the same workbook model through a versioned and sandboxed
 TypeScript surface.
@@ -1768,7 +1782,7 @@ not pretend to provide OneDrive, SharePoint, Power Automate, or Microsoft tenant
 identity. It does provide bounded workbook, range, table, chart, pivot, and
 query automation with atomic failure.
 
-#### Sprint S90, Rendering, distribution and advanced end gate
+#### Sprint S91, Rendering, distribution and advanced end gate
 
 **Goal**: close M19 as a headless advanced spreadsheet engine rather than a
 file-format crate.
@@ -1798,12 +1812,12 @@ at the fully verified SHA.
 | End of S64, M21 | Incubating `rpptx` family. Publish the stable family too only when the reviewed dependency diff requires new shared pins. | Collaboration, security, timing, media, SmartArt, ODP, handouts, HTML import, and PDF import form one complete presentation-depth boundary. |
 | End of S69, M22 | Stable `rdocx` family at v0.13.0 through F-X078. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | OfficeMath, fields, dynamic TOC, automation, comparison, embedded content, and modern package variants complete the planned Word-depth boundary. |
 | End of S73, M23 | Stable `rdocx` family after the five-document public-API-only conformance gate passes. | This is the first boundary where the reference business documents can be authored from `Document::new()` without raw XML or a base template. |
-| End of S80, M24 | Stable `rdocx` family after the modern Word authoring capability matrix is closed. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | This boundary completes the planned modern DOCX authoring surface, lossless extensibility, accessibility, strict-package, determinism, binding, and stability gates. |
-| End of S90, conditional M19 | The new `rxlsx` distribution family defined by F-195, plus only the existing families whose reviewed dependency pins moved. | F-195 is the first point where the conditional spreadsheet programme has a complete facade, CLI, WASM, Python, rendering, and advanced lifecycle gate. |
+| End of S81, M24 | Stable `rdocx` family after the modern Word authoring capability matrix is closed. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | This boundary completes the planned modern DOCX authoring surface, lossless extensibility, accessibility, strict-package, determinism, binding, and stability gates. |
+| End of S91, conditional M19 | The new `rxlsx` distribution family defined by F-195, plus only the existing families whose reviewed dependency pins moved. | F-195 is the first point where the conditional spreadsheet programme has a complete facade, CLI, WASM, Python, rendering, and advanced lifecycle gate. |
 
 No intermediate sprint publishes merely because one subsystem compiles. A
 security fix may still justify a separately planned patch release, but ordinary
-feature work waits for the next boundary above. If F-184 archives M19, the S90
+feature work waits for the next boundary above. If F-184 archives M19, the S91
 boundary disappears with the programme and no spreadsheet release namespace is
 created.
 
