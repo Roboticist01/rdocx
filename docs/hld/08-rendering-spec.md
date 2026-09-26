@@ -856,9 +856,18 @@ Facing-page and section-scoped resolution is not modelled.
 
 Two limits are deliberate. A table that does not float still takes the full
 measure beside a float rather than narrowing its columns inside the keep-out
-band, because that is a re-layout rather than a re-position. `w:cantSplit`
-stays a round-trip and reader fact, because making it meaningful needs row
-splitting for the default case.
+band, because that is a re-layout rather than a re-position. A flowed ordinary
+row breaks across pages at complete paragraph boundaries or at line boundaries
+that preserve widow and orphan minima. Each cell advances independently at a
+safe boundary, and a continuation fragment retains the same logical row and
+cell ownership. A page break repeats preceding header rows, records another
+body-layout fragment, and extends vertical borders and fill without adding a
+horizontal border at the artificial break. `w:cantSplit` instead moves the
+whole row when it fits the next page. An unsplittable row taller than a fresh
+page paints once with visible overflow rather than retrying indefinitely.
+Merged, rotated, anchored, nested-table and exact-height rows keep their
+whole-row placement, including exact-height clipping, until those cases have
+a safe fragment model.
 
 A conditional table-style region's `w:trPr` resolves base first, exactly like
 its cell layers. The style's base row properties apply first, then every region

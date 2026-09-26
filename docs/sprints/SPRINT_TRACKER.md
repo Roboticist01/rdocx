@@ -496,6 +496,7 @@ defended.
 | F-X130 | S74 | L | 5 | 1 | 2026-09-20 | Rewrote all 27 package pages around final authoring depth and added reproducible archive footprint and bounded speed evidence |
 | F-X134 | S75 | S | 1 | 1 | 2026-09-20 | Batched hyperlink namespace scopes and bounded story link text extraction so Python snapshots remain linear |
 | F-X135 | S75 | L | 5 | 6 | 2026-09-26 | Integrated PRs 146 through 151, resolved five uncovered issues, audited late PRs 153 and 154, and preserved unchanged package bytes |
+| F-X136 | S75 | L | 5 | 1 | 2026-09-26 | Split ordinary Word table rows across page boundaries, respected cantSplit and exact heights, and removed the source-built footer-only page |
 
 ## Velocity
 

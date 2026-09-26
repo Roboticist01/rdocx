@@ -91,6 +91,337 @@ impl F252OracleArtifacts {
     }
 }
 
+fn fx136_source_fixture() -> Document {
+    let mut document = Document::new();
+    document.set_footer("FOOTER ONLY SENTINEL");
+    {
+        let mut table = document.add_table(2, 1);
+        table.row(0).expect("header row").set_header();
+        table
+            .cell(0, 0)
+            .expect("header cell")
+            .set_text("REPEATED HEADER");
+        let mut cell = table.cell(1, 0).expect("long body cell");
+        cell.set_text("ROW LINE 00");
+        cell.paragraph_mut(0)
+            .expect("first body paragraph")
+            .set_line_spacing(16.0);
+        for index in 1..70 {
+            cell.add_paragraph(&format!("ROW LINE {index:02}"))
+                .set_line_spacing(16.0);
+        }
+    }
+    document.add_paragraph("");
+    document
+        .add_paragraph("HEADING AFTER TABLE")
+        .page_break_before(true);
+    document
+}
+
+#[test]
+fn table_row_breaks_before_footer_only_page_and_repeats_header() {
+    let document = fx136_source_fixture();
+    let result = document
+        .layout_deterministic()
+        .expect("the long table lays out");
+    let table_fragments = result.body_layout_fragments(0).expect("table body owner");
+    assert!(
+        table_fragments.len() >= 2,
+        "a row taller than one page must contribute table fragments on both pages: {table_fragments:?}"
+    );
+
+    let pages: Vec<_> = result
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    assert!(
+        pages
+            .iter()
+            .all(|page| !page.replace("FOOTER ONLY SENTINEL", "").trim().is_empty()),
+        "a page carries only the footer: {pages:?}"
+    );
+    for index in 0..70 {
+        let tag = format!("ROW LINE {index:02}");
+        assert_eq!(
+            pages.iter().filter(|page| page.contains(&tag)).count(),
+            1,
+            "row text is missing or duplicated: {tag}"
+        );
+    }
+    assert!(
+        pages
+            .iter()
+            .filter(|page| page.contains("REPEATED HEADER"))
+            .count()
+            >= 2,
+        "header did not repeat on the row continuation: {pages:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires pinned LibreOffice and Poppler paths in FX136 oracle environment"]
+fn table_row_page_membership_matches_pinned_libreoffice() {
+    let soffice = std::env::var_os("RDOCX_FX136_SOFFICE").expect("pinned soffice path");
+    let pdftotext = std::env::var_os("RDOCX_FX136_PDFTOTEXT").expect("pinned pdftotext path");
+    let pdftoppm = std::env::var_os("RDOCX_FX136_PDFTOPPM").expect("pinned pdftoppm path");
+    let version = std::process::Command::new(&soffice)
+        .arg("--version")
+        .output()
+        .expect("LibreOffice version");
+    assert!(
+        String::from_utf8_lossy(&version.stdout).contains("LibreOffice 26.2.5.2 "),
+        "the LibreOffice oracle is not pinned"
+    );
+    let version = std::process::Command::new(&pdftoppm)
+        .arg("-v")
+        .output()
+        .expect("Poppler version");
+    assert!(
+        String::from_utf8_lossy(&version.stderr).contains("pdftoppm version 26.01.0"),
+        "the Poppler oracle is not pinned"
+    );
+
+    let artifacts = F252OracleArtifacts::create(
+        std::env::temp_dir().join(format!("rdocx-fx136-oracle-{}", std::process::id())),
+    );
+    let source = artifacts.path().join("fixture.docx");
+    let pdf = artifacts.path().join("fixture.pdf");
+    let mut document = fx136_source_fixture();
+    document.save(&source).expect("save source-built fixture");
+    let own = document
+        .layout_deterministic()
+        .expect("deterministic layout");
+    let own_pages: Vec<_> = own
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    let conversion = std::process::Command::new(&soffice)
+        .arg(format!(
+            "-env:UserInstallation=file://{}/profile",
+            artifacts.path().display()
+        ))
+        .args(["--headless", "--convert-to", "pdf", "--outdir"])
+        .arg(artifacts.path())
+        .arg(&source)
+        .output()
+        .expect("LibreOffice conversion");
+    assert!(conversion.status.success(), "LibreOffice conversion failed");
+    let extracted = std::process::Command::new(&pdftotext)
+        .arg("-layout")
+        .arg(&pdf)
+        .arg("-")
+        .output()
+        .expect("extract oracle pages");
+    assert!(extracted.status.success(), "PDF text extraction failed");
+    let text = String::from_utf8(extracted.stdout).expect("PDF text is UTF-8");
+    let oracle_pages: Vec<_> = text
+        .split('\x0c')
+        .filter(|page| !page.trim().is_empty())
+        .collect();
+    assert_eq!(own_pages.len(), oracle_pages.len(), "page count differs");
+    for index in 0..70 {
+        let tag = format!("ROW LINE {index:02}");
+        let own_page = own_pages.iter().position(|page| page.contains(&tag));
+        let oracle_page = oracle_pages.iter().position(|page| page.contains(&tag));
+        assert_eq!(own_page, oracle_page, "page membership differs for {tag}");
+    }
+    for marker in ["REPEATED HEADER", "HEADING AFTER TABLE"] {
+        let own_occurrences: Vec<_> = own_pages
+            .iter()
+            .enumerate()
+            .filter_map(|(index, page)| page.contains(marker).then_some(index))
+            .collect();
+        let oracle_occurrences: Vec<_> = oracle_pages
+            .iter()
+            .enumerate()
+            .filter_map(|(index, page)| page.contains(marker).then_some(index))
+            .collect();
+        assert_eq!(own_occurrences, oracle_occurrences, "{marker} pages differ");
+    }
+
+    let raster = std::process::Command::new(&pdftoppm)
+        .args(["-gray", "-r", "72"])
+        .arg(&pdf)
+        .arg(artifacts.path().join("page"))
+        .output()
+        .expect("rasterise oracle pages");
+    assert!(raster.status.success(), "PDF rasterisation failed");
+    for page in 1..=oracle_pages.len() {
+        let pgm = std::fs::read(artifacts.path().join(format!("page-{page}.pgm")))
+            .expect("read oracle PGM");
+        let header_end = pgm
+            .iter()
+            .enumerate()
+            .filter(|(_, byte)| **byte == b'\n')
+            .nth(2)
+            .map(|(index, _)| index + 1)
+            .expect("PGM header");
+        assert_eq!(&pgm[..3], b"P5\n");
+        assert_eq!(&pgm[header_end - 4..header_end], b"255\n");
+        let width = 612;
+        let pixels = &pgm[header_end..];
+        assert_eq!(pixels.len(), width * 792);
+        let ink = (72..700)
+            .flat_map(|y| (72..540).map(move |x| pixels[y * width + x]))
+            .filter(|pixel| *pixel < 245)
+            .count();
+        let fraction = ink as f64 / (468 * 628) as f64;
+        assert!(
+            fraction >= 0.001,
+            "page {page} has only {fraction:.4} body ink"
+        );
+    }
+}
+
+#[test]
+fn table_row_split_policy_respects_cant_split_and_exact_height() {
+    let mut unsplittable = Document::new();
+    for index in 0..35 {
+        unsplittable.add_paragraph(&format!("INTRO {index:02}"));
+    }
+    {
+        let mut table = unsplittable.add_table(1, 1);
+        table.row(0).expect("row").set_cant_split();
+        let mut cell = table.cell(0, 0).expect("cell");
+        cell.set_text("CANT SPLIT 00");
+        for index in 1..20 {
+            cell.add_paragraph(&format!("CANT SPLIT {index:02}"));
+        }
+    }
+    let result = unsplittable.layout_deterministic().expect("layout");
+    let pages: Vec<_> = result
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    assert!(
+        pages.len() >= 2,
+        "fixture did not reach a page break: {pages:?}"
+    );
+    assert!(
+        !pages[0].contains("CANT SPLIT"),
+        "cantSplit row was placed partly on the previous page: {pages:?}"
+    );
+    assert!(pages[1].contains("CANT SPLIT 19"));
+
+    let mut exact = Document::new();
+    {
+        let mut table = exact.add_table(1, 1);
+        table
+            .row(0)
+            .expect("row")
+            .set_height_exact(Length::pt(24.0));
+        let mut cell = table.cell(0, 0).expect("cell");
+        cell.set_text("EXACT 00");
+        for index in 1..70 {
+            cell.add_paragraph(&format!("EXACT {index:02}"));
+        }
+    }
+    let result = exact.layout_deterministic().expect("layout");
+    assert_eq!(result.layout.pages.len(), 1, "exact row must not fragment");
+}
+
+#[test]
+fn table_row_fragments_preserve_merge_and_body_ownership() {
+    let mut document = Document::new();
+    let tokens = (0..800)
+        .map(|index| format!("TOKEN{index:04}"))
+        .collect::<Vec<_>>();
+    {
+        let mut table = document.add_table(1, 1);
+        table.cell(0, 0).expect("cell").set_text(&tokens.join(" "));
+    }
+    let result = document.layout_deterministic().expect("layout");
+    let fragments = result.body_layout_fragments(0).expect("table owner");
+    assert!(
+        fragments.len() >= 2,
+        "long cell paragraph did not split: fragments={fragments:?}, pages={}",
+        result.layout.pages.len()
+    );
+    let pages: Vec<_> = result
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    let all_text = pages.concat();
+    for token in tokens {
+        assert_eq!(
+            all_text.matches(&token).count(),
+            1,
+            "wrapped cell text was lost or repeated: {token}"
+        );
+    }
+
+    let mut merged = Document::new();
+    {
+        let mut table = merged.add_table(2, 1);
+        table
+            .cell(0, 0)
+            .expect("merge restart")
+            .set_v_merge_restart();
+        table
+            .cell(0, 0)
+            .expect("merge owner")
+            .set_text("MERGED OWNER");
+        table
+            .cell(1, 0)
+            .expect("merge continuation")
+            .set_v_merge_continue();
+    }
+    let merged_layout = merged.layout_deterministic().expect("merged layout");
+    let merged_text: String = merged_layout
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    assert_eq!(merged_text.matches("MERGED OWNER").count(), 1);
+}
+
+#[test]
+fn table_row_fragments_keep_multicell_text_once() {
+    let mut document = Document::new();
+    {
+        let mut table = document.add_table(1, 2);
+        for column in 0..2 {
+            let mut cell = table.cell(0, column).expect("cell");
+            let prefix = if column == 0 { "LEFT" } else { "RIGHT" };
+            cell.set_text(&format!("{prefix} 00"));
+            let limit = if column == 0 { 70 } else { 55 };
+            for index in 1..limit {
+                cell.add_paragraph(&format!("{prefix} {index:02}"));
+            }
+        }
+    }
+    let result = document.layout_deterministic().expect("layout");
+    assert!(
+        result.body_layout_fragments(0).expect("table owner").len() >= 2,
+        "multi-cell row did not continue"
+    );
+    let pages: Vec<_> = result
+        .layout
+        .pages
+        .iter()
+        .map(|page| f252_page_text(page))
+        .collect();
+    for (prefix, limit) in [("LEFT", 70), ("RIGHT", 55)] {
+        for index in 0..limit {
+            let tag = format!("{prefix} {index:02}");
+            assert_eq!(
+                pages.iter().filter(|page| page.contains(&tag)).count(),
+                1,
+                "multi-cell text is missing or duplicated: {tag}"
+            );
+        }
+    }
+}
+
 impl Drop for F252OracleArtifacts {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.directory);

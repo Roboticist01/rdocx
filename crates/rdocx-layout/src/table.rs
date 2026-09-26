@@ -253,6 +253,8 @@ pub struct TableRow {
     pub height: f64,
     /// Whether this row is a header row.
     pub is_header: bool,
+    /// Whether Word forbids a page break inside this row.
+    pub cant_split: bool,
     /// Distance in points from the table origin to this row's first painted
     /// cell, resolved from the row's omitted grid columns and their width.
     ///
@@ -814,6 +816,7 @@ fn layout_table_inner(
             cells,
             height: row_height,
             is_header,
+            cant_split: row_properties.cant_split.unwrap_or(false),
             offset_left,
         });
         row_semantics.push(RowSemantics {

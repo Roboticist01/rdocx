@@ -16353,3 +16353,42 @@ archive dry run on uncommitted source honest with `--allow-dirty`, then rerun
 the strict command without that flag at sprint close. PRs 146 through 154 and
 their resolved issues still need main integration and specific contributor
 thanks. Do not close Issue 138 before its remaining pagination work passes.
+
+### F-X136, Fix table row breaks and footer-only pages
+
+**Sprint.** S75
+**Completed.** 2026-09-26
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Ordinary flowed table rows now fragment at paragraph or
+guarded line boundaries when they span pages. The layout retains every source
+line and cell owner once, repeats leading header rows, preserves continuation
+borders and body fragments, and honors authored `w:cantSplit`. Exact-height,
+anchored, nested, merged, and rotated cases keep a bounded whole-row fallback.
+
+**Non-obvious choices.** The source-built acceptance fixture uses explicit
+line spacing for its pinned LibreOffice comparison because host Calibri font
+substitution gives unlike natural line advances. The private 53-page reporter
+file and Microsoft Word were unavailable, so this proves the isolated break
+mechanism rather than claiming to reproduce that package exactly.
+
+**Deviations from the design plan.** The initial 0.2 percent body-ink floor
+would reject a legitimate heading-only page. The observed pinned render led
+to a reviewed 0.1 percent floor. No production line-advance change was needed.
+
+**Spec sections touched.** `docs/hld/08-rendering-spec.md`,
+`docs/hld/10-bindings-spec.md`, `docs/hld/12-testing-strategy.md`, and
+`docs/hld/14-development-backlog.md`.
+
+**Tests.** `table_row_breaks_before_footer_only_page_and_repeats_header` is
+the named gate and failed before the implementation. The changed-crate tests,
+warnings-denied clippy and rustdoc, pinned LibreOffice comparison, seven
+golden buffers, 49 hash entries, repository-policy suite, 27 README pages,
+and locally patched 22-package dry run passed. Microscope pass 3 reported
+zero defects and zero smells.
+
+**Hash harness.** Unchanged, 49 of 49.
+
+**Notes for future sessions.** The original private file still needs reporter
+validation if it becomes available. Keep split-row fallback explicit for
+unsupported ownership and geometry cases rather than duplicating content.

@@ -6030,6 +6030,27 @@ bands. It does not implement the reported line-height and row-splitting gaps.
 the exact bytes of modeled parts and relationship parts whose typed state did
 not change, while a targeted edit rewrites only its owned part and graph edges.
 
+### F-X136, Fix table row breaks and footer-only pages (L)
+
+Complete Issue 138 after the paragraph-spacing, cell-margin, and border-band
+portion delivered by F-X135. A source-built page-height fixture places a
+repeated-header table before an empty following paragraph and a heading with
+`w:pageBreakBefore`. Correct row measurement and default row fragmentation
+must not leave a page carrying only the footer. Splitting ordinary rows
+preserves cell text order, border ownership, repeated headers, and body-layout
+fragments. Rows with vertical merges remain whole until a safe merge-fragment
+model exists. `w:cantSplit` moves a row whole when
+it fits on the next page. Explicit exact row heights retain their clipping
+contract. The private reporter document is unavailable, so the source-built
+cases pin the reproducible boundary rather than claiming its exact 53-page
+render has been reproduced.
+
+**Depends on**: F-X135.
+**Test gate**: regression.
+`table_row_breaks_before_footer_only_page_and_repeats_header` asserts the
+footer-only page is absent, every body line appears once in reading order,
+and the table header repeats on the continuation page.
+
 ### F-X021, The hash harness should cover PDF output (M)
 The output-stability harness records `page1.png` and three `word/*.xml` parts
 for each of the seven samples, and no PDF. PDF is a first-class output of this

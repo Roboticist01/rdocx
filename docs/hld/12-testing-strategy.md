@@ -14,6 +14,15 @@ exactly one as its test gate.
 | `golden` | Byte or pixel comparison against a recorded baseline | the hash harness |
 | `differential` | Compared against an external oracle | LibreOffice for renders, python-docx and python-pptx for the bindings |
 
+The table-row pagination regression uses source-built tagged lines and a
+footer-only-page sentinel because Issue 138's private 53-page package is not
+available. The deterministic layout must place each tag on exactly one page,
+retain table body fragments, and repeat headers only on continuation pages.
+The corresponding LibreOffice comparison requires the pinned 26.2.5.2 build
+and Poppler 26.01.0. It checks tagged-line page membership and a nonempty
+body-ink floor outside the footer. A source-built pass does not claim that the
+unavailable private package has been reproduced.
+
 The complete run-property and inline story compares against the recorded
 WordprocessingML for `EG_RPrBase` rather than a fresh Word save, because Word
 GUI capture is not available on the development machine. The no-repair

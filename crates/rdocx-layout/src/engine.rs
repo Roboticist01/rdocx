@@ -17205,6 +17205,7 @@ mod tests {
                     cells: vec![cell(true)],
                     height: 12.0,
                     is_header: true,
+                    cant_split: false,
                     offset_left: 0.0,
                 },
                 table::TableRow {
@@ -17212,6 +17213,7 @@ mod tests {
                     cells: vec![cell(false)],
                     height: 12.0,
                     is_header: false,
+                    cant_split: false,
                     offset_left: 0.0,
                 },
             ],

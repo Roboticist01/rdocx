@@ -415,6 +415,12 @@ valid.
 
 ## Native Word facade stability
 
+The pre-1.0 `rdocx-layout::TableRow` projection carries a public
+`cant_split: bool` alongside its header and height facts. Direct and
+style-resolved `w:cantSplit` values therefore reach pagination. External Rust
+struct literals for `TableRow` must name the new field. The authored `rdocx`
+row facade and Python, WASM, and CLI authoring surfaces do not change.
+
 The public `rdocx` facade is the common source for native, Python, WASM, and
 CLI consumers. Custom lists are created with `Document::add_list_definition`
 from up to nine `ListLevel` values. Each value can select any standard

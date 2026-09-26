@@ -366,6 +366,10 @@ MEASUREMENT_COLUMNS = (
     "Measured on",
 )
 MEASUREMENT_DATE = "2026-09-19"
+ARCHIVE_REMEASUREMENT_DATES = {
+    "rdocx": "2026-09-26",
+    "rdocx-layout": "2026-09-26",
+}
 MEASUREMENT_PLATFORM = "macOS 26.6.2, Apple M5 Max, arm64"
 ARCHIVE_COMPRESSION_TOLERANCE_BYTES = 64
 ARCHIVE_MEASUREMENTS = {
@@ -378,10 +382,10 @@ ARCHIVE_MEASUREMENTS = {
     "oxml-opc": (92_122, 355_510, 12),
     "oxml-pdf": (66_015, 304_432, 14),
     "oxml-sml": (12_511, 49_803, 6),
-    "rdocx": (1_089_633, 6_487_073, 36),
+    "rdocx": (1_092_256, 6_498_484, 36),
     "rdocx-cli": (33_805, 145_256, 8),
     "rdocx-html": (15_486, 63_894, 11),
-    "rdocx-layout": (253_959, 1_378_203, 15),
+    "rdocx-layout": (255_752, 1_385_701, 15),
     "rdocx-opc": (3_655, 9_668, 6),
     "rdocx-oxml": (367_500, 2_380_047, 32),
     "rdocx-pdf": (8_111, 26_758, 6),
@@ -420,7 +424,7 @@ def archive_row(package: str) -> MeasurementRow:
         f"Tracked `{package}` package inventory",
         "`python3 scripts/readme_doctests.py --record-measurements`",
         "gzip archive bytes, tar member bytes, tar member count",
-        MEASUREMENT_DATE,
+        ARCHIVE_REMEASUREMENT_DATES.get(package, MEASUREMENT_DATE),
     )
 
 
