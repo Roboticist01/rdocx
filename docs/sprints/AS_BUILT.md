@@ -16357,6 +16357,8 @@ The integrated full gate exposed one M21 portable deck SHA made stale by the
 intended PPTX unchanged-part preservation. The active source pin now names the
 new deterministic bytes, while the historical manual PowerPoint oracle keeps
 its original SHA and is not claimed to validate the revised source.
+The packaged `rpptx` integration test changes its archive footprint to
+407,658 compressed bytes and 2,122,094 member bytes across 16 members.
 
 ### F-X136, Fix table row breaks and footer-only pages
 
