@@ -16353,6 +16353,10 @@ archive dry run on uncommitted source honest with `--allow-dirty`, then rerun
 the strict command without that flag at sprint close. PRs 146 through 154 and
 their resolved issues still need main integration and specific contributor
 thanks. Do not close Issue 138 before its remaining pagination work passes.
+The integrated full gate exposed one M21 portable deck SHA made stale by the
+intended PPTX unchanged-part preservation. The active source pin now names the
+new deterministic bytes, while the historical manual PowerPoint oracle keeps
+its original SHA and is not claimed to validate the revised source.
 
 ### F-X136, Fix table row breaks and footer-only pages
 

@@ -103,6 +103,11 @@ regression. The complete contributor test inventory, both Python suites, the
 scoped feature gate, hash harness, golden-PNG harness, and package checks are
 also mandatory. The full workspace gate runs once over the integrated sprint.
 
+The integrated full gate found one stale M21 portable source hash after
+unchanged-part PPTX preservation. Its portable fixture is pinned to the new
+deterministic source bytes. The older SHA remains attached to the ignored
+historical PowerPoint recording, which is not relabelled as current evidence.
+
 ## HLD impact
 
 - `docs/hld/03-architecture.md`

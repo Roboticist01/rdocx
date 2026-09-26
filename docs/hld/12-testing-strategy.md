@@ -1625,7 +1625,10 @@ timeline, three notes pages, and a three-up handout. Save and reopen preserve
 those semantic surfaces and real source mutations change the static, animated,
 notes, and handout outputs. This portable test classifies the minimal SmartArt
 render as an unsupported fallback and does not claim authentic SmartArt raster
-fidelity. A separate ignored macOS reference-only writer reads SHA-256-pinned
+fidelity. The portable source hash tracks current deterministic serialization.
+Its legacy PowerPoint recording retains the historical source hash and is not
+valid evidence for changed source bytes without a new capture. A separate
+ignored macOS reference-only writer reads SHA-256-pinned
 authentic layout, quick-style, and colour resources and emits corrected signed
 and signature-free sources for manual oracle capture. The mandatory ignored
 release oracle does not read those installed resources. It reads the captured

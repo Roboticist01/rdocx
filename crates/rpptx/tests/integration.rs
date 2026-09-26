@@ -10295,7 +10295,7 @@ fn m21_assert_representative_semantics(
 #[test]
 fn m21_minimal_smartart_source_classifies_the_unsupported_fallback() {
     let bytes = m21_minimal_smartart_fallback_deck_bytes();
-    assert_eq!(sha256_bytes(&bytes), M21_UNSIGNED_SOURCE_SHA256);
+    assert_eq!(sha256_bytes(&bytes), M21_CURRENT_MINIMAL_SOURCE_SHA256);
     let presentation = Presentation::from_bytes(&bytes).unwrap();
     let (_, layout) = presentation.render_deterministic().unwrap();
     assert_eq!(
@@ -10567,7 +10567,11 @@ struct M21RecordedMovieSample {
 }
 
 #[cfg(all(feature = "digital-signatures", feature = "render"))]
-const M21_UNSIGNED_SOURCE_SHA256: &str =
+const M21_CURRENT_MINIMAL_SOURCE_SHA256: &str =
+    "ba314e60fab74a61480a8eb9f19e037c5be6e1926cdabc9bacb9105904c78b3a";
+
+#[cfg(all(feature = "digital-signatures", feature = "render"))]
+const M21_LEGACY_UNSIGNED_SOURCE_SHA256: &str =
     "00c98ad616bd4cc851065dca65c7252d964c1b66eedbf620027ace6341fbabde";
 
 #[cfg(all(feature = "digital-signatures", feature = "render"))]
@@ -11244,12 +11248,12 @@ fn m21_corrected_signed_outputs_match_powerpoint() {
 
 #[cfg(all(feature = "digital-signatures", feature = "render"))]
 #[test]
-#[ignore = "requires RPPTX_M21_LEGACY_STATIC_PDF"]
+#[ignore = "historical source SHA and RPPTX_M21_LEGACY_STATIC_PDF, not the current portable source"]
 fn m21_recorded_minimal_smartart_oracle_classifies_blank_powerpoint_page() {
     let unsigned_source_bytes = m21_minimal_smartart_fallback_deck_bytes();
     assert_eq!(
         sha256_bytes(&unsigned_source_bytes),
-        M21_UNSIGNED_SOURCE_SHA256
+        M21_LEGACY_UNSIGNED_SOURCE_SHA256
     );
     let static_pdf = PathBuf::from(
         std::env::var_os("RPPTX_M21_LEGACY_STATIC_PDF")
