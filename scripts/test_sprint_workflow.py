@@ -9368,7 +9368,11 @@ Pedro Assumpcao and the rdocx maintainers.
         )
         verify_paths = self.assert_repository_path_claims_resolve(
             verify,
-            generated_claims={"*.crate", "target/package"},
+            generated_claims={
+                "*.crate",
+                "target/package",
+                ".claude/scratch/<F-ID>-progress.md",
+            },
         )
         self.assertIn("docs/hld/00-vision.md", claude_paths)
         self.assertIn(".github/workflows/publish.yml", verify_paths)
@@ -9469,6 +9473,14 @@ Pedro Assumpcao and the rdocx maintainers.
                 verify.replace(
                     ".github/workflows/publish.yml",
                     ".github/workflows/missing.yml",
+                    1,
+                ),
+            ),
+            "ignored-scratch-path": (
+                claude,
+                verify.replace(
+                    ".claude/scratch/<F-ID>-progress.md",
+                    ".claude/scratch/<F-ID>-missing.md",
                     1,
                 ),
             ),
