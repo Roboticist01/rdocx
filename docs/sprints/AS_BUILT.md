@@ -16296,3 +16296,60 @@ tests, and the pinned Linux `rdocx` and workspace gates passed.
 **Notes for future sessions.** Hyperlink materialization requires the exact
 namespace scope at the link start. Keep that scope in the source-wide batch if
 new story snapshot routes are added.
+
+### F-X135, Integrate PRs 146 through 151 and resolve unassigned reports
+
+**Sprint.** S75
+**Completed.** 2026-09-26
+**Size.** L, estimated 5 days, actual 6 days
+
+**What was built.** Integrated the reviewed contributor behavior from PRs 146
+through 151 across TOC rebuilding, slide text layout, Word table and spacing
+rendering, PowerPoint Python authoring, and structured PowerPoint CLI commands.
+Source-built regressions and fixes resolve Issues 134 through 136, 139, and
+140 in comparison and package preservation. Late PRs 153 and 154 were audited
+against those fixes, and their useful parser, diagnostic, ignored-story, and
+border-token cases were incorporated without applying overlapping code twice.
+
+**Non-obvious choices.** PR 148's hash and golden changes stayed in separate
+labelled baseline commits. The six branches' package measurements were
+replaced by one measurement from the integrated source. Unchanged modeled
+DOCX and PPTX parts and relationships retain source bytes, while typed edits
+serialize only their owned parts. The existing distinct `Nil` border token
+retains authored spelling without a second spelling field. Issue 138 remains
+open because line-height and row-splitting work is still required.
+
+**Deviations from the design plan.** PRs 153 and 154 arrived after the initial
+integration and supplied additional cases. The user also requested that
+`/complete-feature` use a scoped verification gate. The workflow now reserves
+the full gate for the integrated sprint, and permits `--allow-dirty` only for
+the scoped package dry run on uncommitted source.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/04-opc-and-packaging.md`, `docs/hld/05-drawingml-model.md`,
+`docs/hld/06-presentationml-model.md`, `docs/hld/08-rendering-spec.md`,
+`docs/hld/10-bindings-spec.md`, `docs/hld/12-testing-strategy.md`,
+`docs/hld/13-risks-and-open-questions.md`,
+`docs/hld/14-development-backlog.md`, and
+`docs/hld/15-build-and-toolchain.md`.
+
+**Tests.** Both `no_op_save_preserves_every_unchanged_part` gates passed and
+would fail against the old unconditional modeled-part serialization paths.
+The scoped feature gate passed with 49 matching hashes, seven matching golden
+buffers, both isolated Python suites, strict typing and stub checks, the
+changed-crate Rust suites, WASM targets, warnings-denied rustdoc, 21 compiled
+README examples, 22 verified packages below 10 MiB, supply-chain checks, and
+the repository workflow suite. Microscope pass 4 had zero defects and smells.
+
+**Hash harness.** PR 148 intentionally changed 15 rendered entries through
+paragraph spacing and table-border layout, with no OOXML-part delta, in its
+separately labelled baseline commit. The integrated final check matched all
+49 entries. The reviewed deterministic raster delta covered `contract`,
+`invoice`, and `quote` only.
+
+**Notes for future sessions.** Run `/verify --scoped F-XXX` at feature
+completion and `/verify --full` once on the integrated sprint. Keep the 22
+archive dry run on uncommitted source honest with `--allow-dirty`, then rerun
+the strict command without that flag at sprint close. PRs 146 through 154 and
+their resolved issues still need main integration and specific contributor
+thanks. Do not close Issue 138 before its remaining pagination work passes.

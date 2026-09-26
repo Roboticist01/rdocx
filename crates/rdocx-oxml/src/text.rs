@@ -4938,8 +4938,10 @@ impl CT_P {
                 Ok(Event::Empty(ref e)) => {
                     let name = e.name();
                     let prefixes = word_prefixes_at(e, word_prefixes)?;
-                    if is_word_element(name.as_ref(), b"pPr", &prefixes) {
-                        properties = Some(CT_PPr::default());
+                    if is_word_element(name.as_ref(), b"pPr", &prefixes)
+                        && e.attributes().next().is_none()
+                    {
+                        properties.get_or_insert_default();
                     } else if is_word_element(name.as_ref(), b"commentRangeStart", &prefixes)
                         || is_word_element(name.as_ref(), b"commentRangeEnd", &prefixes)
                     {
@@ -8795,6 +8797,19 @@ mod tests {
             let paragraph = parse_paragraph(case);
             assert!(paragraph.complex_field_hyperlinks().is_empty(), "{case}");
         }
+    }
+
+    #[test]
+    fn empty_paragraph_properties_model_only_attribute_free_form() {
+        let plain = parse_paragraph(r#"<w:pPr/><w:r><w:t>Text</w:t></w:r>"#);
+        assert!(plain.properties.is_some());
+        assert!(plain.extra_xml.is_empty());
+
+        let attributed =
+            parse_paragraph(r#"<w:pPr w:rsidR="00112233"/><w:r><w:t>Text</w:t></w:r>"#);
+        assert!(attributed.properties.is_none());
+        assert_eq!(attributed.extra_xml.len(), 1);
+        assert!(String::from_utf8_lossy(&attributed.extra_xml[0].1).contains("00112233"));
     }
 
     #[test]

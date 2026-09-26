@@ -1068,7 +1068,7 @@ impl Presentation {
         let package_signatures_invalidated = self.package_signatures_invalidated
             || self.retained_package_signature_would_be_invalidated()?
             || (class_changed && preserve_signed_parts);
-        let mut package = self.staged_package(preserve_signed_parts)?;
+        let mut package = self.staged_package(true)?;
         package
             .content_types
             .add_override(&self.presentation_part, class.content_type());

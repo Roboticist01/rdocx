@@ -387,15 +387,18 @@ impl Document {
             }
             Ok(())
         })?;
-        let mut accepted = candidate.clone_for_staging();
-        accepted.accept_all()?;
-        let accepted_body =
-            normalized_package(&accepted, &original_stories, options, &text_box_markers)?;
+        let accepted_body = resolved_package(
+            &candidate,
+            Document::accept_all,
+            &original_stories,
+            options,
+            &text_box_markers,
+        )?;
         let mut edited_package =
             normalized_package(&edited, &edited_stories, options, &text_box_markers)?;
-        if story_ignored(options, ComparisonStoryKind::Main) {
-            edited_package.0 =
-                normalized_package(&original, &original_stories, options, &text_box_markers)?.0;
+        let main_ignored = story_ignored(options, ComparisonStoryKind::Main);
+        if main_ignored {
+            edited_package.0 = accepted_body.0.clone();
         }
         if accepted_body != edited_package {
             return Err(comparison_postcondition_error(
@@ -405,12 +408,18 @@ impl Document {
                 &edited_package,
             ));
         }
-        let mut rejected = candidate.clone_for_staging();
-        rejected.reject_all()?;
-        let rejected_package =
-            normalized_package(&rejected, &original_stories, options, &text_box_markers)?;
-        let original_package =
+        let rejected_package = resolved_package(
+            &candidate,
+            Document::reject_all,
+            &original_stories,
+            options,
+            &text_box_markers,
+        )?;
+        let mut original_package =
             normalized_package(&original, &original_stories, options, &text_box_markers)?;
+        if main_ignored {
+            original_package.0 = rejected_package.0.clone();
+        }
         if rejected_package != original_package {
             return Err(comparison_postcondition_error(
                 "rejection",
@@ -2061,6 +2070,18 @@ fn comparison_text_box_markers(
     Ok(markers)
 }
 
+fn resolved_package(
+    candidate: &Document,
+    resolve: fn(&mut Document) -> Result<usize>,
+    stories: &[StoryPart],
+    options: &ComparisonOptions,
+    text_box_markers: &TextBoxMarkers,
+) -> Result<NormalizedPackage> {
+    let mut resolved = candidate.clone_for_staging();
+    resolve(&mut resolved)?;
+    normalized_package(&resolved, stories, options, text_box_markers)
+}
+
 fn normalized_package(
     document: &Document,
     stories: &[StoryPart],
@@ -3682,7 +3703,11 @@ fn compare_complex_paragraph(
                 .iter()
                 .filter(|(position, raw)| !CT_P::raw_is_root_attributes(*position, raw)))
         || paragraph_control_boundaries(original) != paragraph_control_boundaries(edited)
-        || (!metadata.options.ignore_formatting && original.properties != edited.properties)
+        || (!metadata.options.ignore_formatting
+            && paragraph_properties_differ(
+                original.properties.as_ref(),
+                edited.properties.as_ref(),
+            ))
     {
         return Err(Error::Other(format!(
             "comparison cannot revise paragraph boundary structures at {location}"
@@ -3883,11 +3908,12 @@ fn paragraph_properties_xml(
             )
         })
         .unwrap_or_default();
-    if current.numbering_revision_xml != original_numbering_xml
-        || current.numbering_revision_xml_positions != original_numbering_positions
-        || current.numbering_revision_position != original_numbering_position
-        || current.revision_xml != original_revision_xml
-        || current.revision_xml_positions != original_revision_positions
+    let edited_properties = edited.properties.as_ref().cloned().unwrap_or_default();
+    if edited_properties.numbering_revision_xml != original_numbering_xml
+        || edited_properties.numbering_revision_xml_positions != original_numbering_positions
+        || edited_properties.numbering_revision_position != original_numbering_position
+        || edited_properties.revision_xml != original_revision_xml
+        || edited_properties.revision_xml_positions != original_revision_positions
     {
         formatting_diagnostic(diagnostics, location.to_owned());
     }
@@ -3924,7 +3950,7 @@ fn paragraph_properties_xml(
 }
 
 fn modeled_paragraph_properties(properties: Option<&CT_PPr>) -> Option<CT_PPr> {
-    properties.cloned().map(|mut properties| {
+    properties.cloned().and_then(|mut properties| {
         properties.sect_pr = None;
         properties.num_ilvl_raw = None;
         properties.num_id_raw = None;
@@ -3935,8 +3961,24 @@ fn modeled_paragraph_properties(properties: Option<&CT_PPr>) -> Option<CT_PPr> {
         properties.change = None;
         properties.revision_xml.clear();
         properties.revision_xml_positions.clear();
-        properties
+        nonempty_paragraph_properties(properties)
     })
+}
+
+fn nonempty_paragraph_properties(mut properties: CT_PPr) -> Option<CT_PPr> {
+    if properties
+        .rpr
+        .as_ref()
+        .is_some_and(|mark| *mark == rdocx_oxml::properties::CT_RPr::default())
+    {
+        properties.rpr = None;
+    }
+    (properties != CT_PPr::default()).then_some(properties)
+}
+
+fn paragraph_properties_differ(original: Option<&CT_PPr>, edited: Option<&CT_PPr>) -> bool {
+    original.cloned().and_then(nonempty_paragraph_properties)
+        != edited.cloned().and_then(nonempty_paragraph_properties)
 }
 
 fn section_properties_xml(
@@ -4177,6 +4219,15 @@ fn table_properties_xml(
     }
     let original_modeled = modeled_table_properties(original);
     let edited_modeled = modeled_table_properties(edited);
+    let unmodeled = |properties: &CT_TblPr| {
+        (
+            properties.extra_xml.clone(),
+            properties.revision_xml.clone(),
+        )
+    };
+    if original.map(unmodeled).unwrap_or_default() != edited.map(unmodeled).unwrap_or_default() {
+        formatting_diagnostic(diagnostics, location.to_owned());
+    }
     if original_modeled == edited_modeled {
         return original
             .map(table_property_xml)
@@ -4185,17 +4236,7 @@ fn table_properties_xml(
     }
     let mut current = edited.cloned().unwrap_or_default();
     current.change = None;
-    let (original_extra_xml, original_revision_xml) = original
-        .map(|properties| {
-            (
-                properties.extra_xml.clone(),
-                properties.revision_xml.clone(),
-            )
-        })
-        .unwrap_or_default();
-    if current.extra_xml != original_extra_xml || current.revision_xml != original_revision_xml {
-        formatting_diagnostic(diagnostics, location.to_owned());
-    }
+    let (original_extra_xml, original_revision_xml) = original.map(unmodeled).unwrap_or_default();
     current.extra_xml = original_extra_xml;
     current.revision_xml = original_revision_xml;
     let previous = original_modeled

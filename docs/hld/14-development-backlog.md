@@ -6014,9 +6014,10 @@ also requires the deterministic golden-PNG baseline that its current head did
 not update even though its intentional layout change moves three reviewed
 rasters.
 
-Resolve open Issues 134, 135, 136, 139, and 140, which have no implementation
-pull request. Comparison must track paragraph formatting when producer revision
-identities are present, treat an empty paragraph-property shell as absence, and
+Resolve open Issues 134, 135, 136, 139, and 140. Contributor PRs 153 and 154
+cover the same reports and supply additional regression cases. Comparison must
+track paragraph formatting when producer revision identities are present, treat
+an empty paragraph-property shell as absence, and
 accept a reordered drawing paragraph without printing raw model bytes in a
 failure. A save must retain an authored `nil` border token and preserve every
 unchanged modeled part and relationship part byte for byte. Issue 138 remains

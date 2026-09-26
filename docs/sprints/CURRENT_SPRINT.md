@@ -31,7 +31,7 @@ note, range, fragment, and glossary authoring in one reviewed sprint.
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
 | F-X134 | Keep Python story hyperlink snapshots linear | S | done | - |
-| F-X135 | Integrate PRs 146 through 151 and resolve unassigned reports | L | in-progress | codex |
+| F-X135 | Integrate PRs 146 through 151 and resolve unassigned reports | L | done | - |
 | F-X133 | Stop rebinding a canonical prefix on every retained element | S | pending | - |
 | F-271 | Uniform rich header and footer editing | L | pending | - |
 | F-272 | Rich footnote authoring | L | pending | - |

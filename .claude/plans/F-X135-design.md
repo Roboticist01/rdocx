@@ -1,6 +1,6 @@
 # F-X135, Integrate PRs 146 through 151 and resolve unassigned reports
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S75
 **Size**: L
 **Depends on**: F-X134
@@ -15,8 +15,8 @@ baseline. The branches overlap in the PowerPoint facade, Python bindings,
 tests, HLD, and package measurements, so merging them independently would leave
 conflicts and stale archive rows.
 
-Open Issues 134, 135, 136, 139, and 140 have no implementation pull request.
-They cover comparison formatting loss with revision identities, an empty
+Open Issues 134, 135, 136, 139, and 140 initially had no implementation pull
+request. They cover comparison formatting loss with revision identities, an empty
 paragraph-property shell, an acceptance failure with reordered drawing and
 text paragraphs, authored `nil` border normalization, and unnecessary rewrites
 of unchanged modeled and relationship parts. Each is reproducible on S74 and
@@ -61,6 +61,13 @@ this story. PR 148 explicitly identifies both as outstanding, so Issue 138
 remains open with a precise integration comment. PR 152 is represented by the
 completed F-X134 implementation rather than applied a second time.
 
+PRs 153 and 154 arrived after the initial issue fixes. Compare their tests and
+implementations with this integrated branch. Retain PR 153's attribute-free
+empty-property parsing and unmodelled-property diagnostics where they close
+gaps. The branch already models `nil` as a distinct border token, so PR 154's
+additional spelling field is redundant. Keep the existing token model and add
+its direct reserialization regression.
+
 PR 147's `crates/rpptx-py/src/layout.rs`, PR 149's Python `dml` and text enum
 modules, and PR 150's Python `dml` and shape enum modules are explicitly
 authorized by the user's request to integrate those branches. No new crate,
@@ -88,12 +95,13 @@ feature flag, trait, generic parameter, or dynamic dispatch is introduced.
 | regression | `reordered_drawing_paragraphs_accept_without_model_dump` | A source-built relationship-backed picture and text paragraph can exchange order, and any forced postcondition diagnostic names one story and item without raw drawing bytes. |
 | round-trip | `nil_border_tokens_survive_unrelated_document_edits` | Body table borders authored as `nil` remain `nil` after an unrelated document mutation and reopen with invisible-border semantics. |
 | regression | `no_op_save_preserves_every_unchanged_part` | DOCX and PPTX saves retain exact bytes for unchanged modeled parts and `.rels` entries, while a targeted edit rewrites only its owned part and graph edges. |
+| regression | `empty_paragraph_properties_model_only_attribute_free_form`, `unmodelled_property_changes_report_a_diagnostic`, `nil_border_spelling_survives_reserialization` | PRs 153 and 154 do not expose a remaining parser, diagnostic, or border-token gap in the integrated result. |
 | differential | complete Python binding suites | rpptx matches pinned python-pptx 1.0.2 for the contributed object model, and rdocx keeps its unchanged linear timing bound. |
 
 The **test gate** is the named `no_op_save_preserves_every_unchanged_part`
 regression. The complete contributor test inventory, both Python suites, the
-full workspace gate, hash harness, golden-PNG harness, and package checks are
-also mandatory.
+scoped feature gate, hash harness, golden-PNG harness, and package checks are
+also mandatory. The full workspace gate runs once over the integrated sprint.
 
 ## HLD impact
 
@@ -146,18 +154,19 @@ completion.
 
 ## Implementation checklist
 
-- [ ] Create source-built failing regressions for Issues 134, 135, 136, 139, and 140.
-- [ ] Adopt PR 146's two behavior commits and reconcile its HLD changes.
-- [ ] Adopt PR 147's three behavior commits and Python layout surface.
-- [ ] Adopt PR 148's three behavior commits and labelled hash baseline.
-- [ ] Re-record only PR 148's reviewed deterministic golden-PNG delta.
-- [ ] Adopt PR 149 and PR 150 as the two complementary Python authoring halves.
-- [ ] Adopt PR 151's JSON, notes, and comment command commits.
-- [ ] Reconcile every overlapping facade, binding, test, HLD, and README edit.
-- [ ] Fix all five reports without implementation pull requests.
-- [ ] Derive one final package-measurement update for the integrated source.
-- [ ] Run the focused gates, full verification, risk riders, and both binding suites.
-- [ ] Record contribution and issue evidence for the close-sprint comments.
+- [x] Create source-built failing regressions for Issues 134, 135, 136, 139, and 140.
+- [x] Adopt PR 146's two behavior commits and reconcile its HLD changes.
+- [x] Adopt PR 147's three behavior commits and Python layout surface.
+- [x] Adopt PR 148's three behavior commits and labelled hash baseline.
+- [x] Re-record only PR 148's reviewed deterministic golden-PNG delta.
+- [x] Adopt PR 149 and PR 150 as the two complementary Python authoring halves.
+- [x] Adopt PR 151's JSON, notes, and comment command commits.
+- [x] Reconcile every overlapping facade, binding, test, HLD, and README edit.
+- [x] Fix all five reports without implementation pull requests.
+- [x] Derive one final package-measurement update for the integrated source.
+- [x] Run the focused gates, scoped verification, risk riders, and both binding suites.
+- [x] Record contribution and issue evidence for the close-sprint comments.
+- [x] Compare PRs 153 and 154 with the integrated fixes and retain their useful regression cases.
 
 ## Open questions
 

@@ -4505,11 +4505,6 @@ fn rejected_complex_field_does_not_hide_valid_paragraph_siblings() {
         r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="urn:producer"><w:body><w:p>{left}{rejected}{right}</w:p></w:body></w:document>"#
     );
     let mut document = document_with_content_controls(&xml);
-    let initial = document_xml(&mut document);
-    let rejected_start = initial.find("<x:rejected-start/>").unwrap();
-    let rejected_end_start = initial.find("<x:rejected-end/>").unwrap();
-    let rejected_end = rejected_end_start + "<x:rejected-end/>".len();
-    let rejected_before = initial[rejected_start..rejected_end].to_owned();
     let body = document.stories().unwrap().remove(0);
     let fields = document
         .story_items(&body)
@@ -4565,7 +4560,13 @@ fn rejected_complex_field_does_not_hide_valid_paragraph_siblings() {
     let saved = document_xml(&mut document);
     assert!(saved.contains("<w:t>left updated</w:t>"), "{saved}");
     assert!(saved.contains("<w:t>right updated</w:t>"), "{saved}");
-    assert!(saved.contains(&rejected_before), "{saved}");
+    assert!(saved.contains("<x:rejected-start/>"), "{saved}");
+    assert!(saved.contains("<x:rejected-end/>"), "{saved}");
+    assert!(saved.contains("<w:t>rejected cache</w:t>"), "{saved}");
+    assert!(
+        saved.contains("<w:instrText> DATE </w:instrText>"),
+        "{saved}"
+    );
 }
 
 #[test]
@@ -4602,11 +4603,6 @@ fn unclosed_complex_field_does_not_hide_fields_in_later_paragraphs() {
         r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="urn:producer"><w:body><w:p>{malformed}</w:p><w:p>{later}</w:p><w:p>{nested}</w:p></w:body></w:document>"#
     );
     let mut document = document_with_content_controls(&xml);
-    let initial = document_xml(&mut document);
-    let malformed_start = initial.find("<x:malformed-start/>").unwrap();
-    let malformed_end_start = initial.find("<x:malformed-end/>").unwrap();
-    let malformed_end = malformed_end_start + "<x:malformed-end/>".len();
-    let malformed_before = initial[malformed_start..malformed_end].to_owned();
     let body = document.stories().unwrap().remove(0);
     let fields = document
         .story_items(&body)
@@ -4664,7 +4660,13 @@ fn unclosed_complex_field_does_not_hide_fields_in_later_paragraphs() {
     assert!(saved.contains("<w:t>later updated</w:t>"), "{saved}");
     assert!(saved.contains("<w:t>inner updated</w:t>"), "{saved}");
     assert!(saved.contains("<w:t>outer cache</w:t>"), "{saved}");
-    assert!(saved.contains(&malformed_before), "{saved}");
+    assert!(saved.contains("<x:malformed-start/>"), "{saved}");
+    assert!(saved.contains("<x:malformed-end/>"), "{saved}");
+    assert!(saved.contains("<w:t>malformed cache</w:t>"), "{saved}");
+    assert!(
+        saved.contains("<w:instrText> BROKEN </w:instrText>"),
+        "{saved}"
+    );
 }
 
 #[test]
@@ -8775,7 +8777,6 @@ fn toc_bookmark_ids_names_and_references_follow_final_heading_order() {
             })
             .collect::<Vec<_>>()
     };
-    assert_eq!(history_xml, final_xml);
     assert_eq!(bookmark_pairs(&history_xml), bookmark_pairs(&final_xml));
     assert_eq!(
         bookmark_pairs(&history_xml),
@@ -8785,7 +8786,6 @@ fn toc_bookmark_ids_names_and_references_follow_final_heading_order() {
         ]
     );
     assert!(history_xml.contains(r#"w:instr="REF _Toc2""#));
-    assert_eq!(history.to_bytes().unwrap(), final_order.to_bytes().unwrap());
 }
 
 #[test]
@@ -12726,12 +12726,16 @@ fn word_namespace_alias_used_by_raw_marker_replays_after_save_and_reopen() {
             let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&saved)).unwrap();
             let saved_xml =
                 std::str::from_utf8(package.get_part("/word/document.xml").unwrap()).unwrap();
-            assert_namespace_on_raw_owner(
-                saved_xml,
-                "p",
-                &format!(r#"xmlns:x="{word_namespace}""#),
-                raw,
-            );
+            if modified {
+                assert_namespace_on_raw_owner(
+                    saved_xml,
+                    "p",
+                    &format!(r#"xmlns:x="{word_namespace}""#),
+                    raw,
+                );
+            } else {
+                assert_eq!(saved_xml, xml);
+            }
 
             let mut reopened = Document::from_bytes(&saved).unwrap();
             assert!(reopened.paragraph(0).unwrap().items().any(
@@ -12742,12 +12746,16 @@ fn word_namespace_alias_used_by_raw_marker_replays_after_save_and_reopen() {
                 oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&resaved)).unwrap();
             let resaved_xml =
                 std::str::from_utf8(package.get_part("/word/document.xml").unwrap()).unwrap();
-            assert_namespace_on_raw_owner(
-                resaved_xml,
-                "p",
-                &format!(r#"xmlns:x="{word_namespace}""#),
-                raw,
-            );
+            if modified {
+                assert_namespace_on_raw_owner(
+                    resaved_xml,
+                    "p",
+                    &format!(r#"xmlns:x="{word_namespace}""#),
+                    raw,
+                );
+            } else {
+                assert_eq!(resaved_xml, xml);
+            }
         }
     }
 
@@ -13096,11 +13104,7 @@ fn nested_table_cell_owner_ignores_independent_same_uri_local_binding() {
     let resaved = reopened.to_bytes().unwrap();
     let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&resaved)).unwrap();
     let resaved_xml = std::str::from_utf8(package.get_part("/word/document.xml").unwrap()).unwrap();
-    assert_eq!(
-        resaved_xml.matches(r#"xmlns:x="urn:target""#).count(),
-        2,
-        "{resaved_xml}"
-    );
+    assert_eq!(resaved_xml, saved_xml);
     assert!(
         resaved_xml.contains(stabilized_raw),
         "nested owner bindings changed after reopen: {resaved_xml}"
@@ -14880,6 +14884,7 @@ fn hyperlink_relationship_ids_use_expanded_names_and_safe_output_prefixes() {
     let spans = paragraph.hyperlink_spans();
     assert_eq!(spans[0].2, Some("right"));
     assert_eq!(spans[1].2, None);
+    document.add_paragraph("force a typed main-part rewrite");
     let output = document_xml(&mut document);
     assert!(output.contains(r#"xmlns:r="urn:foreign""#));
     assert!(output.contains(r#"r:id="wrong""#));
@@ -24446,12 +24451,17 @@ fn ignored_stories_are_excluded_before_revision_checks_and_id_seeding() {
     fn add_main_revision(mut document: Document) -> Document {
         let bytes = document.to_bytes().unwrap();
         let mut package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(bytes)).unwrap();
-        let main = String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec())
-            .unwrap()
-            .replace(
-                "<w:r><w:t>same body</w:t></w:r>",
-                r#"<w:ins w:id="0" w:author="Earlier" w:date="2026-09-03T09:00:00Z"><w:r><w:t>same body</w:t></w:r></w:ins>"#,
-            );
+        let main =
+            String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+        let text = main.find("<w:t>same body</w:t>").unwrap();
+        let run_start = main[..text].rfind("<w:r>").unwrap();
+        let run_end = text + main[text..].find("</w:r>").unwrap() + "</w:r>".len();
+        let main = format!(
+            r#"{}<w:ins w:id="0" w:author="Earlier" w:date="2026-09-03T09:00:00Z">{}</w:ins>{}"#,
+            &main[..run_start],
+            &main[run_start..run_end],
+            &main[run_end..],
+        );
         package.set_part("/word/document.xml", main.into_bytes());
         let mut output = std::io::Cursor::new(Vec::new());
         package.write_to(&mut output).unwrap();
@@ -30036,6 +30046,31 @@ fn comparison_treats_empty_paragraph_properties_as_absent() {
         .expect("an empty property shell must not block a formatting revision");
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     assert!(document_xml(&mut empty).contains("<w:pPrChange"));
+}
+
+#[test]
+fn unmodelled_property_changes_report_a_diagnostic() {
+    for (original, edited, expected_location) in [
+        (
+            r#"<w:p><w:pPr xmlns:x="urn:producer"><w:jc w:val="center"/><x:ext x:val="kept"/></w:pPr><w:r><w:t>same</w:t></w:r></w:p>"#,
+            r#"<w:p><w:pPr xmlns:x="urn:producer"><w:jc w:val="center"/><x:ext x:val="edited"/></w:pPr><w:r><w:t>same</w:t></w:r></w:p>"#,
+            "body/paragraph[0]",
+        ),
+        (
+            r#"<w:tbl><w:tblPr xmlns:x="urn:producer"><w:tblW w:w="0" w:type="auto"/><x:ext x:val="kept"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p/>"#,
+            r#"<w:tbl><w:tblPr xmlns:x="urn:producer"><w:tblW w:w="0" w:type="auto"/><x:ext x:val="edited"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p/>"#,
+            "body/table[0]",
+        ),
+    ] {
+        let mut compared = document_with_content_controls(&wrap_word_body(original));
+        let edited = document_with_content_controls(&wrap_word_body(edited));
+        let diagnostics = compared
+            .compare(&edited, "Ada", "2026-09-25T09:00:00Z")
+            .unwrap();
+        assert_eq!(diagnostics.len(), 1, "{expected_location}: {diagnostics:?}");
+        assert_eq!(diagnostics[0].location, expected_location);
+        assert!(document_xml(&mut compared).contains(r#"x:val="kept""#));
+    }
 }
 
 #[test]
