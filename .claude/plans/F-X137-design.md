@@ -1,6 +1,6 @@
 # F-X137, Package and CLI safety contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S76
 **Size**: L
 **Depends on**: F-X136
@@ -32,6 +32,9 @@ part bytes and namespace declarations when a typed part is unchanged. Keep
 output-path refusal before any mutation, stage writes atomically, and derive
 the saved package class from the selected output extension. Keep the public
 entry points additive and do not create a second package writer.
+The semver impact is additive on pre-1.0 public APIs: path-specific byte
+serialisation and CLI force options gain new entry points, while save behavior
+changes intentionally under the existing methods.
 
 ## Rejected alternatives
 
@@ -54,6 +57,7 @@ entry points additive and do not create a second package writer.
 
 - `docs/hld/04-opc-and-packaging.md`
 - `docs/hld/03-architecture.md`
+- `docs/hld/06-presentationml-model.md`
 - `docs/hld/10-bindings-spec.md`
 
 ## Risk routing
@@ -72,11 +76,11 @@ Expected unchanged. Any delta stops integration until attributed.
 
 ## Implementation checklist
 
-- [ ] Review each PR's incremental commits and record accepted or rejected changes.
-- [ ] Reconcile save, CLI and namespace changes on the S76 prefix.
-- [ ] Keep behavior changes separately labelled from measurement or documentation changes.
-- [ ] Run the stated regression, round-trip and risk checks.
-- [ ] Run microscope passes until zero defects and zero smells.
+- [x] Review each PR's incremental commits and record accepted or rejected changes.
+- [x] Reconcile save, CLI and namespace changes on the S76 prefix.
+- [x] Keep behavior changes separately labelled from measurement or documentation changes.
+- [x] Run the stated regression, round-trip and risk checks.
+- [x] Run microscope passes until zero defects and zero smells.
 
 ## Open questions
 

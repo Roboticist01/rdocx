@@ -22,7 +22,7 @@ and produces fixed or flow output without an Office host.
 
 | Measurement | Value | Version | Platform | Build mode | Input | Command | Statistic | Measured on |
 |---|---|---|---|---|---|---|---|---|
-| Crates.io archive: rdocx-cli | 33,805 compressed bytes, 145,256 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-19 |
+| Crates.io archive: rdocx-cli | 37,853 compressed bytes, 162,093 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-29 |
 
 ## Use it when
 
@@ -64,7 +64,10 @@ across every supported story and accept at most one selector: `--id`,
 `--author`, or the paired `--start-date` and `--end-date` RFC 3339 bounds.
 Omitting a selector resolves all modeled revisions. Every mutation, comparison,
 and TOC rebuild requires `-o/--output`, publishes only a complete validated
-DOCX, and supports a schema-1 record through `--json`.
+DOCX, and supports a schema-1 record through `--json`. A `.docx`, `.docm`,
+`.dotx`, or `.dotm` output extension selects the package class the output
+declares, so a template edited into `report.docx` is written as a document. An
+input that carries a VBA project cannot change to a macro-free extension.
 
 `text --json` reports accepted-view paragraphs in source order. Each paragraph
 has a zero-based `body_index`, a typed zero-based path within that body item,
@@ -82,5 +85,17 @@ fragment on each occupied page.
 `replace --expect N` publishes only when the run-aware replacement count is
 exactly `N`. A mismatch exits unsuccessfully without creating or replacing the
 requested output.
+
+`convert` and `render` refuse an output file that already exists unless
+`--force` is given. Even with `--force` they refuse their own input file under
+any spelling of its path, and an output that is not a regular file, such as a
+directory, a symbolic link, a FIFO, or a device like `/dev/null`. A run checks
+every file it would write before it writes the first one, and publishes each
+file only once it is complete, so a failed run leaves no truncated output.
+
+`validate` exits unsuccessfully on a structural error: a relationship to a
+missing part, a part without a content type, or a prefix that `mc:Ignorable`
+or `mc:MustUnderstand` lists without a namespace declaration. Empty
+paragraphs, heading level gaps, and missing metadata are warnings only.
 
 Run `rdocx --help` or `rdocx <command> --help` for the complete option set.

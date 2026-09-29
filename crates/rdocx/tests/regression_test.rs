@@ -13480,6 +13480,80 @@ fn unused_fixed_prefix_declarations_do_not_reject_safe_raw_replay() {
     assert_eq!(reopened.paragraph(1).unwrap().text(), "changed");
 }
 
+#[cfg(unix)]
+#[test]
+fn path_saves_replace_the_file_by_rename_and_keep_links_and_permissions() {
+    use std::fs::{self, Permissions};
+    use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+    use std::path::Path;
+
+    let directory = std::env::temp_dir().join(format!("rdocx-atomic-save-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&directory);
+    let links = directory.join("links");
+    fs::create_dir_all(&links).unwrap();
+    let staging_files = |directory: &Path| {
+        fs::read_dir(directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "tmp"))
+            .collect::<Vec<_>>()
+    };
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o7777;
+    let mut document = Document::new();
+    document.add_paragraph("replacement");
+
+    // The plain save replaces an existing file by rename and keeps its mode.
+    let destination = directory.join("existing.docx");
+    fs::write(&destination, b"previous bytes").unwrap();
+    fs::set_permissions(&destination, Permissions::from_mode(0o600)).unwrap();
+    let previous_inode = fs::metadata(&destination).unwrap().ino();
+    document.save(&destination).unwrap();
+    assert_ne!(fs::metadata(&destination).unwrap().ino(), previous_inode);
+    assert_eq!(mode(&destination), 0o600);
+    assert_eq!(
+        fs::read(&destination).unwrap(),
+        document.to_bytes().unwrap()
+    );
+
+    // A save through a symbolic link replaces the file it names and keeps the link.
+    let target = directory.join("linked.docx");
+    fs::write(&target, b"previous bytes").unwrap();
+    fs::set_permissions(&target, Permissions::from_mode(0o640)).unwrap();
+    let link = links.join("link.docx");
+    std::os::unix::fs::symlink("../linked.docx", &link).unwrap();
+    document.save(&link).unwrap();
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read_link(&link).unwrap(), Path::new("../linked.docx"));
+    assert_eq!(fs::read(&target).unwrap(), document.to_bytes().unwrap());
+    assert_eq!(mode(&target), 0o640);
+
+    // The savers that already staged their output now keep the mode too.
+    let flat = directory.join("existing.xml");
+    fs::write(&flat, b"previous bytes").unwrap();
+    fs::set_permissions(&flat, Permissions::from_mode(0o600)).unwrap();
+    document.save_flat_opc(&flat).unwrap();
+    assert_eq!(
+        fs::read(&flat).unwrap(),
+        document.to_flat_opc_bytes().unwrap()
+    );
+    assert_eq!(mode(&flat), 0o600);
+
+    // A save that cannot replace its destination leaves it and no staged file.
+    let occupied = directory.join("directory.docx");
+    fs::create_dir(&occupied).unwrap();
+    assert!(document.save(&occupied).is_err());
+    assert!(occupied.is_dir());
+
+    assert!(staging_files(&directory).is_empty());
+    assert!(staging_files(&links).is_empty());
+    fs::remove_dir_all(directory).unwrap();
+}
+
 #[test]
 fn unused_root_default_namespace_allows_atomic_save() {
     let task_namespace = "http://schemas.microsoft.com/office/tasks/2019/documenttasks";
@@ -13520,6 +13594,242 @@ fn used_root_default_namespace_still_fails_atomically() {
     let error = document.try_replace_text("before", "after").unwrap_err();
     assert!(error.to_string().contains("shadowed `default` namespace"));
     assert_eq!(document.to_bytes().unwrap(), before);
+}
+
+const ISSUE_157_UNUSED_ROOT_DEFAULT: &str =
+    r#" xmlns="http://schemas.microsoft.com/office/tasks/2019/documenttasks""#;
+
+/// A Google Docs shaped main part: extra root namespace declarations, an
+/// optional `goog_rdk_0` block content control and a one-cell table.
+fn issue_157_document(root_declarations: &str, content_control: bool, producer: &str) -> Document {
+    let inside = "<w:p><w:r><w:t>Inside the control.</w:t></w:r></w:p>";
+    let inside = if content_control {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:tag w:val="goog_rdk_0"/></w:sdtPr><w:sdtContent>{inside}</w:sdtContent></w:sdt>"#
+        )
+    } else {
+        inside.to_owned()
+    };
+    document_with_content_controls(&format!(
+        r#"<w:document xmlns:w="{W_NS}"{root_declarations}><w:body>{producer}<w:p><w:r><w:t>Before the control.</w:t></w:r></w:p>{inside}<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
+    ))
+}
+
+fn issue_157_paragraph_summary(paragraph: &ParagraphRef<'_>) -> String {
+    let has_picture = paragraph.runs().any(|run| {
+        run.items()
+            .any(|item| matches!(item, RunItemRef::Drawing(drawing) if drawing.is_inline()))
+    });
+    if has_picture {
+        "picture".to_owned()
+    } else {
+        format!("p:{}", paragraph.text())
+    }
+}
+
+fn issue_157_body_summary(document: &Document) -> Vec<String> {
+    document
+        .body_items()
+        .map(|item| match item {
+            BodyItemRef::Paragraph(paragraph) => issue_157_paragraph_summary(&paragraph),
+            BodyItemRef::ContentControl(control) => format!(
+                "sdt:{}:{}",
+                control.tag().unwrap_or_default(),
+                control.text()
+            ),
+            BodyItemRef::Table(table) => format!(
+                "table:{}",
+                table
+                    .cell(0, 0)
+                    .unwrap()
+                    .paragraphs()
+                    .map(|paragraph| issue_157_paragraph_summary(&paragraph))
+                    .collect::<Vec<_>>()
+                    .join("|")
+            ),
+            BodyItemRef::UnsupportedXml(raw) => format!("raw:{}", String::from_utf8_lossy(raw)),
+        })
+        .collect()
+}
+
+fn issue_157_insert_picture(
+    document: &mut Document,
+    story: &StoryId,
+    after: Option<&ContentLocation>,
+) -> rdocx::Result<ContentLocation> {
+    document.insert_picture_to_story(
+        story,
+        after,
+        b"issue 157 image payload",
+        "issue_157.png",
+        Some(Length::pt(12.0)),
+        Some(Length::pt(8.0)),
+    )
+}
+
+#[test]
+fn story_picture_splice_beside_content_control_ignores_unused_root_default() {
+    // A story splice publishes canonical main-part XML without the unused
+    // root default. The flush that follows must classify those bytes, not
+    // the declarations of the part they replaced.
+    for (root_default, content_control) in [(true, true), (false, true), (true, false)] {
+        let case = format!("root default {root_default}, content control {content_control}");
+        let root_declarations = if root_default {
+            ISSUE_157_UNUSED_ROOT_DEFAULT
+        } else {
+            ""
+        };
+        let mut document = issue_157_document(root_declarations, content_control, "");
+        let body = f254_story(&document, StoryKind::Body);
+        let anchor = document
+            .story_items(&body)
+            .unwrap()
+            .into_iter()
+            .find(|item| {
+                if content_control {
+                    item.kind() == StoryItemKind::ContentControl
+                } else {
+                    item.text().unwrap().as_deref() == Some("Inside the control.")
+                }
+            })
+            .unwrap()
+            .location()
+            .clone();
+        let after = issue_157_insert_picture(&mut document, &body, Some(&anchor))
+            .unwrap_or_else(|error| panic!("{case}: picture after the anchor: {error}"));
+        assert_eq!(after.item_kind(), StoryItemKind::Paragraph, "{case}");
+
+        let cell = f254_story(&document, StoryKind::TableCell);
+        issue_157_insert_picture(&mut document, &cell, None)
+            .unwrap_or_else(|error| panic!("{case}: picture in the table cell: {error}"));
+        let cell = f254_story(&document, StoryKind::TableCell);
+        document
+            .add_hyperlink_to_story(&cell, "link", "https://example.invalid/issue-157")
+            .unwrap_or_else(|error| panic!("{case}: hyperlink in the table cell: {error}"));
+        let body = f254_story(&document, StoryKind::Body);
+        issue_157_insert_picture(&mut document, &body, None)
+            .unwrap_or_else(|error| panic!("{case}: appended picture: {error}"));
+
+        let anchor = if content_control {
+            "sdt:goog_rdk_0:Inside the control."
+        } else {
+            "p:Inside the control."
+        };
+        let expected = [
+            "p:Before the control.",
+            anchor,
+            "picture",
+            "table:p:cell|picture|p:link",
+            "picture",
+        ];
+        assert_eq!(issue_157_body_summary(&document), expected, "{case}");
+        let saved = document.to_bytes().unwrap();
+        let reopened = Document::from_bytes(&saved).unwrap();
+        assert_eq!(issue_157_body_summary(&reopened), expected, "{case}");
+    }
+}
+
+#[test]
+fn rewritten_root_namespaces_block_story_splices_atomically() {
+    // The canonical main-part source of a story splice drops the root
+    // default and rebinds the root `w`, `r` and `mc` prefixes, so retained
+    // content that uses one of those root bindings would silently change
+    // namespace.
+    let roots = [
+        (r#" xmlns="urn:used-default""#, "<producer/>", "default"),
+        (r#" xmlns:r="urn:not-relationships""#, "<r:producer/>", "r"),
+        (
+            r#" xmlns:mc="urn:not-compatibility""#,
+            "<mc:producer/>",
+            "mc",
+        ),
+    ];
+    for (root_declarations, producer, prefix) in roots {
+        for content_control in [false, true] {
+            let case = format!("{prefix}, content control {content_control}");
+            let mut document = issue_157_document(root_declarations, content_control, producer);
+            let before = document.to_bytes().unwrap();
+            let body = f254_story(&document, StoryKind::Body);
+            let cell = f254_story(&document, StoryKind::TableCell);
+            let errors = [
+                issue_157_insert_picture(&mut document, &body, None).unwrap_err(),
+                issue_157_insert_picture(&mut document, &cell, None).unwrap_err(),
+                document
+                    .insert_content(&ContentLocation::end(body), f254_paragraph("spliced"))
+                    .unwrap_err(),
+            ];
+            for error in errors {
+                assert!(
+                    error
+                        .to_string()
+                        .contains(&format!("shadowed `{prefix}` namespace")),
+                    "{case}: {error}"
+                );
+            }
+            assert_eq!(document.to_bytes().unwrap(), before, "{case}");
+        }
+    }
+}
+
+#[test]
+fn body_declarations_and_a_rebound_root_w_block_story_splices_atomically() {
+    // The canonical main-part source drops every declaration on `w:body`, so
+    // a raw element nested in a paragraph or run would keep an unbound
+    // prefix. It also binds the root `w` prefix to WordprocessingML, so a
+    // producer element under another root `w` binding would change namespace.
+    for content_control in [false, true] {
+        let control = |q: &str| {
+            if content_control {
+                format!(
+                    r#"<{q}:sdt><{q}:sdtPr><{q}:tag {q}:val="goog_rdk_0"/></{q}:sdtPr><{q}:sdtContent><{q}:p><{q}:r><{q}:t>Inside the control.</{q}:t></{q}:r></{q}:p></{q}:sdtContent></{q}:sdt>"#
+                )
+            } else {
+                String::new()
+            }
+        };
+        let (w_control, q_control) = (control("w"), control("q"));
+        let documents = [
+            (
+                format!(
+                    r#"<w:document xmlns:w="{W_NS}"><w:body xmlns:x="urn:x"><w:p><w:r><x:producer/><w:t>run</w:t></w:r></w:p>{w_control}<w:sectPr/></w:body></w:document>"#
+                ),
+                "x",
+            ),
+            (
+                format!(
+                    r#"<w:document xmlns:w="{W_NS}"><w:body xmlns:x="urn:x"><w:p><x:producer/><w:r><w:t>run</w:t></w:r></w:p>{w_control}<w:sectPr/></w:body></w:document>"#
+                ),
+                "x",
+            ),
+            (
+                format!(
+                    r#"<q:document xmlns:q="{W_NS}" xmlns:w="urn:producer"><q:body><w:producer/><q:p><q:r><q:t>run</q:t></q:r></q:p>{q_control}<q:sectPr/></q:body></q:document>"#
+                ),
+                "w",
+            ),
+        ];
+        for (xml, prefix) in documents {
+            let case = format!("content control {content_control}: {xml}");
+            let mut document = document_with_content_controls(&xml);
+            let before = document.to_bytes().unwrap();
+            let body = f254_story(&document, StoryKind::Body);
+            let errors = [
+                issue_157_insert_picture(&mut document, &body, None).unwrap_err(),
+                document
+                    .insert_content(&ContentLocation::end(body), f254_paragraph("spliced"))
+                    .unwrap_err(),
+            ];
+            for error in errors {
+                assert!(
+                    error
+                        .to_string()
+                        .contains(&format!("shadowed `{prefix}` namespace")),
+                    "{case}: {error}"
+                );
+            }
+            assert_eq!(document.to_bytes().unwrap(), before, "{case}");
+        }
+    }
 }
 
 #[test]
@@ -30572,6 +30882,298 @@ fn no_op_save_preserves_every_unchanged_part() {
     assert_eq!(changed, ["word/document.xml"]);
 }
 
+/// Part roots written by Word and Google Docs survive a save (#160, section
+/// 3). An unchanged comments part keeps its bytes, so a document compares
+/// against its own save. A root that a save rewrites keeps `mc:Ignorable`
+/// and a declaration for every prefix it lists.
+mod producer_part_roots_survive_save {
+    use super::*;
+    use rdocx::RevisionKind;
+
+    const TIMESTAMP: &str = "2026-09-27T12:00:00Z";
+    const COMMENTS: (&str, &str) = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml",
+        oxml_opc::relationship::rel_types::COMMENTS,
+    );
+    const HEADER: (&str, &str) = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml",
+        oxml_opc::relationship::rel_types::HEADER,
+    );
+    const FOOTER: (&str, &str) = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml",
+        oxml_opc::relationship::rel_types::FOOTER,
+    );
+    /// The root declarations of the reproduction in #160, as Word writes them.
+    const WORD_ROOT: &str = concat!(
+        r#"xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" "#,
+        r#"xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" "#,
+        r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" "#,
+        r#"xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" "#,
+        r#"xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" "#,
+        r#"mc:Ignorable="w14 w15""#,
+    );
+    const DECLARATION: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+
+    /// A document package with the given main part (or rdocx's own), plus
+    /// parts related from it as `(relationship id, part, kind, xml)`.
+    fn package_with(
+        document_xml: Option<&str>,
+        parts: &[(&str, &str, (&str, &str), &str)],
+    ) -> Vec<u8> {
+        let mut seed = Document::new();
+        seed.add_paragraph("Lorem ipsum dolor.");
+        let mut package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap()))
+                .unwrap();
+        if let Some(xml) = document_xml {
+            package.set_part("/word/document.xml", xml.as_bytes().to_vec());
+        }
+        for (id, part, (content_type, relationship_type), xml) in parts {
+            package.set_part(part, xml.as_bytes().to_vec());
+            package.content_types.add_override(part, content_type);
+            package
+                .get_or_create_part_rels("/word/document.xml")
+                .add_with_id(id, relationship_type, part.trim_start_matches("/word/"));
+        }
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut bytes).unwrap();
+        bytes.into_inner()
+    }
+
+    fn part(package: &[u8], name: &str) -> String {
+        let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(package)).unwrap();
+        String::from_utf8(package.get_part(name).unwrap().to_vec()).unwrap()
+    }
+
+    /// The start tag of the root element of `xml`.
+    fn root_tag(xml: &str) -> &str {
+        let after_declaration = xml.find("?>").map_or(0, |end| end + 2);
+        let start = after_declaration + xml[after_declaration..].find('<').unwrap();
+        &xml[start..=start + xml[start..].find('>').unwrap()]
+    }
+
+    /// `root` keeps `mc:Ignorable="{ignorable}"` and declares every prefix it lists.
+    fn assert_ignorable_declared(root: &str, ignorable: &str) {
+        assert!(
+            root.contains(&format!(r#"mc:Ignorable="{ignorable}""#)),
+            "{root}"
+        );
+        for prefix in ignorable.split_whitespace() {
+            assert!(
+                root.contains(&format!("xmlns:{prefix}=")),
+                "{prefix}: {root}"
+            );
+        }
+    }
+
+    /// The parts whose bytes differ between two packages with the same parts.
+    fn changed_parts(source: &[u8], saved: &[u8]) -> Vec<String> {
+        let (source, saved) = (zip_entries(source), zip_entries(saved));
+        assert_eq!(
+            source.keys().collect::<Vec<_>>(),
+            saved.keys().collect::<Vec<_>>()
+        );
+        source
+            .into_iter()
+            .filter(|(name, bytes)| saved.get(name) != Some(bytes))
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    fn revision_kinds(original: &[u8], edited: &[u8]) -> Vec<RevisionKind> {
+        let mut compared = Document::from_bytes(original).unwrap();
+        compared
+            .compare(&Document::from_bytes(edited).unwrap(), "R", TIMESTAMP)
+            .unwrap();
+        compared
+            .revisions()
+            .iter()
+            .map(|revision| revision.kind())
+            .collect()
+    }
+
+    fn edited_save(source: &[u8], old: &str, new: &str, expected: usize) -> Vec<u8> {
+        let mut document = Document::from_bytes(source).unwrap();
+        assert_eq!(document.try_replace_text(old, new).unwrap(), expected);
+        document.to_bytes().unwrap()
+    }
+
+    /// The reproduction of #160 section 3, with the self-closed root it
+    /// reports, the open and close pair of the #158 report fixture, and that
+    /// fixture's unused default namespace.
+    #[test]
+    fn empty_comments_part_keeps_its_bytes_and_compares_against_its_own_save() {
+        for comments in [
+            format!("{DECLARATION}<w:comments {WORD_ROOT}/>"),
+            format!("{DECLARATION}<w:comments {WORD_ROOT}></w:comments>"),
+            format!(
+                r#"{DECLARATION}<w:comments {WORD_ROOT} xmlns="http://schemas.microsoft.com/office/tasks/2019/documenttasks"></w:comments>"#
+            ),
+        ] {
+            let source = package_with(
+                None,
+                &[("rId99", "/word/comments.xml", COMMENTS, &comments)],
+            );
+
+            let saved = Document::from_bytes(&source).unwrap().to_bytes().unwrap();
+            assert_eq!(
+                changed_parts(&source, &saved),
+                Vec::<String>::new(),
+                "{comments}"
+            );
+            assert_eq!(revision_kinds(&source, &saved), []);
+
+            let edited = edited_save(&source, "Lorem", "LOREM", 1);
+            assert_eq!(part(&edited, "/word/comments.xml"), comments);
+            assert_eq!(
+                revision_kinds(&source, &edited),
+                [RevisionKind::Deletion, RevisionKind::Insertion]
+            );
+        }
+    }
+
+    /// A Word document with one comment. Word writes `w:id` first on the
+    /// comment and `w14:paraId` on its paragraph, and rdocx writes neither
+    /// that way.
+    fn word_comment_package() -> (Vec<u8>, String) {
+        let document = format!(
+            concat!(
+                "{}<w:document {}><w:body><w:p w14:paraId=\"1A2B3C4D\" w14:textId=\"77777777\">",
+                "<w:commentRangeStart w:id=\"0\"/><w:r><w:t>Lorem</w:t></w:r>",
+                "<w:commentRangeEnd w:id=\"0\"/><w:r><w:commentReference w:id=\"0\"/></w:r>",
+                "<w:r><w:t xml:space=\"preserve\"> ipsum dolor.</w:t></w:r></w:p>",
+                "<w:sectPr/></w:body></w:document>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let comments = format!(
+            concat!(
+                "{}<w:comments {}><w:comment w:id=\"0\" w:author=\"Ada\" ",
+                "w:date=\"2026-09-27T10:00:00Z\" w:initials=\"AL\">",
+                "<w:p w14:paraId=\"5E6F7A8B\" w14:textId=\"77777777\"><w:r><w:t>Check this.</w:t></w:r></w:p>",
+                "</w:comment></w:comments>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let source = package_with(
+            Some(&document),
+            &[("rId99", "/word/comments.xml", COMMENTS, &comments)],
+        );
+        (source, comments)
+    }
+
+    /// A rewrite of the unchanged part made compare refuse any Word file with
+    /// comments against its own save.
+    #[test]
+    fn word_comments_keep_their_bytes_through_a_body_edit() {
+        let (source, comments) = word_comment_package();
+
+        let saved = Document::from_bytes(&source).unwrap().to_bytes().unwrap();
+        assert_eq!(changed_parts(&source, &saved), Vec::<String>::new());
+        assert_eq!(revision_kinds(&source, &saved), []);
+
+        let edited = edited_save(&source, "dolor", "DOLOR", 1);
+        assert_eq!(part(&edited, "/word/comments.xml"), comments);
+        assert_eq!(
+            revision_kinds(&source, &edited),
+            [RevisionKind::Deletion, RevisionKind::Insertion]
+        );
+    }
+
+    /// Removing the last comment leaves no paragraph id, and the rewritten
+    /// root used to drop the `w14` declaration that `mc:Ignorable` lists.
+    #[test]
+    fn rewritten_comments_root_keeps_every_declaration_in_source_order() {
+        let (source, comments) = word_comment_package();
+        let mut document = Document::from_bytes(&source).unwrap();
+        assert!(document.remove_comment(0).unwrap());
+        let xml = part(&document.to_bytes().unwrap(), "/word/comments.xml");
+        assert!(!xml.contains("w:comment "), "{xml}");
+        assert_eq!(root_tag(&xml), root_tag(&comments));
+        assert_ignorable_declared(root_tag(&xml), "w14 w15");
+    }
+
+    /// The mirror case noted in PR #154: an edited `document.xml` lost
+    /// `mc:Ignorable` while its body kept every `w14:paraId`.
+    #[test]
+    fn edited_main_document_keeps_mc_ignorable_while_its_body_uses_w14() {
+        let document = format!(
+            concat!(
+                "{}<w:document {}><w:body>",
+                "<w:p w14:paraId=\"1A2B3C4D\" w14:textId=\"77777777\"><w:r><w:t>Lorem ipsum dolor.</w:t></w:r></w:p>",
+                "<w:p w14:paraId=\"2A2B3C4D\" w14:textId=\"77777777\"><w:r><w:t>Second paragraph.</w:t></w:r></w:p>",
+                "<w:sectPr/></w:body></w:document>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let source = package_with(Some(&document), &[]);
+
+        let edited = edited_save(&source, "Lorem", "LOREM", 1);
+        let xml = part(&edited, "/word/document.xml");
+        assert_ignorable_declared(root_tag(&xml), "w14 w15");
+        assert!(xml.contains(r#"w14:paraId="2A2B3C4D""#), "{xml}");
+        assert_eq!(
+            revision_kinds(&source, &edited),
+            [RevisionKind::Deletion, RevisionKind::Insertion]
+        );
+
+        let again = edited_save(&edited, "Second", "SECOND", 1);
+        assert_eq!(
+            root_tag(&part(&again, "/word/document.xml")),
+            root_tag(&xml)
+        );
+    }
+
+    /// A replacement in a header or footer rewrites its part, and the
+    /// rewritten root dropped `mc:Ignorable`.
+    #[test]
+    fn rewritten_header_and_footer_keep_mc_ignorable_and_its_declarations() {
+        let document = format!(
+            concat!(
+                "{}<w:document {}><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p>",
+                "<w:sectPr><w:headerReference w:type=\"default\" r:id=\"rIdHeader\"/>",
+                "<w:footerReference w:type=\"default\" r:id=\"rIdFooter\"/></w:sectPr>",
+                "</w:body></w:document>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let story = |root: &str, text: &str| {
+            format!(
+                concat!(
+                    "{}<w:{} {}><w:p w14:paraId=\"3A2B3C4D\" w14:textId=\"77777777\">",
+                    "<w:r><w:t>{}</w:t></w:r></w:p></w:{}>",
+                ),
+                DECLARATION, root, WORD_ROOT, text, root
+            )
+        };
+        let source = package_with(
+            Some(&document),
+            &[
+                (
+                    "rIdHeader",
+                    "/word/header1.xml",
+                    HEADER,
+                    &story("hdr", "Header margin"),
+                ),
+                (
+                    "rIdFooter",
+                    "/word/footer1.xml",
+                    FOOTER,
+                    &story("ftr", "Footer margin"),
+                ),
+            ],
+        );
+
+        let edited = edited_save(&source, "margin", "MARGIN", 2);
+        for name in ["/word/header1.xml", "/word/footer1.xml"] {
+            let xml = part(&edited, name);
+            assert!(xml.contains("MARGIN"), "{xml}");
+            assert_ignorable_declared(root_tag(&xml), "w14 w15");
+            assert!(xml.contains(r#"w14:paraId="3A2B3C4D""#), "{xml}");
+        }
+    }
+}
+
 mod f265_run_property_regressions {
     use super::*;
     use rdocx::RunFontSlot;
@@ -31453,6 +32055,7 @@ mod advanced_table_geometry_regressions {
                 extra_namespaces: Vec::new(),
                 background_xml: None,
                 background_extra_xml: Vec::new(),
+                root_attributes: Vec::new(),
             },
             styles: CT_Styles::new_default(),
             numbering: None,

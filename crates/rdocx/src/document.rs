@@ -14,7 +14,7 @@ use oxml_chart::{CT_ChartSpace, ChartData, ChartKind};
 use oxml_core::app_properties::AppProperties;
 use oxml_opc::content_types;
 use oxml_opc::relationship::rel_types;
-use oxml_opc::{OpcPackage, PackageReadLimits};
+use oxml_opc::{OpcPackage, PackageReadLimits, write_atomic_file};
 use oxml_sml::Workbook;
 use quick_xml::Writer;
 use quick_xml::XmlVersion;
@@ -231,6 +231,24 @@ impl WordPackageClass {
             content_types::WORD_TEMPLATE_MACRO_ENABLED => Some(Self::MacroEnabledTemplate),
             _ => None,
         }
+    }
+
+    /// The class that a `.docx`, `.docm`, `.dotx`, or `.dotm` path names.
+    fn from_path(path: &Path) -> Option<Self> {
+        match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+            "docx" => Some(Self::Document),
+            "docm" => Some(Self::MacroEnabledDocument),
+            "dotx" => Some(Self::Template),
+            "dotm" => Some(Self::MacroEnabledTemplate),
+            _ => None,
+        }
+    }
+
+    fn is_macro_enabled(self) -> bool {
+        matches!(
+            self,
+            Self::MacroEnabledDocument | Self::MacroEnabledTemplate
+        )
     }
 }
 
@@ -6594,8 +6612,34 @@ fn restart_merges_continued_below(table: &mut CT_Tbl, row_index: usize) -> Resul
 
 fn set_story_source_xml(document: &mut Document, part_name: &str, xml: Vec<u8>) -> Result<()> {
     if part_name == document.doc_part_name {
+        // The main-part story source is canonical XML. It drops a root
+        // default namespace and every body declaration, and binds the root
+        // `w`, `r` and `mc` prefixes to their canonical URIs. The save path's
+        // check on those declarations keeps retained content of the replaced
+        // part in its namespace.
+        let rewritten_root_declarations: Vec<_> = document
+            .root_namespace_declarations
+            .iter()
+            .filter(|(name, _)| {
+                matches!(name.as_str(), "xmlns" | "xmlns:w" | "xmlns:r" | "xmlns:mc")
+            })
+            .cloned()
+            .collect();
+        if let Some(prefix) = unsafe_serializer_namespace_prefix(
+            &rewritten_root_declarations,
+            &document.body_namespace_declarations,
+            document.package.get_part(part_name),
+        ) {
+            return Err(Error::Other(format!(
+                "cannot serialize a modified document with a shadowed `{prefix}` namespace"
+            )));
+        }
+        let namespace_scopes = document_namespace_scopes(&xml)?;
         document.document = CT_Document::from_xml(&xml)?;
         document.package.set_part(part_name, xml);
+        document.root_namespace_declarations = namespace_scopes.root_declarations;
+        document.body_namespace_declarations = namespace_scopes.body_declarations;
+        document.body_namespace_bindings = namespace_scopes.body_bindings;
     } else if document.comments_part_name.as_deref() == Some(part_name) {
         document.comments = Some(rdocx_oxml::comments::CT_Comments::from_xml(&xml)?);
         document.package.set_part(part_name, xml);
@@ -11625,6 +11669,7 @@ impl Document {
         write_atomic_file(
             path.as_ref(),
             &bytes,
+            "rdocx",
             "invalid Word package file name",
             "could not allocate Word package save staging file",
         )?;
@@ -11988,7 +12033,26 @@ impl Document {
     }
 
     /// Save the document to a file path.
+    ///
+    /// The package is staged in a synced sibling file and renamed over `path`
+    /// through [`oxml_opc::write_atomic_file`], so a failed save leaves an
+    /// existing file as it was. A symbolic link at `path` is kept and the file
+    /// it names is replaced, and on Unix that file keeps its permission bits.
+    ///
+    /// A `.docx`, `.docm`, `.dotx`, or `.dotm` extension selects the main
+    /// part content type, so a template saved as `.docx` declares a document.
+    /// Any other extension keeps the opened class, and `save_encrypted` and
+    /// the Flat OPC saves ignore the extension. When the class changes, a
+    /// main part that carries a VBA project cannot be saved under a
+    /// macro-free extension, because the project would remain in a file that
+    /// claims to carry none. [`Document::save_as_package_class`] performs
+    /// that conversion explicitly and keeps the VBA part.
+    ///
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        let path = path.as_ref();
+        if let Some(class) = self.package_class_for_path(path)? {
+            return self.save_as_package_class(path, class);
+        }
         let mut candidate = self.clone_for_staging();
         candidate.prepare_staged_output()?;
         crate::embedded::persist_invalidated_package_signature(
@@ -12012,6 +12076,44 @@ impl Document {
         Ok(buf.into_inner())
     }
 
+    /// Serialize the bytes that [`Document::save`] writes to `path`.
+    pub fn to_bytes_for_path<P: AsRef<Path>>(&mut self, path: P) -> Result<Vec<u8>> {
+        match self.package_class_for_path(path.as_ref())? {
+            Some(class) => self.to_bytes_as(class),
+            None => self.to_bytes(),
+        }
+    }
+
+    /// The class a save to `path` converts to, or `None` to keep the opened class.
+    fn package_class_for_path(&self, path: &Path) -> Result<Option<WordPackageClass>> {
+        let Some(target) = WordPackageClass::from_path(path) else {
+            return Ok(None);
+        };
+        // Read the override itself: a new compact document has no main part
+        // bytes until staging, so `package_class` cannot validate it yet.
+        let current = self
+            .package
+            .content_types
+            .override_for(&self.doc_part_name)
+            .and_then(WordPackageClass::from_content_type);
+        if current == Some(target) {
+            return Ok(None);
+        }
+        let carries_vba =
+            self.package
+                .get_part_rels(&self.doc_part_name)
+                .is_some_and(|relationships| {
+                    relationships.get_by_type(rel_types::VBA_PROJECT).is_some()
+                });
+        if carries_vba && !target.is_macro_enabled() {
+            return Err(Error::Other(format!(
+                "cannot save {}: the document carries a VBA project and the extension names a macro-free class, save it as .docm or .dotm",
+                path.display()
+            )));
+        }
+        Ok(Some(target))
+    }
+
     /// Save a password-protected document using the fixed Agile write profile.
     #[cfg(all(feature = "agile-encryption", not(target_arch = "wasm32")))]
     pub fn save_encrypted<P: AsRef<Path>>(&self, path: P, password: &str) -> Result<()> {
@@ -12019,6 +12121,7 @@ impl Document {
         write_atomic_file(
             path.as_ref(),
             &bytes,
+            "rdocx",
             "invalid file name",
             "could not allocate encrypted-save staging file",
         )?;
@@ -12053,8 +12156,20 @@ impl Document {
         self.flush_to_package()
     }
 
+    /// Stage every public output. A comments model that no longer matches its
+    /// part is written back even when no mutation marked it dirty. An
+    /// unchanged comments part keeps its producer bytes, as styles and the
+    /// other modelled parts do, so a save without a comment edit neither
+    /// rewrites it nor invalidates a package signature over it.
     pub(crate) fn prepare_staged_output(&mut self) -> Result<()> {
-        self.comments_dirty |= self.comments.is_some() && self.comments_part_name.is_some();
+        if let (Some(comments), Some(part_name)) = (&self.comments, &self.comments_part_name) {
+            self.comments_dirty |= self
+                .package
+                .get_part(part_name)
+                .and_then(|xml| rdocx_oxml::comments::CT_Comments::from_xml(xml).ok())
+                .as_ref()
+                != Some(comments);
+        }
         self.prepare_staged_package()
     }
 
@@ -22971,86 +23086,6 @@ impl Document {
         }
 
         issues
-    }
-}
-
-pub(crate) fn write_atomic_file(
-    path: &Path,
-    bytes: &[u8],
-    invalid_name_message: &'static str,
-    exhausted_message: &'static str,
-) -> std::io::Result<()> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let file_name = path.file_name().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, invalid_name_message)
-    })?;
-    for attempt in 0..128_u8 {
-        let mut temporary_name = std::ffi::OsString::from(".");
-        temporary_name.push(file_name);
-        temporary_name.push(format!(".rdocx-{}-{attempt}.tmp", std::process::id()));
-        let temporary = parent.join(temporary_name);
-        let mut file = match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
-        {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error),
-        };
-        let result = std::io::Write::write_all(&mut file, bytes).and_then(|()| file.sync_all());
-        drop(file);
-        let result = result.and_then(|()| replace_file(&temporary, path));
-        if result.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        return result;
-    }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::AlreadyExists,
-        exhausted_message,
-    ))
-}
-
-#[cfg(not(target_os = "windows"))]
-pub(crate) fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
-    std::fs::rename(source, destination)
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-
-    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
-    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
-
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn MoveFileExW(
-            existing_file_name: *const u16,
-            new_file_name: *const u16,
-            flags: u32,
-        ) -> i32;
-    }
-
-    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
-    let destination: Vec<u16> = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    // SAFETY: both path buffers are NUL-terminated and remain alive for the call.
-    let replaced = unsafe {
-        MoveFileExW(
-            source.as_ptr(),
-            destination.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if replaced == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
     }
 }
 
