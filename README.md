@@ -165,6 +165,14 @@ The [binding specification](https://github.com/tensorbee/rdocx/blob/main/docs/hl
 defines where Python, WebAssembly, and CLI intentionally expose less than
 native Rust.
 
+### Community Claude plugin
+
+Contributor [hadim](https://github.com/hadim) maintains
+[rdocx-skills](https://github.com/hadim/rdocx-skills), a Claude plugin with
+DOCX and PPTX skills built on the rdocx and rpptx CLIs and Python bindings.
+Its repository documents installation, pinned builds, acceptance tests, and
+current capability gaps.
+
 ## Evidence-based alternatives
 
 Comparison checked 2026-09-09. `ND` means the capability was not documented in

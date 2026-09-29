@@ -9,7 +9,7 @@
 
 PRs 183, 184, 190, 193, 198 and 205 repair producer-prefix handling,
 identity preservation and comparison behavior. The present comparison entry
-point is `crates/rdocx/src/comparison.rs:226`; field and TOC parsing reaches
+point is `crates/rdocx/src/comparison.rs:226`. Field and TOC parsing reaches
 `crates/rdocx-oxml/src/text.rs`. The PR heads share ancestor changes and
 source files with F-X138. Replaying a whole head could silently replace that
 feature's story and replacement semantics.
