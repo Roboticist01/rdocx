@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)            | 168 | 144 | 1 | 19 |
-| **Total** | **493** | **406** | **1** | **82** |
+| X, Cross-cutting (opportunistic)            | 168 | 145 | 0 | 19 |
+| **Total** | **493** | **407** | **0** | **82** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -693,7 +693,7 @@ regenerated, never hand-edited.
 | F-X137 | Package and CLI safety contribution wave | S76 | L | done |
 | F-X138 | Word story and content contribution wave | S76 | L | done |
 | F-X139 | Word identity and comparison contribution wave | S76 | L | done |
-| F-X140 | Rendering and layout contribution wave | S77 | L | in-progress |
+| F-X140 | Rendering and layout contribution wave | S77 | L | done |
 | F-X141 | Word Python contribution wave | S77 | L | pending |
 | F-X142 | Presentation Python contribution wave | S77 | L | pending |
 | F-X143 | Revision listing and CLI story contribution wave | S77 | M | pending |

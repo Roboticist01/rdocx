@@ -16458,3 +16458,46 @@ unsupported ownership and geometry cases rather than duplicating content.
 **Hash harness.** Unchanged, 49 of 49 at the integrated S76 gate.
 
 **Notes for future sessions.** The broader Issue 159 and 161 acceptance matrices remain assigned to S78. Retain `work/f-x139-codex` and its worktree through sprint closure.
+
+### F-X140, Rendering and layout contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated PRs 175, 188, 196, 199, 200, 206 and 207.
+Presentation PDF backgrounds, optional gradient attributes, duplicated
+paragraph properties, picture geometry and connector styles now survive the
+supported read, edit and render paths. Word keep-with-next chains, row minimum
+heights and warm restart boundaries follow their focused regressions. PDF
+ToUnicode maps preserve ligature text for extraction.
+
+**Non-obvious choices.** PR 188's PDF mapping change and its 14 expected
+hash keys were isolated in a labelled commit. The PR 206 fixture expectation
+was corrected only after inspecting the generated deck. Stacked and
+overlapping contributions were replayed against the completed S76 prefix,
+with unmodelled XML and schema order preserved.
+
+**Deviations from the design plan.** None. The full workspace gate and sprint
+review are reserved for the final integrated S77 result under the current
+workflow.
+
+**Spec sections touched.** `docs/hld/05-drawingml-model.md`,
+`docs/hld/06-presentationml-model.md`,
+`docs/hld/07-inheritance-and-resolution.md`,
+`docs/hld/08-rendering-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The worker's golden gate passed pinned Word and presentation
+fidelity, focused layout and presentation regression suites,
+`/verify --scoped F-X140`, and microscope pass 1 with zero defects and zero
+smells. The integrated prefix passed formatting, workspace Clippy and the
+affected Word and presentation suites reached by the interrupted full run.
+The complete full gate remains due at S77 closure.
+
+**Hash harness.** Fourteen declared `pdf/resources` and `pdf/bytes` keys
+changed across seven samples for the ToUnicode ligature correction. All 49
+entries matched the reviewed baseline in the worker handoff.
+
+**Notes for future sessions.** Retain the F-X140 worker branch and worktree
+through the final sprint review. PR-head CI still needs rerun after the
+contribution branches are rebased.

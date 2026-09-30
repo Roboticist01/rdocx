@@ -503,6 +503,8 @@ defended.
 | F-X138 | S76 | L | 5 | 1 | 2026-09-30 | Integrated eight Word story PRs with direct body coordinates, comment anchoring, content control traversal and source-preserving replacement |
 | F-X139 | S76 | L | 5 | 1 | 2026-09-30 | Integrated six Word identity and comparison PRs with producer attribute preservation, marker ordering, comparison options and CLI comment dates |
 
+| F-X140 | S77 | L | 5 | 1 | 2026-09-30 | Integrated seven rendering and layout PRs with reviewed ligature PDF hashes, presentation preservation and Word pagination regressions |
+
 ## Velocity
 
 Recalculated at each sprint close. The backlog assumes about 2 stories per week
