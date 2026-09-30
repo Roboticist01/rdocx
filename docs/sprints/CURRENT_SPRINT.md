@@ -5,7 +5,7 @@
 **Goal**: integrate the remaining reviewed rendering, layout, Python,
 presentation and CLI contributions on the completed S76 prefix. Reconcile
 stacked and overlapping PRs before one combined verification and review
-boundary. Issue acceptance continues in S78 and S79.
+boundary. Issue acceptance continues through S82 before the deferred feature work at S83.
 
 ## Spec references
 
@@ -21,7 +21,7 @@ boundary. Issue acceptance continues in S78 and S79.
   behavior and both CLI contracts.
 - `docs/hld/12-testing-strategy.md`, for deterministic rendering, the hash
   harness, fidelity corpora, binding smoke and integration evidence.
-- `docs/hld/14-development-backlog.md`, for F-X140 through F-X143
+- `docs/hld/14-development-backlog.md`, for F-X140 through F-X158
   dependencies, PR sets and named test gates.
 
 ## The wave
@@ -50,7 +50,8 @@ incremental diff of each stacked PR, then rebase and rerun CI.
 ## Definition of done for this sprint
 
 - Every S77 PR has a reviewed incremental diff, reconciled overlap and
-  passing relevant focused checks after rebasing.
+  passing relevant focused checks after rebasing. The later 30 September PR
+  intake is assigned to S78 through S81.
 - F-X140's intentional rendering delta has its own labelled commit and
   reviewed expected hash change. The deterministic Word and presentation
   fidelity gates pass.

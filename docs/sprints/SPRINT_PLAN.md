@@ -6,7 +6,7 @@ Sprints are dependency and review boundaries, not fixed two-week containers.
 Sprint clocks start at the first `/start-feature` of that sprint, not at a fixed
 calendar date.
 
-The active roadmap runs through S95, with earlier deferred cutover boundaries
+The active roadmap runs through S98, with earlier deferred cutover boundaries
 retained in place. The sizing rationale and compression options are in
 `docs/hld/14-development-backlog.md`.
 
@@ -754,9 +754,9 @@ against `14-development-backlog.md` M14 through M24.
 The order is deliberate and each boundary is a stopping point. Stopping after
 S45 leaves one chart engine serving both families. Stopping after S51 leaves a
 document-automation product. S69 closes the first Word-depth programme. S73
-closes from-scratch generation for the five private business documents, and S85
+closes from-scratch generation for the five private business documents, and S88
 closes the broader modern DOCX authoring boundary. The advanced spreadsheet
-programme starts only after S85 and only if its feasibility gate confirms a gap
+programme starts only after S88 and only if its feasibility gate confirms a gap
 worth filling in the Rust ecosystem.
 
 | Sprints | Milestone | Stories | Days |
@@ -770,12 +770,12 @@ worth filling in the Rust ecosystem.
 | S59 to S64 | M21, presentation depth | 15 | 60 |
 | S65 to S69 | M22, Word depth | 12 | 44 |
 | S70 to S73 | M23, from-scratch business documents | 24 | 112 |
-| S74 to S75, S80 to S85 | M24, modern DOCX authoring completeness | 47 | 219 |
-| S86 to S95 | M19, advanced spreadsheets | 21 | 85 |
+| S74 to S75, S83 to S88 | M24, modern DOCX authoring completeness | 47 | 219 |
+| S89 to S98 | M19, advanced spreadsheets | 21 | 85 |
 
 The table counts milestone stories only. S70 also carries four cross-cutting
 Issue 67 and Issue 69 stories estimated at 12 developer-days. S76 through
-S79 hold the separate contribution and issue repair programme.
+S82 hold the separate contribution and issue repair programme.
 
 ### M15, Charts beyond PowerPoint
 
@@ -1328,7 +1328,7 @@ evidence is attributed correctly. F-X084 through F-X086 are independent after
 that intake and may run in parallel, but only one story may own a rendering
 baseline change. F-240 is the planning authority. F-241 and F-242 consume its
 approved matrix, and F-240 updates the provisional sprint contents before
-S70 closes. The M24 end gate is S85.
+S70 closes. The M24 end gate is S88.
 
 #### Sprint S71, Fresh package, styles, and numbering
 
@@ -1523,7 +1523,7 @@ six remaining contributor branches and repairs open reports without a pull
 request. F-X136 finishes the distinct Issue 138 line-height and row-splitting
 report after F-X135's spacing and table-margin changes. F-X133 and F-271
 through F-277 were carried to the then-planned S76 at the approved cutoff.
-The unstarted S76 stories are now scheduled from S80 after repair intake.
+The unstarted S76 stories are now scheduled from S83 after repair intake.
 
 #### Sprint S76, Contribution intake and core repair
 
@@ -1574,167 +1574,233 @@ parent lands, then rebase the head and rerun CI. Binding smoke, package,
 rendering, documentation and release regression checks run on the combined
 result, followed by `/verify --full` and `/sprint-review`.
 
-#### Sprint S78, Issue matrix and layout repair
+#### Sprint S78, Word producer and comparison repair
 
-**Goal**: finish the identity, producer, comparison and layout defects that
-the contribution wave does not fully close. Verify the integrated result
-before broader binding and workflow acceptance.
+**Goal**: land the new Word preservation and comparison contributions, then
+finish the identity, producer and redline acceptance matrices.
 
 | F-ID | Title | Size |
 |------|-------|------|
+| F-X151 | Word preservation and comparison PR intake | L |
 | F-X144 | Identity and producer matrices across operations | L |
 | F-X145 | Comparison options and redline completion | L |
+
+F-X151 reviews PRs 214, 228, 229, 232, 233 and 239 against the S77 prefix.
+F-X144 follows that integration and completes Issues 157, 159 and 160.
+F-X145 then completes Issue 161, including edited-side comments and rebuilt
+TOCs. Rebase every old head against its actual parent, review only its
+incremental diff, and rerun the combined matrix and full sprint gate.
+
+#### Sprint S79, Word layout, CLI diff and binding repair
+
+**Goal**: finish the Word layout and CLI defects, then close the remaining
+Word Python binding gaps before the production fixture gate.
+
+| F-ID | Title | Size |
+|------|-------|------|
 | F-X146 | Word line height and inline picture spacing | L |
+| F-X152 | Full-story CLI diff and count repair | M |
+| F-X153 | Word Python supplemental contribution | M |
 
-F-X144 covers Issues 157, 159 and 160, including every matrix row and
-location, operation, and producer trait, after the PR fixes are integrated.
-F-X145 covers the remaining Issue 161 comment and TOC redline semantics
-and PR 205's marker placement limitation. F-X146 owns both unclaimed
-parts of Issue 162. The integrated result passes `/verify --full` and
-`/sprint-review` before S79 begins.
+F-X146 reviews PRs 222, 225 and 237 and completes Issues 162 and 226.
+PR 222's Test and MSRV failures block intake until corrected and rerun.
+F-X152 reviews PR 236 and completes Issue 227. F-X153 reviews PR 220,
+including its Issue 168 comment and run operations. The Word fixture and
+focused layout oracles run on the integrated result before `/verify --full`
+and `/sprint-review`.
 
-#### Sprint S79, Production checklist and issue closure gate
+#### Sprint S80, Word checklist and presentation preservation
 
-**Goal**: finish the remaining Word and PowerPoint binding contracts,
-exercise the attached production fixtures and workflows, and record a
-criterion-by-criterion result for every open technical issue. Issue 213 is
-an informational contribution note with no implementation acceptance
-criteria.
+**Goal**: complete the Word Python production checklist and land the new
+presentation preservation and drawing contributions on a reviewed prefix.
 
 | F-ID | Title | Size |
 |------|-------|------|
 | F-X147 | Complete rdocx Python production checklist | L |
+| F-X154 | Presentation text and preservation repair | M |
+| F-X155 | Presentation drawing API contribution | L |
+
+F-X147 completes every Issue 168 item after F-X141 and F-X153 or records a
+reviewed scope decision with a documented fallback where the reporter permits
+one. F-X154 reviews PRs 218 and 223 and completes Issues 215 and 216.
+F-X155 reviews PRs 219, 221, 224, 230 and 234. PR 219 follows PR 189,
+and PR 234 follows PR 207. Their shape, line, effect and binding overlap
+requires manual reconciliation and a fresh CI run.
+
+#### Sprint S81, Presentation composition and deck checklists
+
+**Goal**: finish the presentation authoring surface and prove the complete
+Issue 169 and Issue 217 deck checklists against independent viewers.
+
+| F-ID | Title | Size |
+|------|-------|------|
+| F-X156 | Presentation slide and table contribution | L |
 | F-X148 | Complete rpptx Python production checklist | L |
-| F-X149 | Production fixtures and workflow acceptance gate | L |
+| F-X157 | Complete deck-chain authoring checklist | L |
+
+F-X156 reviews PRs 231, 235 and 238. PR 231 follows PR 181. F-X148 checks
+all Issue 169 items, including shape hyperlinks, anchored comments and
+built-in table styles, after F-X142 and F-X156. F-X157 completes Issue 217,
+including outer shadows, connectors without theme effects, line ends, preset
+geometry, cross-deck import and scoped replacement. Both checklist stories
+require Python API, package validation, python-pptx reopening, LibreOffice
+render comparison and explicit scope decisions for any unsupported operation.
+
+#### Sprint S82, Production acceptance and issue closure evidence
+
+**Goal**: turn the reporter's Word and deck fixtures into repeatable acceptance
+checks, then reconcile every open issue criterion against the integrated result.
+
+| F-ID | Title | Size |
+|------|-------|------|
+| F-X149 | Word fixture and workflow acceptance gate | L |
+| F-X158 | Presentation fixture and workflow acceptance gate | L |
 | F-X150 | Reconcile issue closure evidence | M |
 
-F-X147 finishes the remaining explicit unchecked items in Issue 168, or
-records a reviewed product scope decision where that issue invites one.
-F-X148 independently checks F-X142's Issue 169 result against the production
-deck fixture and cross-viewer output. F-X149 makes the attached Issue 158 fixtures,
-matrices and workflows repeatable acceptance evidence. F-X150 compares
-every Issue 156 through 172 criterion against that evidence, including
-Issue 172's three comment entry points, without treating a merged PR as
-automatic issue completion. If any criterion remains open, the relevant
-F-ID remains pending and the issue stays open. The umbrella Issue 158 is
-last. This four-sprint repair programme exceeds ordinary sprint scope and
-is deliberately split at integrated verification boundaries before feature
-work resumes.
+F-X149 owns the 18 by 7 identity matrix, 11 by 8 producer matrix and complete
+DOCX workflow. F-X158 owns the deck workflow and cross-viewer acceptance for
+Issues 169, 170, 215, 216 and 217. F-X150 records criterion-level evidence
+for all 22 currently open issues, with Issue 158 last. A missing criterion
+keeps its issue open and is scheduled through a scoped follow-up F-ID. This
+six-sprint S77 to S82 repair programme exceeds a normal sprint and is split
+at integrated verification boundaries before feature work resumes.
 
-#### Contribution intake evidence, 29 September 2026
+#### Live contribution and issue inventory, 30 September 2026
 
-The GitHub snapshot contains 40 open PRs, all targeting `main`, and 18 open
-issues. No PR has an approved review recorded. The PR inventory below names
-each head, its snapshot check state, explicit stack parent, overlapping integration
-wave and related issue. `green` means the latest reported checks passed or
-were intentionally skipped. `running` means at least one required check had
-not completed. All heads require review and a fresh CI run against their
-rebased integration position. The S76 and S77 waves are an integration order,
-not permission to merge a PR directly to `main`.
+GitHub reported 61 open PRs and 22 open issues at this snapshot. Every PR
+still targets `main` and has no submitted GitHub review. `pass` means all
+reported checks completed successfully, `running` means a check remained
+incomplete, `fail` names a failed gate, and `none` means GitHub reported no
+checks. These are head-commit states, not approval to merge. The `S76` rows
+have already been replayed into the completed S76 prefix, and F-X140 has a
+reviewed commit on `sprint/s77`. Their original PRs remain open pending
+integrated acceptance. `*` marks a PR that appears to cover an issue's full
+narrow implementation claim. The issue still requires its stated evidence.
 
-| PR | Base | Head | CI | Review | Stack | Overlap example | Wave | Issues |
+| PR | Base | Head | CI | Review | Stack | Overlap | F-ID | Issues |
 |---|---|---|---|---|---|---|---|---|
-| [#173](https://github.com/tensorbee/rdocx/pull/173) | `main` | `fix/rpptx-run-text-keeps-handles` | green | none | - | `rpptx-py/src/text.rs` | F-X142 | 167 |
-| [#174](https://github.com/tensorbee/rdocx/pull/174) | `main` | `fix/cli-output-overwrite-and-closed-pipe` | green | none | - | `rdocx-cli/src/commands.rs` | F-X137 | 156, 166 |
-| [#175](https://github.com/tensorbee/rdocx/pull/175) | `main` | `fix/rpptx-pdf-backgrounds-and-optional-gradient-attributes` | green | none | - | tests or docs | F-X140 | 170 |
-| [#176](https://github.com/tensorbee/rdocx/pull/176) | `main` | `feat/python-compare-options` | green | none | - | `rdocx-py/src/document.rs` | F-X141 | 161, 168 |
-| [#177](https://github.com/tensorbee/rdocx/pull/177) | `main` | `fix/body-readers-reach-content-controls` | green | none | - | `rdocx/src/document.rs` | F-X138 | 160 |
-| [#178](https://github.com/tensorbee/rdocx/pull/178) | `main` | `fix/atomic-library-save` | green | none | - | `rdocx/src/document.rs` | F-X137 | 164 |
-| [#179](https://github.com/tensorbee/rdocx/pull/179) | `main` | `fix/direct-body-index-coordinates` | green | none | - | `rdocx/src/document.rs` | F-X138 | 163 |
-| [#180](https://github.com/tensorbee/rdocx/pull/180) | `main` | `fix/text-box-rewrite-keeps-all-children` | green | none | - | `rdocx-oxml/src/placeholder.rs` | F-X138 | 160 |
-| [#181](https://github.com/tensorbee/rdocx/pull/181) | `main` | `feat/rpptx-py-facade-basics` | green | none | - | `rpptx-py/src/lib.rs` | F-X142 | 169, 158 |
-| [#182](https://github.com/tensorbee/rdocx/pull/182) | `main` | `fix/story-splice-namespace-facts` | green | none | - | `rdocx/src/document.rs` | F-X137 | 157 |
-| [#183](https://github.com/tensorbee/rdocx/pull/183) | `main` | `fix/toc-rebuild-unbound-word-prefix` | green | none | - | `rdocx-oxml/src/text.rs` | F-X139 | 159 |
-| [#184](https://github.com/tensorbee/rdocx/pull/184) | `main` | `fix/compare-producer-noise` | green | none | - | `rdocx/src/comparison.rs` | F-X139 | 159, 160 |
-| [#185](https://github.com/tensorbee/rdocx/pull/185) | `main` | `fix/rewritten-part-roots-and-comments-part` | green | none | - | `rdocx/src/document.rs` | F-X137 | 160 |
-| [#186](https://github.com/tensorbee/rdocx/pull/186) | `main` | `feat/story-revisions-listing` | green | none | - | `rdocx/src/document.rs` | F-X143 | 165 |
-| [#187](https://github.com/tensorbee/rdocx/pull/187) | `main` | `feat/py-tables-and-sections` | green | none | - | `rdocx/src/document.rs` | F-X141 | 168 |
-| [#188](https://github.com/tensorbee/rdocx/pull/188) | `main` | `fix/pdf-tounicode-ligatures` | green | none | - | tests or docs | F-X140 | 171 |
-| [#189](https://github.com/tensorbee/rdocx/pull/189) | `main` | `feat/rpptx-py-tables-crop-zorder-hyperlinks` | green | none | - | `rpptx/src/lib.rs` | F-X142 | 169 |
-| [#190](https://github.com/tensorbee/rdocx/pull/190) | `main` | `fix/compare-diagnostics-instead-of-refusals` | green | none | - | `rdocx/src/comparison.rs` | F-X139 | 159, 160, 161 |
-| [#191](https://github.com/tensorbee/rdocx/pull/191) | `main` | `fix/comment-anchoring-run-index` | green | none | - | `rdocx/src/document.rs` | F-X138 | 172 |
-| [#192](https://github.com/tensorbee/rdocx/pull/192) | `main` | `feat/rpptx-effective-placeholder-geometry` | green | none | - | `rpptx/src/lib.rs` | F-X142 | 169 |
-| [#193](https://github.com/tensorbee/rdocx/pull/193) | `main` | `fix/table-row-identity-attributes` | green | none | - | `rdocx/src/document.rs` | F-X139 | 159 |
-| [#194](https://github.com/tensorbee/rdocx/pull/194) | `main` | `feat/py-bookmarks-fields-stories-replace-render` | green | none | - | `rdocx/src/document.rs` | F-X141 | 168 |
-| [#195](https://github.com/tensorbee/rdocx/pull/195) | `main` | `fix/replace-reaches-content-controls` | green | none | - | `rdocx/src/document.rs` | F-X138 | 160 |
-| [#196](https://github.com/tensorbee/rdocx/pull/196) | `main` | `fix/rpptx-duplicate-paragraph-properties` | fail | none | - | `oxml-drawing/src/text/paragraph.rs` | F-X140 | - |
-| [#197](https://github.com/tensorbee/rdocx/pull/197) | `main` | `fix/template-saved-as-document-content-type` | green | none | - | `rdocx/src/document.rs` | F-X137 | - |
-| [#198](https://github.com/tensorbee/rdocx/pull/198) | `main` | `feat/cli-compare-options-comment-dates` | green | none | - | `rdocx/src/document.rs` | F-X139 | 161 |
-| [#199](https://github.com/tensorbee/rdocx/pull/199) | `main` | `fix/keep-with-next-chains` | running | none | - | `rdocx-layout/src/engine.rs` | F-X140 | - |
-| [#200](https://github.com/tensorbee/rdocx/pull/200) | `main` | `fix/restart-before-first-changed-block` | green | none | - | `rdocx-layout/src/engine.rs` | F-X140 | - |
-| [#201](https://github.com/tensorbee/rdocx/pull/201) | `main` | `feat/py-paragraph-text-style-check-core-properties` | green | none | - | `rdocx/src/document.rs` | F-X141 | 168 |
-| [#202](https://github.com/tensorbee/rdocx/pull/202) | `main` | `fix/replace-reaches-notes-and-tracked-insertions` | running | none | #195 | `rdocx/src/document.rs` | F-X138 | 160 |
-| [#203](https://github.com/tensorbee/rdocx/pull/203) | `main` | `feat/py-styles-numbering-and-default-styles` | running | none | #201 | `rdocx/src/document.rs` | F-X141 | 168 |
-| [#204](https://github.com/tensorbee/rdocx/pull/204) | `main` | `feat/cli-text-every-story-and-stricter-validate` | running | none | #198 | `rdocx/src/document.rs` | F-X143 | 160, 158 |
-| [#205](https://github.com/tensorbee/rdocx/pull/205) | `main` | `fix/comparison-marker-unit-boundaries` | running | none | - | `rdocx/src/comparison.rs` | F-X139 | 161 |
-| [#206](https://github.com/tensorbee/rdocx/pull/206) | `main` | `fix/rpptx-added-pictures-have-a-geometry` | fail | none | - | tests or docs | F-X140 | - |
-| [#207](https://github.com/tensorbee/rdocx/pull/207) | `main` | `fix/rpptx-added-connectors-have-a-line` | running | none | - | `rpptx/src/lib.rs` | F-X140 | - |
-| [#208](https://github.com/tensorbee/rdocx/pull/208) | `main` | `feat/rpptx-populate-group-shapes` | running | none | #189 | `rpptx/src/lib.rs` | F-X142 | 169 |
-| [#209](https://github.com/tensorbee/rdocx/pull/209) | `main` | `feat/rpptx-table-rows-and-columns` | running | none | #189 | `rpptx/src/lib.rs` | F-X142 | 169 |
-| [#210](https://github.com/tensorbee/rdocx/pull/210) | `main` | `fix/word-text-boxes-read-and-counted-once` | running | none | #195 | `rdocx/src/document.rs` | F-X138 | 160 |
-| [#211](https://github.com/tensorbee/rdocx/pull/211) | `main` | `fix/text-inside-simple-fields-smart-tags-custom-xml` | running | none | #202 | `rdocx/src/document.rs` | F-X138 | 160 |
-| [#212](https://github.com/tensorbee/rdocx/pull/212) | `main` | `feat/py-hyperlink-retarget-and-picture-resize` | running | none | - | `rdocx/src/document.rs` | F-X141 | 168 |
-PRs 173, 174, 175, 178, 186 and 188 claim complete fixes for Issues
-167, 156 and 166, 170, 164, 165 and 171 respectively. Those claims still
-need their issue acceptance evidence. PRs 179 and 191 jointly address
-Issue 163, while 191 also targets Issue 172. Every other numbered issue
-cell in the inventory is partial coverage of its larger issue contract.
-Rows with `-` address adjacent defects or product quality without claiming
-an open issue. The overlap example is one source path shared with another
-open PR, except where only tests or docs overlap. Stacked PR file lists
-include ancestor changes, so review their incremental diffs separately.
+| [#173](https://github.com/tensorbee/rdocx/pull/173) | `main` | `fix/rpptx-run-text-keeps-handles` | pass | none | - | `rpptx-py/src/text.rs with #231` | F-X142 | 167* |
+| [#174](https://github.com/tensorbee/rdocx/pull/174) | `main` | `fix/cli-output-overwrite-and-closed-pipe` | pass | none | - | `rdocx-cli/README.md with #197` | F-X137 | 156*, 166* |
+| [#175](https://github.com/tensorbee/rdocx/pull/175) | `main` | `fix/rpptx-pdf-backgrounds-and-optional-gradient-attributes` | pass | none | - | `oxml-drawing/README.md with #238` | F-X140 | 170* |
+| [#176](https://github.com/tensorbee/rdocx/pull/176) | `main` | `feat/python-compare-options` | fail: CI gate, Presentation fidelity | none | - | `rdocx-py/python/rdocx/_rdocx.pyi with #212` | F-X141 | 161, 168 |
+| [#177](https://github.com/tensorbee/rdocx/pull/177) | `main` | `fix/body-readers-reach-content-controls` | pass | none | - | `README.md with #211` | F-X138 | 160 |
+| [#178](https://github.com/tensorbee/rdocx/pull/178) | `main` | `fix/atomic-library-save` | pass | none | - | `README.md with #233` | F-X137 | 164* |
+| [#179](https://github.com/tensorbee/rdocx/pull/179) | `main` | `fix/direct-body-index-coordinates` | fail: CI gate, Test, Word fidelity | none | - | `README.md with #194` | F-X138 | 163 |
+| [#180](https://github.com/tensorbee/rdocx/pull/180) | `main` | `fix/text-box-rewrite-keeps-all-children` | pass | none | - | `README.md with #211` | F-X138 | 160 |
+| [#181](https://github.com/tensorbee/rdocx/pull/181) | `main` | `feat/rpptx-py-facade-basics` | pass | none | - | `rpptx-py/README.md with #231` | F-X142 | 169 |
+| [#182](https://github.com/tensorbee/rdocx/pull/182) | `main` | `fix/story-splice-namespace-facts` | pass | none | - | `README.md with #220` | F-X137 | 157 |
+| [#183](https://github.com/tensorbee/rdocx/pull/183) | `main` | `fix/toc-rebuild-unbound-word-prefix` | pass | none | - | `README.md with #193` | F-X139 | 159 |
+| [#184](https://github.com/tensorbee/rdocx/pull/184) | `main` | `fix/compare-producer-noise` | pass | none | - | `README.md with #211` | F-X139 | 159, 160 |
+| [#185](https://github.com/tensorbee/rdocx/pull/185) | `main` | `fix/rewritten-part-roots-and-comments-part` | pass | none | - | `README.md with #211` | F-X137 | 160 |
+| [#186](https://github.com/tensorbee/rdocx/pull/186) | `main` | `feat/story-revisions-listing` | pass | none | - | `README.md with #191` | F-X143 | 165* |
+| [#187](https://github.com/tensorbee/rdocx/pull/187) | `main` | `feat/py-tables-and-sections` | pass | none | - | `README.md with #203` | F-X141 | 168 |
+| [#188](https://github.com/tensorbee/rdocx/pull/188) | `main` | `fix/pdf-tounicode-ligatures` | pass | none | - | `README.md with #237` | F-X140 | 171* |
+| [#189](https://github.com/tensorbee/rdocx/pull/189) | `main` | `feat/rpptx-py-tables-crop-zorder-hyperlinks` | pass | none | - | `rpptx-oxml/README.md with #219` | F-X142 | 169 |
+| [#190](https://github.com/tensorbee/rdocx/pull/190) | `main` | `fix/compare-diagnostics-instead-of-refusals` | pass | none | #184 | `README.md with #211` | F-X139 | 159, 160, 161 |
+| [#191](https://github.com/tensorbee/rdocx/pull/191) | `main` | `fix/comment-anchoring-run-index` | pass | none | #179 | `README.md with #220` | F-X138 | 163, 172 |
+| [#192](https://github.com/tensorbee/rdocx/pull/192) | `main` | `feat/rpptx-effective-placeholder-geometry` | pass | none | - | `rpptx-layout/README.md with #234` | F-X142 | 169 |
+| [#193](https://github.com/tensorbee/rdocx/pull/193) | `main` | `fix/table-row-identity-attributes` | pass | none | #183 | `README.md with #211` | F-X139 | 159 |
+| [#194](https://github.com/tensorbee/rdocx/pull/194) | `main` | `feat/py-bookmarks-fields-stories-replace-render` | pass | none | #179 | `README.md with #203` | F-X141 | 168 |
+| [#195](https://github.com/tensorbee/rdocx/pull/195) | `main` | `fix/replace-reaches-content-controls` | pass | none | #184 | `README.md with #211` | F-X138 | 160 |
+| [#196](https://github.com/tensorbee/rdocx/pull/196) | `main` | `fix/rpptx-duplicate-paragraph-properties` | pass | none | - | `oxml-drawing/README.md with #223` | F-X140 | - |
+| [#197](https://github.com/tensorbee/rdocx/pull/197) | `main` | `fix/template-saved-as-document-content-type` | pass | none | - | `README.md with #203` | F-X137 | - |
+| [#198](https://github.com/tensorbee/rdocx/pull/198) | `main` | `feat/cli-compare-options-comment-dates` | pass | none | - | `README.md with #204` | F-X139 | 161 |
+| [#199](https://github.com/tensorbee/rdocx/pull/199) | `main` | `fix/keep-with-next-chains` | pass | none | - | `README.md with #237` | F-X140 | - |
+| [#200](https://github.com/tensorbee/rdocx/pull/200) | `main` | `fix/restart-before-first-changed-block` | pass | none | - | `rdocx-layout/README.md with #237` | F-X140 | - |
+| [#201](https://github.com/tensorbee/rdocx/pull/201) | `main` | `feat/py-paragraph-text-style-check-core-properties` | pass | none | - | `README.md with #203` | F-X141 | 168 |
+| [#202](https://github.com/tensorbee/rdocx/pull/202) | `main` | `fix/replace-reaches-notes-and-tracked-insertions` | pass | none | #195 | `README.md with #211` | F-X138 | 160 |
+| [#203](https://github.com/tensorbee/rdocx/pull/203) | `main` | `feat/py-styles-numbering-and-default-styles` | pass | none | #201 | `README.md with #201` | F-X141 | 168 |
+| [#204](https://github.com/tensorbee/rdocx/pull/204) | `main` | `feat/cli-text-every-story-and-stricter-validate` | pass | none | #198 | `README.md with #198` | F-X143 | 160 |
+| [#205](https://github.com/tensorbee/rdocx/pull/205) | `main` | `fix/comparison-marker-unit-boundaries` | pass | none | - | `README.md with #239` | F-X139 | 161 |
+| [#206](https://github.com/tensorbee/rdocx/pull/206) | `main` | `fix/rpptx-added-pictures-have-a-geometry` | fail: CI gate, MSRV (1.93), Test | none | - | `rpptx-oxml/README.md with #219` | F-X140 | - |
+| [#207](https://github.com/tensorbee/rdocx/pull/207) | `main` | `fix/rpptx-added-connectors-have-a-line` | pass | none | - | `rpptx-layout/README.md with #234` | F-X140 | 217 |
+| [#208](https://github.com/tensorbee/rdocx/pull/208) | `main` | `feat/rpptx-populate-group-shapes` | pass | none | #189 | `rpptx-oxml/README.md with #219` | F-X142 | 169 |
+| [#209](https://github.com/tensorbee/rdocx/pull/209) | `main` | `feat/rpptx-table-rows-and-columns` | pass | none | #189 | `rpptx-oxml/README.md with #219` | F-X142 | 169 |
+| [#210](https://github.com/tensorbee/rdocx/pull/210) | `main` | `fix/word-text-boxes-read-and-counted-once` | pass | none | #195 | `README.md with #211` | F-X138 | 160 |
+| [#211](https://github.com/tensorbee/rdocx/pull/211) | `main` | `fix/text-inside-simple-fields-smart-tags-custom-xml` | pass | none | #202 | `README.md with #202` | F-X138 | 160 |
+| [#212](https://github.com/tensorbee/rdocx/pull/212) | `main` | `feat/py-hyperlink-retarget-and-picture-resize` | pass | none | - | `README.md with #194` | F-X141 | 168 |
+| [#214](https://github.com/tensorbee/rdocx/pull/214) | `main` | `fix/pdf-with-fonts-bundled-fallback` | pass | none | - | `README.md with #237` | F-X151 | - |
+| [#218](https://github.com/tensorbee/rdocx/pull/218) | `main` | `fix/rpptx-body-properties-keep-unmodelled-attributes` | pass | none | - | `oxml-drawing/README.md with #238` | F-X154 | 215* |
+| [#219](https://github.com/tensorbee/rdocx/pull/219) | `main` | `feat/rpptx-shape-click-hyperlinks` | none | none | #189 | `rpptx-oxml/README.md with #209` | F-X155 | 169, 217 |
+| [#220](https://github.com/tensorbee/rdocx/pull/220) | `main` | `feat/word-cli-anchor-numbering-run-remove` | pass | none | - | `README.md with #191` | F-X153 | 163, 168, 172 |
+| [#221](https://github.com/tensorbee/rdocx/pull/221) | `main` | `feat/rpptx-line-dash-and-ends` | running | none | - | `oxml-drawing/README.md with #224` | F-X155 | 217 |
+| [#222](https://github.com/tensorbee/rdocx/pull/222) | `main` | `fix/rpptx-line-pitch-and-line-breaks` | fail: CI gate, MSRV (1.93), Test | none | - | `README.md with #237` | F-X146 | 162, 226 |
+| [#223](https://github.com/tensorbee/rdocx/pull/223) | `main` | `fix/rpptx-text-frame-line-feeds-make-paragraphs` | running | none | - | `oxml-drawing/README.md with #209` | F-X154 | 216* |
+| [#224](https://github.com/tensorbee/rdocx/pull/224) | `main` | `feat/rpptx-shape-shadow` | running | none | - | `oxml-drawing/README.md with #209` | F-X155 | 217 |
+| [#225](https://github.com/tensorbee/rdocx/pull/225) | `main` | `fix/word-line-height-leading` | pass | none | - | `README.md with #237` | F-X146 | 162 |
+| [#228](https://github.com/tensorbee/rdocx/pull/228) | `main` | `fix/compare-after-toc-rebuild` | running | none | - | `README.md with #186` | F-X151 | 161 |
+| [#229](https://github.com/tensorbee/rdocx/pull/229) | `main` | `fix/exporters-reach-content-controls` | running | none | - | `README.md with #193` | F-X151 | 160 |
+| [#230](https://github.com/tensorbee/rdocx/pull/230) | `main` | `feat/rpptx-auto-shape-type` | running | none | - | `rpptx-py/python/rpptx/_rpptx.pyi with #234` | F-X155 | 217 |
+| [#231](https://github.com/tensorbee/rdocx/pull/231) | `main` | `feat/rpptx-scoped-try-replace-text` | none | none | #181 | `rpptx-py/README.md with #219` | F-X156 | 217 |
+| [#232](https://github.com/tensorbee/rdocx/pull/232) | `main` | `fix/border-styles-and-header-namespaces` | running | none | - | `README.md with #237` | F-X151 | 160 |
+| [#233](https://github.com/tensorbee/rdocx/pull/233) | `main` | `fix/never-save-characters-xml-cannot-carry` | running | none | - | `oxml-drawing/README.md with #209` | F-X151 | - |
+| [#234](https://github.com/tensorbee/rdocx/pull/234) | `main` | `feat/rpptx-shapes-without-theme-effect` | none | none | #207 | `rpptx-oxml/README.md with #224` | F-X155 | 217 |
+| [#235](https://github.com/tensorbee/rdocx/pull/235) | `main` | `feat/rpptx-import-slide` | running | none | - | `rpptx-py/python/rpptx/_rpptx.pyi with #231` | F-X156 | 217 |
+| [#236](https://github.com/tensorbee/rdocx/pull/236) | `main` | `fix/rdocx-diff-every-story` | running | none | - | `README.md with #220` | F-X152 | 227* |
+| [#237](https://github.com/tensorbee/rdocx/pull/237) | `main` | `fix/tab-stops-and-numbered-toc-entries` | running | none | - | `README.md with #225` | F-X146 | 162 |
+| [#238](https://github.com/tensorbee/rdocx/pull/238) | `main` | `feat/rpptx-builtin-table-styles` | running | none | - | `oxml-drawing/README.md with #223` | F-X156 | 169 |
+| [#239](https://github.com/tensorbee/rdocx/pull/239) | `main` | `fix/run-text-around-a-complex-field` | running | none | - | `README.md with #211` | F-X151 | 160 |
 
-The shared conflict surfaces are `rdocx/src/document.rs`,
-`rdocx/src/comparison.rs`, `rdocx-oxml/src/placeholder.rs`,
-`rdocx-oxml/src/text.rs`, the Python binding source and stubs,
-`rdocx-cli/src/commands.rs`, `rpptx-py/src/shape.rs`, the existing
-integration test entrypoints, `docs/hld/10-bindings-spec.md`, the README
-family and `scripts/readme_doctests.py`. These overlaps need manual
-reconciliation against both approved designs. A clean GitHub mergeability
-indicator against `main` does not settle a conflict after an earlier PR lands.
-PR 188 changes `scripts/hash_baseline.json`, so it owns the exclusive baseline
-update. Recheck its expected delta and the deterministic rendering baseline
-after all rendering changes. PR 196 currently fails Presentation fidelity because its corpus download
-could not reach the network, and its CI gate fails. PR 206 currently fails
-MSRV and Test while its CI gate is pending. Diagnose and rerun both heads
-rather than waiving either result.
+Every PR through #212 except #214 was cut from the S75 merge base and is
+20 commits behind live `main` at this snapshot. PRs #219, #231 and #234
+share that old base. Rebase their incremental commits after the listed parent
+and earlier sprint prefix. The other new heads are current with `main` now,
+but must be rebased after their prerequisite repair sprints. Stacked siblings
+#208 and #209 share #189, #202 and #210 share #195, and #219 also shares
+#189. Review each incremental range once. The dominant semantic conflicts
+are Word document, comparison and OXML serialization, Python binding and stub
+files, slide shape and table ownership, DrawingML text and effects, CLI
+commands, and their shared integration test entrypoints. Reconcile them
+manually against both approved designs. A clean mergeability flag against
+old `main` does not resolve a conflict after an earlier contribution lands.
 
-| Issue | PR coverage at intake | Remaining acceptance and closure evidence |
-|---|---|---|
-| [#156](https://github.com/tensorbee/rdocx/issues/156) | 174 | Prove every writing CLI refuses input-as-output and existing output without `--force`, with byte-identical inputs and outputs after refusal. |
-| [#157](https://github.com/tensorbee/rdocx/issues/157) | 182 | Rerun `add_picture` on the report fixture and both default-namespace and inline-control producer matrix rows. |
-| [#158](https://github.com/tensorbee/rdocx/issues/158) | Many PRs address cells, none covers the full umbrella | Keep the attached DOCX and PPTX fixtures, both matrices and both workflows as repeatable gates. Prove the full CLI, Python, save, compare, layout, render and deck chain after every narrower issue passes. |
-| [#159](https://github.com/tensorbee/rdocx/issues/159) | 183, 184, 190, 193 | Run all 18 identity rows across save, replace, TOC, fields, render and both compare variants. Preserve table row identities and avoid any identity-only revision or refusal. |
-| [#160](https://github.com/tensorbee/rdocx/issues/160) | 177, 180, 184, 185, 190, 195, 202, 204, 210, 211 | Run every producer matrix cell. Add the content-control location by walker matrix, including image, nested, table and related stories. Prove packed footer fields, no-op comments bytes, valid `mc:Ignorable`, and compare against edited copies. |
-| [#161](https://github.com/tensorbee/rdocx/issues/161) | 176, 190, 198, 205 | Prove Python and CLI option parity, Word and Character redlines, edited-side comments through add, remove, reply, resolve and date changes, and rebuilt TOC comparison. Fix marker placement after changed text. |
-| [#162](https://github.com/tensorbee/rdocx/issues/162) | None directly, 199 and 200 are adjacent pagination work | Add pinned pitch matrix for four bundled families at two sizes and 240/264 spacing. Prove a tall inline picture stays at picture height under proportional spacing and the report caption stays with it. |
-| [#163](https://github.com/tensorbee/rdocx/issues/163) | 179, 191 | Verify `find_content_index`, `split_run`, bookmarks and comments share direct body coordinates after a table, across Rust, Python and CLI. |
-| [#164](https://github.com/tensorbee/rdocx/issues/164) | 178 | Prove atomic document and presentation saves preserve the prior file after failure, including links and modes. |
-| [#165](https://github.com/tensorbee/rdocx/issues/165) | 186 | Verify revision listing across body, cells, headers, footers, notes and comments in Rust, Python and CLI, with accept and reject parity. |
-| [#166](https://github.com/tensorbee/rdocx/issues/166) | 174 | Run both CLIs through a closed pipe and prove clean exit without panic. |
-| [#167](https://github.com/tensorbee/rdocx/issues/167) | 173 | Keep slide and shape handles usable after Python `Run.text` changes. |
-| [#168](https://github.com/tensorbee/rdocx/issues/168) | 176, 187, 191, 194, 201, 203, 212 | Verify contributed tables, sections, rich stories, batch replacement, rendering, text setters, hyperlinks and picture resize. Finish or explicitly decide style mutation and removal, run removal, writable XML or package escape hatch, and text anchored comments. Run every checklist example. |
-| [#169](https://github.com/tensorbee/rdocx/issues/169) | 181, 189, 192, 208, 209 | Verify contributed table borders, row and column edits, crop, z-order, run hyperlinks and geometry. Finish or explicitly decide shape hyperlinks, shape or text anchored comments and built-in table styles. Run the full deck chain. |
-| [#170](https://github.com/tensorbee/rdocx/issues/170) | 175 | Prove PDF backgrounds match PNG, gradients without `ang` or `path` open and render, and round trips do not add omitted attributes. |
-| [#171](https://github.com/tensorbee/rdocx/issues/171) | 188 | Use `pdftotext` for every bundled family in regular and bold, including ligatures, then verify the reviewed hash delta. |
-| [#172](https://github.com/tensorbee/rdocx/issues/172) | 191 | Prove exact inline-control anchoring and refusal of unrepresentable ranges through Python `add_comment`, `add_story_comment` and CLI `comment add`. |
-| [#213](https://github.com/tensorbee/rdocx/issues/213) | Informational note, no PR required | Acknowledge the contributor's integration branch as context. It has no technical acceptance criteria and is not evidence that the 40 separate PRs pass review. |
+PR #176 fails Presentation fidelity and CI gate. PR #179 fails Test, Word
+fidelity and CI gate. PR #206 fails Test, MSRV and CI gate on its GitHub head,
+although F-X140 has a locally reviewed repair of the fixture hash. PR #222
+fails Test, MSRV and CI gate. PRs #219, #231 and #234 have no reported CI.
+The remaining running PRs require completion and any failing head requires a
+new green run after rebase. PR #188's PDF text change and F-X141's native
+common-style change own separate reviewed baseline updates. All later
+rendering and layout changes need expected deltas stated before rerecording
+any deterministic baseline.
 
-Issue 158 is the final technical closure gate. F-X150 records the result
-criterion by criterion before any issue closure. A green PR check alone is
-not enough, and an issue without a direct PR still has an assigned F-ID.
-For each F-ID, follow `/design`, `/start-feature`, implementation,
-`/microscope`, `/verify --scoped` and `/complete-feature`. Rerun CI on each
-rebased head, then `/verify --full` and `/sprint-review` on the integrated
-result of each repair sprint. The full gate includes the workspace suite,
-Clippy, rustfmt, MSRV, no-default-features, WASM, both Python bindings,
-release regressions, deterministic Word and presentation fidelity, the
-hash harness, prose and generated-skill checks, plus each design's risk
-riders. Only `/close-sprint` may merge a reviewed sprint to `main` or create
-an `sNN` tag. PR and issue closure follows the corresponding integrated
-main result and criterion evidence, never the individual PR's merge alone.
+| Issue | PR coverage | Remaining acceptance and closure evidence | F-ID |
+|---|---|---|---|
+| [#156](https://github.com/tensorbee/rdocx/issues/156) | #174 | Every writing CLI refuses input-as-output and existing output without `--force`, with byte-identical files after refusal. | F-X137 |
+| [#157](https://github.com/tensorbee/rdocx/issues/157) | #182 | `add_picture` succeeds on the report fixture and default-namespace plus inline-control matrix rows. | F-X144 |
+| [#158](https://github.com/tensorbee/rdocx/issues/158) | Many partial PRs | Keep both attached fixtures, 18 by 7 and 11 by 8 matrices, and both end-to-end workflows as repeatable acceptance gates. Close only after every child issue has evidence. | F-X149, F-X158, F-X150 |
+| [#159](https://github.com/tensorbee/rdocx/issues/159) | #183, #184, #190, #193 | Run all identity rows through all seven operations. Preserve row identities and avoid identity-only revisions or refusals. | F-X144 |
+| [#160](https://github.com/tensorbee/rdocx/issues/160) | #177, #180, #184, #185, #190, #195, #202, #204, #210, #211, #229, #232, #239 | Run every producer cell, all body walker locations including images and related stories, packed fields, unchanged comments bytes, and valid `mc:Ignorable`. | F-X144, F-X151 |
+| [#161](https://github.com/tensorbee/rdocx/issues/161) | #176, #190, #198, #205, #228 | Prove Python and CLI option parity, Word and Character granularity, edited-side comment changes, rebuilt TOCs and correct marker order. | F-X145 |
+| [#162](https://github.com/tensorbee/rdocx/issues/162) | #222, #225, #237 | Pin four-family pitch at two sizes and 240 or 264 spacing. Confirm the inline picture height and report caption against Word PDF. | F-X146 |
+| [#163](https://github.com/tensorbee/rdocx/issues/163) | #179, #191, #220 | Prove direct body coordinates after tables in Rust, Python and CLI for split, bookmarks and comments. | F-X138, F-X153 |
+| [#164](https://github.com/tensorbee/rdocx/issues/164) | #178 | Prove failed saves retain old DOCX and PPTX bytes, links and modes. | F-X137 |
+| [#165](https://github.com/tensorbee/rdocx/issues/165) | #186 | List revisions in body, cells, headers, footers and notes with accept/reject parity in Rust, Python and CLI. | F-X143 |
+| [#166](https://github.com/tensorbee/rdocx/issues/166) | #174 | Both CLIs exit cleanly after a closed pipe without panic. | F-X137 |
+| [#167](https://github.com/tensorbee/rdocx/issues/167) | #173 | All slide and shape handles remain usable after Python `Run.text` changes. | F-X142 |
+| [#168](https://github.com/tensorbee/rdocx/issues/168) | #176, #187, #194, #201, #203, #212, #220 | Run every table, style, section, bookmark, field, rich story, replacement, rendering, paragraph, hyperlink, picture, XML and anchored-comment checklist example. Finish gaps or record an allowed scope decision with fallback. | F-X141, F-X147, F-X153 |
+| [#169](https://github.com/tensorbee/rdocx/issues/169) | #181, #189, #192, #208, #209, #219, #238 | Run every slide, table, crop, z-order, layout, hyperlink, comment, geometry and built-in style checklist example on the deck. Finish gaps or record an allowed scope decision with fallback. | F-X142, F-X148, F-X156 |
+| [#170](https://github.com/tensorbee/rdocx/issues/170) | #175 | PDF backgrounds match PNG, missing gradient angle or path opens and renders, and round trips keep omitted attributes omitted. | F-X140, F-X158 |
+| [#171](https://github.com/tensorbee/rdocx/issues/171) | #188 | `pdftotext` returns all bundled regular and bold family text including ligatures. Review the hash delta. | F-X140 |
+| [#172](https://github.com/tensorbee/rdocx/issues/172) | #191, #220 | Anchor exact inline-control text through Python `add_comment`, `add_story_comment` and CLI `comment add`. Refuse unrepresentable ranges. | F-X138, F-X153 |
+| [#215](https://github.com/tensorbee/rdocx/issues/215) | #218 | Unedited text bodies keep every unmodelled `a:bodyPr` attribute after another shape changes. | F-X154 |
+| [#216](https://github.com/tensorbee/rdocx/issues/216) | #223 | Assigned `\n` creates paragraphs, `\v` creates breaks, and layout and render survive producer line feeds. | F-X154 |
+| [#217](https://github.com/tensorbee/rdocx/issues/217) | #207, #219, #221, #224, #230, #231, #234, #235 | Complete all six shadow, theme effect, line end, preset geometry, slide import and scoped replacement items. Reopen in python-pptx, validate, and compare LibreOffice and rpptx renders per item. | F-X155, F-X156, F-X157 |
+| [#226](https://github.com/tensorbee/rdocx/issues/226) | #222 | UAX 14 breaks for plain and explicit `w:rtl=false` runs, with hanging trailing space and Word or LibreOffice line parity at both supplied widths. | F-X146 |
+| [#227](https://github.com/tensorbee/rdocx/issues/227) | #236 | Diff locates cell and related-story text changes and counts one changed paragraph once. Decide optional machine-readable output separately. | F-X152 |
 
-#### Sprint S80, Rich related-story foundations
+Every issue stays open until its acceptance criterion passes on the integrated
+main result. F-X150 records the evidence, including explicit scope decisions,
+before any closure action. Each F-ID follows `/design`, `/start-feature`,
+implementation, `/microscope`, `/verify --scoped` and `/complete-feature`.
+Each sprint reruns CI on rebased heads, then `/verify --full` and
+`/sprint-review` on the integrated result. The full gate includes workspace
+suite, Clippy, rustfmt, MSRV, no-default-features, WASM, Python bindings,
+release regressions, deterministic fidelity, the hash harness, prose and
+adapter checks, plus risk riders. Only `/close-sprint` may merge to `main` or
+tag a sprint. Closing PRs and issues requires separate integrated evidence.
+
+#### Sprint S83, Rich related-story foundations
 
 **Goal**: establish rich header, footer, and note authoring on the existing
 story model, while removing repeated canonical-prefix rebinding from retained
@@ -1749,9 +1815,9 @@ elements. Complete the footnote substrate before extending it to endnotes.
 
 F-X133 is independent and may proceed alongside F-271. F-272 establishes
 the note-authoring model that F-273 extends. The other 11 stories from the
-original S76 inventory move together to S81 in dependency order.
+original S76 inventory move together to S84 in dependency order.
 
-#### Sprint S81, Related-story completion, fields, and stable templating
+#### Sprint S84, Related-story completion, fields, and stable templating
 
 **Goal**: complete note policy, cross-story ranges, fragment transactions,
 and glossary authoring, then build the field-driven navigation and stable
@@ -1771,7 +1837,7 @@ templating structures that depend on them.
 | F-283 | Complete numbering-aware navigation fields | L |
 | F-284 | Stable container-wide template grammar | L |
 
-F-274 composes the S80 note families with section policy. F-276 follows the
+F-274 composes the S83 note families with section policy. F-276 follows the
 related-story work, and F-277 uses its transactional remapping. F-278 is the
 shared field construction substrate after those stories. F-283 integrates
 numbering only after the other navigation structures are complete. F-284
@@ -1780,7 +1846,7 @@ model. This 11-story wave is intentionally larger than the usual sprint
 cadence. Reassess its capacity and split it again before implementation if
 the dependency work cannot be completed within one sprint.
 
-#### Sprint S82, Content controls, forms, and data binding
+#### Sprint S85, Content controls, forms, and data binding
 
 **Goal**: create rather than only fill modern and legacy forms, including
 repeating controls, custom XML bindings, and mail-merge package state.
@@ -1798,7 +1864,7 @@ The generic control lifecycle precedes typed controls and bindings. F-289 is
 the composed form gate. Mail merge remains offline by default and never treats
 unavailable external data as an empty successful result.
 
-#### Sprint S83, Collaboration authoring
+#### Sprint S86, Collaboration authoring
 
 **Goal**: create complete Word revisions, comments, permission ranges, and
 comparison results rather than limiting the facade to existing-content
@@ -1817,7 +1883,7 @@ F-291 establishes revision ownership. F-292 and F-293 can then proceed in
 parallel. F-295 composes the complete model, and F-296 closes ambient identity
 and clock inputs before the sprint gate.
 
-#### Sprint S84, Drawings, diagrams, and embedded content
+#### Sprint S87, Drawings, diagrams, and embedded content
 
 **Goal**: complete the visible and packaged Word object surface across every
 valid insertion point without raw compatibility wrappers or executable payload
@@ -1837,7 +1903,7 @@ F-297 through F-302 build independent object families on the shared
 relationship model. F-303 is their integrated deterministic layout and render
 gate.
 
-#### Sprint S85, Package extensibility and modern DOCX end gate
+#### Sprint S88, Package extensibility and modern DOCX end gate
 
 **Goal**: close package extension, accessibility, conformance, determinism,
 resource, binding, documentation, and stability boundaries for modern DOCX
@@ -1860,7 +1926,7 @@ separate from completing this sprint.
 
 ### M19, Advanced spreadsheets
 
-#### Sprint S86, Spreadsheet decision, corpus and core model
+#### Sprint S89, Spreadsheet decision, corpus and core model
 
 **Goal**: decide whether a material Rust ecosystem gap still exists, then build
 the ownership model only if that decision is affirmative.
@@ -1872,12 +1938,12 @@ the ownership model only if that decision is affirmative.
 | F-185 | Workbook and worksheet model | L |
 
 F-184 is a true go or no-go gate. It reassesses Calamine,
-`rust_xlsxwriter`, `umya-spreadsheet`, `xls`, and any credible successor at S86,
+`rust_xlsxwriter`, `umya-spreadsheet`, `xls`, and any credible successor at S89,
 then classifies each proposed feature as preserved, modeled and editable, or
 executable. If the ecosystem provides the complete required lifecycle by then,
 M19 is archived rather than implemented.
 
-#### Sprint S87, Styles, tables and structured references
+#### Sprint S90, Styles, tables and structured references
 
 **Goal**: model the indexed formatting and structured data semantics that
 ordinary business workbooks rely on.
@@ -1892,7 +1958,7 @@ F-189 lands here because structured table references are part of the formula
 grammar rather than a string convention. The sprint does not yet calculate
 formulas.
 
-#### Sprint S88, Advanced worksheet objects
+#### Sprint S91, Advanced worksheet objects
 
 **Goal**: cover the visible and interactive worksheet surface before the
 streaming package boundary freezes it.
@@ -1905,7 +1971,7 @@ This includes comments, hyperlinks, rich text, drawings, grouping, panes,
 sparklines, page breaks, and modern image cells. External content stays offline
 unless an explicit bounded policy allows retrieval.
 
-#### Sprint S89, Streaming read and write
+#### Sprint S92, Streaming read and write
 
 **Goal**: prove that advanced workbooks remain bounded at the package boundary.
 
@@ -1918,7 +1984,7 @@ Both carry an asserted memory ceiling rather than a hoped-for one. A 100 MB
 fixture is the gate, not a smoke test. Unsupported package parts and
 relationships remain attached through unrelated typed edits.
 
-#### Sprint S90, Calculation and sheet features
+#### Sprint S93, Calculation and sheet features
 
 **Goal**: calculate ordinary and modern formulas, then expose the features that
 depend on their results.
@@ -1934,7 +2000,7 @@ including dynamic arrays, spill ranges, and structured references. Unsupported
 functions retain cached values with diagnostics. F-191 reuses `oxml-chart`
 rather than creating a spreadsheet-only chart engine.
 
-#### Sprint S91, Pivots and the Data Model boundary
+#### Sprint S94, Pivots and the Data Model boundary
 
 **Goal**: move PivotTables from opaque preservation to typed local refresh and
 define the boundary around proprietary analytical models.
@@ -1950,7 +2016,7 @@ and visible cells. Slicers and pivot charts follow that refresh. OLAP, Power
 Pivot, VertiPaq, and DAX state is preserved and inspectable but is not executed
 under this milestone.
 
-#### Sprint S92, Power Query language and package model
+#### Sprint S95, Power Query language and package model
 
 **Goal**: understand and evaluate M independently of external data access.
 
@@ -1963,7 +2029,7 @@ refresh metadata. The language boundary covers the pure transformations needed
 by the corpus before credentials, connectors, or network policy enter the
 runtime.
 
-#### Sprint S93, Power Query execution
+#### Sprint S96, Power Query execution
 
 **Goal**: refresh a bounded, useful connector set without weakening privacy or
 offline determinism.
@@ -1977,7 +2043,7 @@ privacy levels, source combination, timeouts, byte limits, caching, and query
 folding are explicit contracts. Proprietary and tenant-bound connectors remain
 preserved with diagnostics.
 
-#### Sprint S94, Office Scripts-compatible automation
+#### Sprint S97, Office Scripts-compatible automation
 
 **Goal**: automate the same workbook model through a versioned and sandboxed
 TypeScript surface.
@@ -1992,7 +2058,7 @@ not pretend to provide OneDrive, SharePoint, Power Automate, or Microsoft tenant
 identity. It does provide bounded workbook, range, table, chart, pivot, and
 query automation with atomic failure.
 
-#### Sprint S95, Rendering, distribution and advanced end gate
+#### Sprint S98, Rendering, distribution and advanced end gate
 
 **Goal**: close M19 as a headless advanced spreadsheet engine rather than a
 file-format crate.
@@ -2022,12 +2088,12 @@ at the fully verified SHA.
 | End of S64, M21 | Incubating `rpptx` family. Publish the stable family too only when the reviewed dependency diff requires new shared pins. | Collaboration, security, timing, media, SmartArt, ODP, handouts, HTML import, and PDF import form one complete presentation-depth boundary. |
 | End of S69, M22 | Stable `rdocx` family at v0.13.0 through F-X078. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | OfficeMath, fields, dynamic TOC, automation, comparison, embedded content, and modern package variants complete the planned Word-depth boundary. |
 | End of S73, M23 | Stable `rdocx` family after the five-document public-API-only conformance gate passes. | This is the first boundary where the reference business documents can be authored from `Document::new()` without raw XML or a base template. |
-| End of S85, M24 | Stable `rdocx` family after the modern Word authoring capability matrix is closed. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | This boundary completes the planned modern DOCX authoring surface, lossless extensibility, accessibility, strict-package, determinism, binding, and stability gates. |
-| End of S95, conditional M19 | The new `rxlsx` distribution family defined by F-195, plus only the existing families whose reviewed dependency pins moved. | F-195 is the first point where the conditional spreadsheet programme has a complete facade, CLI, WASM, Python, rendering, and advanced lifecycle gate. |
+| End of S88, M24 | Stable `rdocx` family after the modern Word authoring capability matrix is closed. Publish the incubating shared family first only if a shared crate version or stable dependency pin moved. | This boundary completes the planned modern DOCX authoring surface, lossless extensibility, accessibility, strict-package, determinism, binding, and stability gates. |
+| End of S98, conditional M19 | The new `rxlsx` distribution family defined by F-195, plus only the existing families whose reviewed dependency pins moved. | F-195 is the first point where the conditional spreadsheet programme has a complete facade, CLI, WASM, Python, rendering, and advanced lifecycle gate. |
 
 No intermediate sprint publishes merely because one subsystem compiles. A
 security fix may still justify a separately planned patch release, but ordinary
-feature work waits for the next boundary above. If F-184 archives M19, the S95
+feature work waits for the next boundary above. If F-184 archives M19, the S98
 boundary disappears with the programme and no spreadsheet release namespace is
 created.
 
