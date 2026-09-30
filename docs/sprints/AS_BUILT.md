@@ -16501,3 +16501,53 @@ entries matched the reviewed baseline in the worker handoff.
 **Notes for future sessions.** Retain the F-X140 worker branch and worktree
 through the final sprint review. PR-head CI still needs rerun after the
 contribution branches are rebased.
+
+### F-X141, Word Python contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 176, 187, 194,
+201, 203 and 212. The Word Python binding now exposes contributed table,
+section, style, field, replacement, story, rendering and core-property
+operations with matching stubs and native behavior. Section updates fill
+missing partners from layout defaults. New native compatible documents define
+common Word styles. Inserted TOCs rebuild after heading changes.
+
+**Non-obvious choices.** PR 194's inherited S76 commits and PR 203's PR 201
+base were excluded from replay. A shared Python test helper was reconciled
+without losing either bytes or text behavior. The bundled presentation
+template SHA was checked against preserved revision metadata. The worker
+records the separately labelled F-X141 hash update at `2382c5c9`. A
+microscope finding led to bounded TOC width arithmetic and a regression for
+extreme section values. Package measurements and stale sprint-policy test
+expectations were refreshed after the scoped gate exposed them.
+
+**Deviations from the design plan.** None in product scope. The complete
+workspace gate and sprint review remain due once at S77 closure.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/04-opc-and-packaging.md`, `docs/hld/08-rendering-spec.md`,
+`docs/hld/10-bindings-spec.md` and `docs/hld/14-development-backlog.md`.
+
+**Tests.** The native common-style and TOC rebuild acceptance cases failed
+before implementation and passed afterward. Final Word suites passed 482 unit,
+326 integration and 658 regression tests. Presentation suites passed 84 unit,
+243 integration and 33 CLI integration tests. The Python binding suite passed
+120 tests, strict mypy and stubtest passed, and the public authoring
+conformance harness passed with a host-only compile timeout increase. Scoped
+Clippy, both WASM targets, 131 repository-policy tests, five touched-crate
+publish dry runs and the 10 MiB archive limit passed. Microscope pass 3
+reported zero defects and zero smells.
+
+**Hash harness.** Sixteen declared keys changed: `word/styles.xml` in all
+seven samples, and `word/document.xml`, `pdf/pages` and `pdf/bytes` in each
+of feature_showcase, proposal and report. All 49 entries matched the
+separately reviewed baseline. The integrated full sprint hash check remains
+due at S77 closure.
+
+**Notes for future sessions.** Issue 168 remains open. F-X147 and F-X153
+cover the remaining acceptance checklist. PR-head CI needs rerun after the
+contribution branches are rebased. The clean F-X141 worker worktree can be
+removed after this dependency-prefix record to save disk space.

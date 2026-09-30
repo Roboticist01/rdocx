@@ -504,6 +504,7 @@ defended.
 | F-X139 | S76 | L | 5 | 1 | 2026-09-30 | Integrated six Word identity and comparison PRs with producer attribute preservation, marker ordering, comparison options and CLI comment dates |
 
 | F-X140 | S77 | L | 5 | 1 | 2026-09-30 | Integrated seven rendering and layout PRs with reviewed ligature PDF hashes, presentation preservation and Word pagination regressions |
+| F-X141 | S77 | L | 5 | 1 | 2026-09-30 | Integrated six Word Python PRs, added native common styles and refreshable TOCs, and reviewed a separate 16-key baseline delta |
 
 ## Velocity
 
