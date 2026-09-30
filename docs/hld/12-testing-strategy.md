@@ -1286,6 +1286,11 @@ compression. A fingerprint of extracted text and page geometry alone was
 rejected, because the dependency refresh in F-X020 moved all seven sample PDFs
 while `pdftotext` output stayed identical in 7 of 7.
 
+Focused PDF text regressions require a shaped ligature to map back to its
+full source text through ToUnicode. The seven sample resource and byte hashes
+cover the resulting font maps, while their page, PNG and Word XML hashes remain
+stable.
+
 Document metadata streams are excluded only from `pdf/resources`. They are not
 page resources, and their complete bytes remain covered by `pdf/bytes`. A
 focused scanner test adds a `/Type /Metadata` stream and requires only the byte

@@ -1,6 +1,6 @@
 # F-X140, Rendering and layout contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S77
 **Size**: L
 **Depends on**: F-X137
@@ -97,12 +97,12 @@ against the actual ToUnicode ligature output.
 
 ## Implementation checklist
 
-- [ ] Review and replay the seven PRs against S76, reconciling shared tests
+- [x] Review and replay the seven PRs against S76, reconciling shared tests
   and source paths.
-- [ ] Isolate and review PR 188's expected PDF hash baseline change.
-- [ ] Inspect PR 206's source-built deck and repair its fixture expectation.
-- [ ] Rerun PR 196's pinned Presentation fidelity gate.
-- [ ] Run focused checks, risk riders and microscope to zero findings.
+- [x] Isolate and review PR 188's expected PDF hash baseline change.
+- [x] Inspect PR 206's source-built deck and repair its fixture expectation.
+- [x] Rerun PR 196's pinned Presentation fidelity gate.
+- [x] Run focused checks, risk riders and microscope to zero findings.
 
 ## Open questions
 

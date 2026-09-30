@@ -3017,6 +3017,55 @@ fn smartart_rendering_uses_producing_scope_and_updates_after_node_edit() {
     );
 }
 
+#[test]
+fn smartart_data_paragraph_properties_override_the_layout_defaults() {
+    use rpptx_layout::ParagraphAlignment;
+
+    if !pinned_smartart_resources_available() {
+        eprintln!(
+            "authentic SmartArt paragraph properties skipped because pinned PowerPoint resources are absent or hash-mismatched"
+        );
+        return;
+    }
+    for (data_properties, later_properties, expected) in [
+        ("", "", ParagraphAlignment::Center),
+        (r#"<a:pPr algn="r"/>"#, "", ParagraphAlignment::Right),
+        (
+            r#"<a:pPr algn="r"/>"#,
+            r#"<a:pPr algn="l"/>"#,
+            ParagraphAlignment::Right,
+        ),
+    ] {
+        let mut package =
+            OpcPackage::from_reader(Cursor::new(authentic_smartart_oracle_source_bytes("cycle")))
+                .unwrap();
+        let data = String::from_utf8(authentic_smartart_data_model("cycle"))
+            .unwrap()
+            .replace("<a:p><a:r>", &format!("<a:p>{data_properties}<a:r>"))
+            .replace("</a:r></a:p>", &format!("</a:r>{later_properties}</a:p>"));
+        package.set_part("/ppt/diagrams/data1.xml", data.into_bytes());
+        let presentation = Presentation::from_bytes(&package_bytes(package)).unwrap();
+        let (input, _) = presentation.render_deterministic().unwrap();
+        let slide = &input.slides[0];
+        assert!(slide.diagnostics.is_empty(), "{:?}", slide.diagnostics);
+        let paragraphs = slide
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.content {
+                ResolvedContent::Text(body) if resolved_text(body).starts_with("F220 cycle") => {
+                    Some(&body.paragraphs[0])
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(paragraphs.len(), 3, "{data_properties}");
+        for paragraph in paragraphs {
+            assert_eq!(paragraph.alignment, expected, "{data_properties}");
+            assert!(paragraph.line_spacing.is_some(), "{data_properties}");
+        }
+    }
+}
+
 fn assert_smartart_frame_clip(
     page: &PageFrame,
     slide: &ResolvedSlide,
@@ -6020,16 +6069,16 @@ fn animated_gif_and_motion_jpeg_avi_match_the_reviewed_two_machine_manifest() {
             timestamps: vec![0, 100, 200, 300, 400, 500],
             frame_hashes: vec![
                 4_894_345_659_775_260_357,
-                14_975_209_435_305_666_729,
-                11_017_240_483_202_348_157,
+                6_182_286_987_453_888_369,
+                13_510_962_248_632_293_461,
                 4_894_345_659_775_260_357,
-                12_281_991_332_647_577_373,
-                439_196_692_808_906_197,
+                4_350_559_588_561_512_901,
+                4_200_447_167_577_390_285,
             ],
             loop_repetitions: gif::Repeat::Finite(2),
             width: 96,
             height: 54,
-            container_hash: 1_682_901_777_930_996_407,
+            container_hash: 5_365_094_422_666_602_990,
         }
     );
 
@@ -7948,7 +7997,7 @@ const F124_ARTIFACT_SHA256: &str =
 const F116_ARTIFACT_SHA256: &str =
     "d36da6e8849eabd4487d2572baea19c3716ee7d0fe03aaa4714a28ce3c41de4f";
 const F116_CURRENT_ARTIFACT_SHA256: &str =
-    "249c70db36c4fab392a585988a25f8285ead01dfe56dba2b1d6f3d32b7a0e553";
+    "8b2c9a2b3df96c7b8470b8ef4154cb13acdd7feb65511d2b98ecc0491b37af49";
 const F116_FINAL_TITLES: [&str; 10] = [
     "F-116 slide 10",
     "F-116 slide 02",
@@ -10633,7 +10682,7 @@ struct M21RecordedMovieSample {
 
 #[cfg(all(feature = "digital-signatures", feature = "render"))]
 const M21_CURRENT_MINIMAL_SOURCE_SHA256: &str =
-    "ba314e60fab74a61480a8eb9f19e037c5be6e1926cdabc9bacb9105904c78b3a";
+    "2a47b59d92718712a134e51a7ebc08a705505b4d7dd0cc39abd4febb53ea000b";
 
 #[cfg(all(feature = "digital-signatures", feature = "render"))]
 const M21_LEGACY_UNSIGNED_SOURCE_SHA256: &str =
@@ -14858,6 +14907,80 @@ fn text_mutation_preserves_unmodelled_xml_and_schema_order() {
 }
 
 #[test]
+fn a_second_paragraph_properties_element_keeps_every_run_readable_editable_and_rendered() {
+    use rpptx::TextAlignment;
+
+    let second = r#"<a:pPr algn="r"/>"#;
+    let paragraph = format!(
+        r#"<a:p><a:pPr algn="l"/><a:r><a:rPr lang="en-US" sz="1800"/><a:t>One. </a:t></a:r>{second}<a:r><a:rPr lang="en-US" sz="1800"/><a:t>Two.</a:t></a:r></a:p>"#
+    );
+    let mut presentation = text_layout_deck(
+        &text_layout_shape(
+            2,
+            "Two properties",
+            (914_400, 914_400, 3_657_600, 914_400),
+            "<a:bodyPr/>",
+            &paragraph,
+        ),
+        "",
+    );
+    let shape = presentation.slide(0).unwrap().shape(0).unwrap();
+    assert_eq!(shape.text().as_deref(), Some("One. Two."));
+    let frame = shape.text_frame().unwrap();
+    let properties = frame.paragraph(0).unwrap().properties().unwrap();
+    assert_eq!(properties.alignment, Some(TextAlignment::Left));
+
+    let (input, _) = presentation.render_deterministic().unwrap();
+    assert_eq!(
+        resolved_content_text(&input.slides[0].shapes[0].content),
+        "One. Two."
+    );
+    let frames = presentation.text_layout_deterministic(1.0).unwrap();
+    assert_eq!(
+        frames[0]
+            .layout
+            .lines
+            .iter()
+            .map(|line| line.text.as_str())
+            .collect::<String>(),
+        "One. Two."
+    );
+
+    presentation
+        .slide_mut(0)
+        .unwrap()
+        .shape_mut(0)
+        .unwrap()
+        .text_frame()
+        .unwrap()
+        .paragraph_mut(0)
+        .unwrap()
+        .run_mut(0)
+        .unwrap()
+        .set_text("Uno. ");
+    let output = open_opc(&presentation.to_bytes().unwrap(), "second pPr edit output");
+    let xml =
+        String::from_utf8(output.get_part("/ppt/slides/slide1.xml").unwrap().to_vec()).unwrap();
+    assert!(
+        xml.contains(&format!(
+            r#"<a:t xml:space="preserve">Uno. </a:t></a:r>{second}<a:r>"#
+        )),
+        "{xml}"
+    );
+    let reopened = Presentation::from_bytes(&package_bytes(output)).unwrap();
+    assert_eq!(
+        reopened
+            .slide(0)
+            .unwrap()
+            .shape(0)
+            .unwrap()
+            .text()
+            .as_deref(),
+        Some("Uno. Two.")
+    );
+}
+
+#[test]
 fn text_mutation_indices_and_shape_kinds_are_total() {
     let mut presentation = Presentation::from_bytes(&mutation_fixture_bytes()).unwrap();
     let mut slide = presentation.slide_mut(0).unwrap();
@@ -14920,6 +15043,57 @@ fn picture_without_explicit_size_uses_native_dimensions() {
     assert_eq!(transform.offset.unwrap().y, Emu(20));
     assert_eq!(transform.extent.unwrap().cx, Emu(406_400));
     assert_eq!(transform.extent.unwrap().cy, Emu(203_200));
+}
+
+#[test]
+fn added_pictures_carry_a_rectangle_geometry_after_their_transform() {
+    let png = valid_one_pixel_png();
+    let mut presentation = Presentation::new().expect("open bundled template");
+    presentation.add_slide(6).expect("add blank slide");
+    presentation
+        .add_picture(
+            0,
+            &png,
+            "pixel.png",
+            Emu(10),
+            Emu(20),
+            Some(Emu(30)),
+            Some(Emu(40)),
+        )
+        .expect("add picture");
+    presentation
+        .add_media(
+            0,
+            MediaKind::Video,
+            MediaSourceInput::Embedded(EmbeddedMediaInput {
+                bytes: b"\0\0\0\x18ftypisom-geometry",
+                filename: "clip.mp4",
+                content_type: "video/mp4",
+            }),
+            MediaPoster {
+                bytes: &png,
+                filename: "poster.png",
+            },
+            Emu(50),
+            Emu(60),
+            Emu(70),
+            Emu(80),
+            MediaPlaybackSettings::default(),
+        )
+        .expect("add video");
+
+    let package = open_opc(&presentation.to_bytes().unwrap(), "added picture geometry");
+    let xml =
+        String::from_utf8(package.get_part("/ppt/slides/slide1.xml").unwrap().to_vec()).unwrap();
+    let start = xml.find("<p:pic>").expect("added picture");
+    let end = start + xml[start..].find("</p:pic>").unwrap() + "</p:pic>".len();
+    assert_eq!(
+        &xml[start..end],
+        r#"<p:pic><p:nvPicPr><p:cNvPr id="2" name="Picture 2"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>"#
+    );
+    assert!(xml[end..].contains(
+        r#"<p:spPr><a:xfrm><a:off x="50" y="60"/><a:ext cx="70" cy="80"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>"#
+    ));
 }
 
 #[test]
@@ -15378,6 +15552,209 @@ fn picture_alpha_mod_fix_matches_presentation_renderers() {
     fs::remove_dir_all(root).unwrap();
 }
 
+/// A one-slide blank deck whose parts of `content_type` carry `background`,
+/// in place of their own `p:bg` or ahead of their shape tree.
+fn blank_deck_with_background(content_type: &str, background: &str) -> Vec<u8> {
+    let mut presentation = Presentation::new().expect("open bundled template");
+    presentation.add_slide(6).expect("add blank slide");
+    let mut package = open_opc(&presentation.to_bytes().unwrap(), "background fixture");
+    let parts = package
+        .content_types
+        .overrides
+        .iter()
+        .filter(|(_, part_type)| *part_type == content_type)
+        .map(|(part, _)| part.clone())
+        .collect::<Vec<_>>();
+    assert!(!parts.is_empty(), "no {content_type} part");
+    for part in parts {
+        let xml = String::from_utf8(package.get_part(&part).unwrap().to_vec()).unwrap();
+        let xml = match (xml.find("<p:bg>"), xml.find("</p:bg>")) {
+            (Some(start), Some(end)) => format!(
+                "{}{background}{}",
+                &xml[..start],
+                &xml[end + "</p:bg>".len()..]
+            ),
+            _ => xml.replacen("<p:spTree", &format!("{background}<p:spTree"), 1),
+        };
+        package.set_part(&part, xml.into_bytes());
+    }
+    package_bytes(package)
+}
+
+fn saved_slide_xml(presentation: &Presentation) -> String {
+    let package = open_opc(&presentation.to_bytes().unwrap(), "saved slide");
+    let part = package
+        .content_types
+        .overrides
+        .iter()
+        .find_map(|(part, part_type)| (part_type == content_types::SLIDE).then_some(part))
+        .unwrap();
+    String::from_utf8(package.get_part(part).unwrap().to_vec()).unwrap()
+}
+
+#[test]
+fn gradient_backgrounds_without_angle_or_path_open_render_and_round_trip() {
+    let stops = r#"<a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst>"#;
+    let linear = format!(
+        r#"<p:bg><p:bgPr><a:gradFill rotWithShape="1">{stops}<a:lin scaled="0"/></a:gradFill><a:effectLst/></p:bgPr></p:bg>"#
+    );
+    let presentation =
+        Presentation::from_bytes(&blank_deck_with_background(content_types::SLIDE, &linear))
+            .expect("open a linear gradient without @ang");
+    let (input, layout) = presentation.render_deterministic().unwrap();
+    assert!(
+        input.slides[0].diagnostics.is_empty(),
+        "{:?}",
+        input.slides[0].diagnostics
+    );
+    let png = oxml_pdf::render_page_to_png(&layout, 0, 72.0).unwrap();
+    let pixmap = tiny_skia::Pixmap::decode_png(&png).unwrap();
+    let rgb = |x: u32, y: u32| {
+        let pixel = pixmap.pixel(x, y).unwrap();
+        (pixel.red(), pixel.green(), pixel.blue())
+    };
+    let (right, bottom) = (pixmap.width() - 5, pixmap.height() - 5);
+    let (top_left, top_right) = (rgb(5, 5), rgb(right, 5));
+    // A missing angle is 0 degrees, so colour varies left to right only.
+    assert!(top_left.0 > 200 && top_left.2 < 55, "{top_left:?}");
+    assert!(top_right.2 > 200 && top_right.0 < 55, "{top_right:?}");
+    assert_eq!(rgb(5, bottom), top_left);
+    assert_eq!(rgb(right, bottom), top_right);
+    let saved = saved_slide_xml(&presentation);
+    assert!(saved.contains(r#"<a:lin scaled="0"/>"#), "{saved}");
+
+    // The PDF fills the page with the same gradient before any slide content,
+    // as a pattern whose axial shading runs left to right from red to blue.
+    let pdf = lopdf::Document::load_mem(&presentation.to_pdf_deterministic().unwrap()).unwrap();
+    let page = *pdf.get_pages().values().next().unwrap();
+    let operations = pdf.get_and_decode_page_content(page).unwrap().operations;
+    let operators = operations
+        .iter()
+        .take(8)
+        .map(|operation| operation.operator.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(operators, ["q", "cm", "q", "cs", "scn", "re", "f", "Q"]);
+    let dictionary = |object| pdf.dereference(object).unwrap().1.as_dict().unwrap();
+    let numbers = |object: &lopdf::Object| {
+        object
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_float().unwrap())
+            .collect::<Vec<_>>()
+    };
+    let resources = dictionary(pdf.get_dictionary(page).unwrap().get(b"Resources").unwrap());
+    let patterns = dictionary(resources.get(b"Pattern").unwrap());
+    let pattern = dictionary(
+        patterns
+            .get(operations[4].operands[0].as_name().unwrap())
+            .unwrap(),
+    );
+    let shading = dictionary(pattern.get(b"Shading").unwrap());
+    assert_eq!(shading.get(b"ShadingType").unwrap().as_i64().unwrap(), 2);
+    let axis = numbers(shading.get(b"Coords").unwrap());
+    assert!(
+        (axis[1] - axis[3]).abs() < 1e-3 && axis[0] < axis[2],
+        "{axis:?}"
+    );
+    let intervals = dictionary(shading.get(b"Function").unwrap())
+        .get(b"Functions")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    assert_eq!(intervals.len(), 1);
+    let interval = dictionary(&intervals[0]);
+    assert_eq!(numbers(interval.get(b"C0").unwrap()), [1.0, 0.0, 0.0]);
+    assert_eq!(numbers(interval.get(b"C1").unwrap()), [0.0, 0.0, 1.0]);
+
+    let path = format!(
+        r#"<p:bg><p:bgPr><a:gradFill rotWithShape="1">{stops}<a:path><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path></a:gradFill><a:effectLst/></p:bgPr></p:bg>"#
+    );
+    let presentation =
+        Presentation::from_bytes(&blank_deck_with_background(content_types::SLIDE, &path))
+            .expect("open a path gradient without @path");
+    let (input, _) = presentation.render_deterministic().unwrap();
+    assert_eq!(
+        input.slides[0]
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>(),
+        ["unsupported background rectangle path gradient"]
+    );
+    let saved = saved_slide_xml(&presentation);
+    assert!(
+        saved.contains(
+            r#"<a:path><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>"#
+        ),
+        "{saved}"
+    );
+}
+
+#[test]
+fn solid_backgrounds_from_slide_layout_and_master_reach_pdf_and_png() {
+    let background = r#"<p:bg><p:bgPr><a:solidFill><a:srgbClr val="7B1E3A"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>"#;
+    let expected = [0x7B_u8, 0x1E, 0x3A];
+    for owner in [
+        content_types::SLIDE,
+        content_types::SLIDE_LAYOUT,
+        content_types::SLIDE_MASTER,
+    ] {
+        let presentation =
+            Presentation::from_bytes(&blank_deck_with_background(owner, background)).unwrap();
+        let png = presentation
+            .slide_png_deterministic(0, 72.0)
+            .unwrap()
+            .unwrap();
+        let pixmap = tiny_skia::Pixmap::decode_png(&png).unwrap();
+        let corner = pixmap.pixel(5, 5).unwrap();
+        assert_eq!(
+            [corner.red(), corner.green(), corner.blue()],
+            expected,
+            "{owner} PNG"
+        );
+
+        let pdf = lopdf::Document::load_mem(&presentation.to_pdf_deterministic().unwrap()).unwrap();
+        let page = *pdf.get_pages().values().next().unwrap();
+        let media_box = pdf
+            .get_dictionary(page)
+            .unwrap()
+            .get(b"MediaBox")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_float().unwrap())
+            .collect::<Vec<_>>();
+        let operations = pdf.get_and_decode_page_content(page).unwrap().operations;
+        let operators = operations
+            .iter()
+            .take(7)
+            .map(|operation| operation.operator.as_str())
+            .collect::<Vec<_>>();
+        // The background fills the whole page before any slide content.
+        assert_eq!(
+            operators,
+            ["q", "cm", "q", "rg", "re", "f", "Q"],
+            "{owner} PDF"
+        );
+        let numbers = |index: usize| {
+            operations[index]
+                .operands
+                .iter()
+                .map(|value| value.as_float().unwrap())
+                .collect::<Vec<_>>()
+        };
+        for (component, byte) in numbers(3).into_iter().zip(expected) {
+            assert!(
+                (component * 255.0 - f32::from(byte)).abs() < 0.5,
+                "{owner} PDF fill {component}"
+            );
+        }
+        assert_eq!(numbers(4), media_box, "{owner} PDF rectangle");
+    }
+}
+
 #[test]
 fn picture_sniffs_bytes_when_extension_is_misleading() {
     let png = png_header(5, 4);
@@ -15766,6 +16143,51 @@ fn four_appended_shapes_have_unique_ids_and_reopen() {
     assert!(group_xml.contains("<p:cNvGrpSpPr/>"));
     assert!(group_xml.contains("<p:nvPr/>"));
     assert!(group_xml.contains("<p:grpSpPr/>"));
+}
+
+#[test]
+fn added_connector_carries_the_theme_style_and_renders_its_line() {
+    let mut presentation = Presentation::new().expect("open bundled template");
+    presentation.add_slide(6).expect("add blank slide");
+    presentation
+        .slide_mut(0)
+        .unwrap()
+        .add_connector(
+            ConnectorType::Straight,
+            Emu::from_cm(2.0),
+            Emu::from_cm(3.0),
+            Emu::from_cm(20.0),
+            Emu::from_cm(3.0),
+        )
+        .expect("add connector");
+
+    let bytes = presentation.to_bytes().expect("serialize connector deck");
+    let package = open_opc(&bytes, "added connector style");
+    let xml =
+        String::from_utf8(package.get_part("/ppt/slides/slide1.xml").unwrap().to_vec()).unwrap();
+    let start = xml.find("<p:cxnSp>").expect("added connector");
+    let end = start + xml[start..].find("</p:cxnSp>").unwrap() + "</p:cxnSp>".len();
+    assert_eq!(
+        &xml[start..end],
+        r#"<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="2" name="Connector 2"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm><a:off x="720000" y="1080000"/><a:ext cx="6480000" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom></p:spPr><p:style><a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef></p:style></p:cxnSp>"#
+    );
+
+    let reopened = Presentation::from_bytes(&bytes).expect("reopen connector deck");
+    assert!(reopened.validate().is_empty());
+    let (_, layout) = reopened.render_deterministic().unwrap();
+    assert!(layout.diagnostics.is_empty(), "{:?}", layout.diagnostics);
+    // The bundled theme's second line is 2 pt of accent1 (4F81BD). At 72 DPI the
+    // line centred at 3 cm (85.04 pt) fully covers pixel row 85.
+    let png = reopened.slide_png_deterministic(0, 72.0).unwrap().unwrap();
+    let pixmap = tiny_skia::Pixmap::decode_png(&png).unwrap();
+    for x in 60..560 {
+        let pixel = pixmap.pixel(x, 85).unwrap();
+        assert_eq!(
+            (pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()),
+            (0x4F, 0x81, 0xBD, 0xFF),
+            "connector line pixel at x {x}"
+        );
+    }
 }
 
 #[test]
