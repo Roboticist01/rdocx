@@ -499,6 +499,7 @@ defended.
 | F-X135 | S75 | L | 5 | 6 | 2026-09-26 | Integrated PRs 146 through 151, resolved five uncovered issues, audited late PRs 153 and 154, and preserved unchanged package bytes |
 | F-X136 | S75 | L | 5 | 1 | 2026-09-26 | Split ordinary Word table rows across page boundaries, respected cantSplit and exact heights, and removed the source-built footer-only page |
 | F-X137 | S76 | L | 5 | 1 | 2026-09-30 | Integrated five package and CLI safety PRs with atomic saves, safe output refusal, namespace binding and package class selection |
+| F-X138 | S76 | L | 5 | 1 | 2026-09-30 | Integrated eight Word story PRs with direct body coordinates, comment anchoring, content control traversal and source-preserving replacement |
 
 ## Velocity
 
