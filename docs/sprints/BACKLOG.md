@@ -701,7 +701,7 @@ regenerated, never hand-edited.
 | F-X145 | Comparison options and redline completion | S78 | L | pending |
 | F-X146 | Word line height and inline picture spacing | S78 | L | pending |
 | F-X147 | Complete rdocx Python production checklist | S79 | L | pending |
-| F-X148 | Complete rpptx Python production checklist | S79 | L | pending |
+| F-X148 | Audit rpptx Python production fixture | S79 | L | pending |
 | F-X149 | Production fixtures and workflow acceptance gate | S79 | L | pending |
 | F-X150 | Reconcile issue closure evidence | S79 | M | pending |
 <!-- AUTOGEN:backlog-MX END -->

@@ -6104,7 +6104,10 @@ labelled and reviewed.
 
 Review and integrate PRs 176, 187, 194, 201, 203 and 212 on the S76
 prefix. PR 203 follows 201. Preserve Python stub, binding and native API
-agreement while exposing the contributed Issue 168 checklist items.
+agreement while exposing the contributed Issue 168 checklist items. Complete
+the named section-default, native common-style and refreshable TOC behavior
+gaps beyond the PRs. Own a separate, reviewed hash baseline update after
+F-X140. The remaining Issue 168 checklist stays with F-X147.
 **Depends on**: F-X139, F-X140.
 **Test gate**: integration. The contributed Python workflow, typing smoke
 and Rust parity cases pass after save and reopen.
@@ -6113,7 +6116,9 @@ and Rust parity cases pass after save and reopen.
 
 Review and integrate PRs 173, 181, 189, 192, 208 and 209. PRs 208 and
 209 follow 189. Reconcile the shared shape, table, layout and binding
-files before running the Issue 169 deck workflow.
+files before running the Issue 169 deck workflow. Complete every Issue 169
+checklist item beyond the PRs with a working API or an explicit reviewed scope
+decision and documented fallback.
 **Depends on**: F-X140.
 **Test gate**: integration. Python and Rust deck operations round-trip,
 validate and render with correct shape geometry and table structure.
@@ -6166,12 +6171,12 @@ decision for any intentionally unsupported long-tail operation.
 **Test gate**: integration. Every Issue 168 checklist example runs from
 Python, or has an explicit accepted scope decision and documented fallback.
 
-### F-X148, Complete rpptx Python production checklist (L)
+### F-X148, Audit rpptx Python production fixture (L)
 
-Complete Issue 169 after F-X142. Verify contributed borders, z-order,
-table edits and run hyperlinks, then address shape hyperlinks, comment
-anchors and built-in table styles. Record any reviewed scope decision the
-reporter explicitly invites.
+Independently exercise F-X142's completed Issue 169 checklist against the
+production deck fixture and cross-viewer output. Record any integration gap
+found after S77 and repair it through a scoped follow-up rather than claiming
+the checklist was completed twice.
 **Depends on**: F-X142.
 **Test gate**: integration. The complete deck chain round-trips, validates
 and renders, with every checklist item either passing or explicitly scoped.

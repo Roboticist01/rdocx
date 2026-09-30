@@ -1558,12 +1558,17 @@ combined verification and review boundary.
 | F-X142 | Presentation Python contribution wave | L |
 | F-X143 | Revision listing and CLI story contribution wave | M |
 
-F-X140 reviews PRs 175, 188, 196, 199, 200, 206 and 207. It alone may
-change the hash baseline, after a labelled and reviewed expected delta.
+F-X140 reviews PRs 175, 188, 196, 199, 200, 206 and 207. It owns the
+first labelled and reviewed hash baseline update. F-X141 owns a second,
+separate baseline update for native common styles and any reviewed TOC output
+delta. No other S77 story may move the baseline.
 PR 196's Presentation fidelity gate and PR 206's MSRV and Test gates must
 pass before integration. F-X141 reviews PRs 176, 187, 194, 201, 203 and 212. PR 203 follows
 201. F-X142 reviews PRs 173, 181, 189, 192, 208 and 209. PRs 208
-and 209 follow 189. F-X143 reviews PRs 186 and 204, with 204 following
+and 209 follow 189. F-X141 also completes the named section-default, native
+common-style and refreshable TOC gaps beyond those PRs. F-X142 completes the
+full Issue 169 checklist, including the API and rendering items outside its
+PR set. F-X143 reviews PRs 186 and 204, with 204 following
 S76 PR 198. Replay only each stacked PR's incremental diff after its
 parent lands, then rebase the head and rerun CI. Binding smoke, package,
 rendering, documentation and release regression checks run on the combined
@@ -1603,9 +1608,10 @@ criteria.
 | F-X149 | Production fixtures and workflow acceptance gate | L |
 | F-X150 | Reconcile issue closure evidence | M |
 
-F-X147 and F-X148 finish the explicit unchecked
-items in Issues 168 and 169, or record a reviewed product scope decision
-where those issues invite one. F-X149 makes the attached Issue 158 fixtures,
+F-X147 finishes the remaining explicit unchecked items in Issue 168, or
+records a reviewed product scope decision where that issue invites one.
+F-X148 independently checks F-X142's Issue 169 result against the production
+deck fixture and cross-viewer output. F-X149 makes the attached Issue 158 fixtures,
 matrices and workflows repeatable acceptance evidence. F-X150 compares
 every Issue 156 through 172 criterion against that evidence, including
 Issue 172's three comment entry points, without treating a merged PR as
