@@ -28,7 +28,7 @@ boundary. Issue acceptance continues in S78 and S79.
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X140 | Rendering and layout contribution wave | L | pending | - |
+| F-X140 | Rendering and layout contribution wave | L | in-progress | codex |
 | F-X141 | Word Python contribution wave | L | pending | - |
 | F-X142 | Presentation Python contribution wave | L | pending | - |
 | F-X143 | Revision listing and CLI story contribution wave | M | pending | - |
