@@ -93,7 +93,9 @@ borrowed nested handle can mutate without a rebind:
 Python paragraph text, run iteration, run indexing, formatting mutation, and
 run splitting share the native accepted-view run order. Visible runs inside
 inline content controls, insertions, and move destinations carry recursive
-source paths. Deleted and move-source runs are absent. A successful structural
+source paths. Deleted and move-source runs are absent. Paragraph text also
+reads the runs inside smart tags, inline custom XML elements, and simple fields,
+which the run handles do not address. A successful structural
 edit invalidates earlier path-backed run handles through the same document
 revision check as direct handles.
 
@@ -241,8 +243,15 @@ field cache update operations. `RunPosition` and
 `RunRange` are constructible frozen values for zero-based half-open run ranges.
 `StoryRunPosition` and `StoryRunRange` are parallel frozen values whose
 `StoryItem` snapshots can identify direct body or table-cell paragraphs.
-`Document.add_comment` accepts either range form. The original direct-body
-constructors and call shape remain unchanged.
+`StoryRunPosition` also accepts a body `Paragraph` handle. A handle to a
+paragraph inside a block content control yields an item with the two-segment
+path of `Document::paragraph_story_location`, the control's story item index
+then the paragraph's position among the control's paragraphs, which only
+comment positions accept.
+`Document.add_comment` accepts either range form.
+`Document.add_comment_on_text` comments on the zero-based occurrence of an
+exact text in the main story without run index bookkeeping. The original
+direct-body constructors and call shape remain unchanged.
 `Comment`, `ComparisonDiagnostic`, `BoundingBox`, `LayoutFragment`,
 `LayoutPage`, `TocRebuildReport`, and `Revision` are frozen typed snapshots.
 `Document.revisions` lists main-document revisions with a snake_case `kind`,
@@ -696,7 +705,10 @@ bundled-font page targets and returns `TocRebuildReport` with entry and newly
 allocated bookmark counts plus exact retained-field diagnostics in physical
 source order. `diagnostic_count()` is derived from the owned diagnostic
 collection. A document without a TOC is unchanged and returns empty counts and
-diagnostics. `rdocx-cli toc rebuild` publishes the validated result to an
+diagnostics. The cached entry paragraphs are replaced, so comment and bookmark
+markers on them, including those in a table of contents content control, are
+dropped with them, and a comment anchored only there stays unanchored in the
+comments part. `rdocx-cli toc rebuild` publishes the validated result to an
 explicit output and reports the counts through a schema-1 main-story record.
 Python exposes the same operation and returns diagnostics as an immutable tuple
 with a derived `diagnostic_count` property. WASM does not expose this operation.
@@ -876,8 +888,54 @@ The native Word facade provides additive `Document::try_replace_text` beside
 the legacy infallible `replace_text` method. The fallible method stages the
 replacement and publishes it only after namespace-safe serialization succeeds.
 The command-line `replace` operation uses this boundary, reports the stable
-serialization error, and creates no partial output. Python and WASM bindings
-gain no corresponding method.
+serialization error, and creates no partial output. Python exposes the fallible
+method as `Document.try_replace_text`. The WASM binding keeps its infallible
+`replacePlaceholder`, which calls `replace_text`.
+
+Literal replacement reaches the body, tables, content controls at every level,
+headers, footers, footnotes, endnotes, the text boxes of the body, headers, and
+footers, and the labels of the charts in the body. Regex replacement reaches
+the same stories except chart labels. Every normal note of the
+relationship-resolved footnotes and endnotes parts is searched, its tables and
+block controls included. The separator, continuation separator, and
+continuation notice entries are not, and neither is an untyped entry at id 0 or
+below, as the typed notes reader and the story walkers read them. A text box
+inside a note is not searched. A notes part is rewritten only when a note
+changed, and then only the changed children of that note are serialized again.
+A match inside a tracked insertion or move destination is replaced inside it.
+So is a match inside a smart tag, an inline custom XML element, or the cached
+result of a simple field, whose instruction is never matched. Deleted text is
+not matched, except in a text box inside a deleted run, which the text box pass
+rewrites like any other text box. The Rust facade, Python `try_replace_text`
+and `replace_all_regex`, the WASM replacement method, and
+`rdocx replace --expect` share these counts.
+
+Literal replacement reaches the body, tables, content controls at every level,
+headers, footers, footnotes, endnotes, text boxes, and chart labels. Regex
+replacement reaches the same stories except chart labels. Every normal note of
+the relationship-resolved footnotes and endnotes parts is searched, its tables
+and block controls included. The separator, continuation
+separator, and continuation notice entries are not, and neither is an untyped
+entry at id 0 or below, as the typed notes reader and the story walkers read
+them. A notes part is rewritten only when a note changed, and then only the
+changed children of that note are serialized again. A match inside a tracked
+insertion or move destination is replaced inside it, and deleted text is never
+matched. The Rust facade, Python `try_replace_text` and `replace_all_regex`,
+the WASM replacement method, and `rdocx replace --expect` share these counts.
+
+Every Word replacement, literal, regular
+expression, or template, edits every copy of a text box that Word writes in
+`mc:AlternateContent`. The count is that of the first `mc:Choice` that holds a
+text box, the DrawingML copy that layout draws and the story walkers read. The
+VML `mc:Fallback` and any later Choice are edited whatever they hold, a
+Fallback that a story edit left behind its Choice included, and never counted.
+A replacement can therefore change a Fallback and report 0. When no Choice
+holds a text box, a Fallback text box is replaced and counted as any other
+text box. Replacement handles `mc:AlternateContent` at any depth outside
+another text box, while the story walkers read it only as a child of a run.
+A story edit of such a text box changes the Choice only, see
+`03-architecture.md`. `redact_text` removes the literal from every copy and
+still counts each copy.
 
 The native presentation facade provides the same staged boundary through
 `Presentation::try_replace_text`, with exact counts across slides and speaker
@@ -1010,23 +1068,43 @@ Native Word callers can inspect comments through `Document::comments` and
 author threads through `add_comment`, `reply_to`, `resolve_comment`, and
 `remove_comment`. The additive native `add_comment_with_date` and
 `reply_to_with_date` methods accept an optional validated RFC 3339 timestamp.
+The additive native `add_comment_on_text` anchors a comment on the zero-based,
+non-overlapping, case-sensitive occurrence of a literal text in main-story
+paragraphs, through tables and block content controls. It splits the runs at
+both ends of the match, anchors the runs between the splits like
+`add_comment`, and refuses a missing occurrence or a match that cannot be
+anchored exactly without changing the document. Tabs and breaks have no width
+in the literal text, and a match whose range would also show text that the
+literal text leaves out, such as a field result, is not exact. Python exposes
+it with keyword `author`, `text`, `occurrence`, `initials` and `date`
+arguments.
 The Python `add_comment` and `reply_to` methods expose the same value as the
 optional `date` keyword. Omission writes no date and remains deterministic.
 Returned ids keep naming the same comment or reply after rdocx save and reopen,
 although third-party editors may renumber them. `RunPosition` and `RunRange`
 define top-level paragraph run
-boundaries with an inclusive start and exclusive end. `Document::split_run`
+boundaries with an inclusive start and exclusive end. Run boundaries count the
+accepted-view runs that `Paragraph.runs` and `rdocx-cli text --json` list,
+including the runs inside inline content controls and tracked insertions, and
+a range that cannot be anchored exactly is an error rather than a shifted
+range. `Document::split_run`
 splits one direct-body run at a Unicode scalar offset of its literal text, so
-such a boundary can fall inside what was one run. The second part keeps the run
+such a boundary can fall inside what was one run. Its first argument is the
+same direct body child index as `RunPosition` and `find_content_index`. An
+index that names a table, a block content control, or preserved XML is an
+error naming that kind. The second part keeps the run
 properties and the enclosing hyperlink. Tabs, breaks, fields, drawings,
 references, and preserved raw children have zero width. Zero and the literal
 text length return the existing boundary without mutation. Interior success
-returns the new continuation index. Python exposes the same method and advances
-the binding revision only when a continuation is created. `CommentRef` exposes
+returns the new continuation index. Python exposes the same method and also
+accepts a `Paragraph` handle in place of the index, which reaches paragraphs
+inside block content controls. A table cell paragraph handle is refused. The
+binding revision advances only when a continuation is created. `CommentRef` exposes
 comment metadata, text, parent identity, and resolved state without permitting
 part-local mutation. `rdocx-cli comment` lists, adds, replies to, resolves, and
 removes comments. Add ranges use explicit zero-based, half-open body paragraph
-and run coordinates. Every mutation publishes a complete validated document
+and run coordinates, and the run coordinates count the runs that `text --json`
+lists. Every mutation publishes a complete validated document
 to an explicit output. Python and WASM keep their package-preserving owners.
 
 Native Word callers remove one exact non-empty literal with
@@ -1040,7 +1118,12 @@ preserve a document already redacted through the native facade.
 Native Word callers use `Document::bookmarks` for immutable `BookmarkRef`
 summaries and `Document::add_bookmark` for atomic insertion over the existing
 top-level half-open `RunRange`. A summary exposes an optional id, name, range,
-current text, and marker issue. Insertion validates the Word name and both
+direct range, current text, and marker issue. The range counts paragraphs
+recursively through tables and block content controls. The direct range uses
+the `RunPosition` body index that `add_bookmark` takes and is present only when
+both markers sit in direct body paragraphs. Its run indexes stay the
+accepted-view boundaries of the range, which are the run indexes
+`add_bookmark` takes. Insertion validates the Word name and both
 boundaries, rejects duplicate or producer-reserved names, and returns the
 allocated nonnegative id. The shared recursive `Field` model retains the
 complete `REF` and `PAGEREF` instruction, target argument, cached display,

@@ -1516,6 +1516,19 @@ fn replace_image_preserves_drawings_and_story_relationship_ownership() {
 }
 
 #[test]
+fn issue_163_split_run_uses_the_direct_body_index_after_a_table() {
+    let mut document = Document::new();
+    document.add_paragraph("Before.");
+    document.add_table(1, 1);
+    document.add_paragraph("Target run.");
+
+    let body_index = document.find_content_index("Target").unwrap();
+    assert_eq!(body_index, 2);
+    assert_eq!(document.split_run(body_index, 0, 6).unwrap(), 1);
+    assert_eq!(document.paragraphs()[1].text(), "Target run.");
+}
+
+#[test]
 fn split_run_enables_exact_comment_ranges_without_losing_content() {
     let mut document = Document::new();
     document
@@ -1632,6 +1645,843 @@ fn checked_table_cell_comment_range_is_atomic_and_reopens() {
     let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
     assert_eq!(reopened.comments()[0].id(), id);
     assert_eq!(reopened.comments()[0].text(), "review");
+}
+
+/// GitHub issue #163: the index `find_content_index` returns is a direct body
+/// child index, and every body API that takes an index must address the same
+/// paragraph with it, whatever tables or block content controls precede it.
+mod direct_body_index_coordinates {
+    use rdocx::{
+        Document, RunPosition, RunRange, StoryItemKind, StoryKind, StoryRunPosition, StoryRunRange,
+    };
+
+    const TABLE: &str = r#"<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>c00</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>c01</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>c10</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>c11</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#;
+    const CONTROL: &str = r#"<w:sdt><w:sdtPr><w:alias w:val="Block"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>Control one.</w:t></w:r></w:p><w:p><w:r><w:t>Control two.</w:t></w:r></w:p></w:sdtContent></w:sdt>"#;
+
+    fn paragraph(text: &str) -> String {
+        format!("<w:p><w:r><w:t>{text}</w:t></w:r></w:p>")
+    }
+
+    fn document_from_body(body: &str) -> Document {
+        super::document_with_content_controls(&super::wrap_word_body(body))
+    }
+
+    fn run_texts(document: &Document) -> Vec<Vec<String>> {
+        document
+            .paragraphs()
+            .iter()
+            .map(|paragraph| paragraph.runs().map(|run| run.text()).collect())
+            .collect()
+    }
+
+    fn one_run_range(body_index: usize) -> RunRange {
+        RunRange {
+            start: RunPosition {
+                body_index,
+                run_index: 0,
+            },
+            end: RunPosition {
+                body_index,
+                run_index: 1,
+            },
+        }
+    }
+
+    /// Visible text between the range markers of comment `id` in the saved
+    /// main part. The tests keep each range inside one paragraph.
+    fn commented_text(document: &mut Document, id: i32) -> String {
+        let xml = super::document_xml(document);
+        let start_marker = format!(r#"<w:commentRangeStart w:id="{id}"/>"#);
+        let end_marker = format!(r#"<w:commentRangeEnd w:id="{id}"/>"#);
+        let start = xml.find(&start_marker).expect("comment start marker") + start_marker.len();
+        let end = start + xml[start..].find(&end_marker).expect("comment end marker");
+        super::f_x093_visible_text(&xml[start..end])
+    }
+
+    #[test]
+    fn split_run_takes_the_direct_body_index_after_a_table() {
+        let mut document = Document::new();
+        document.add_paragraph("Alpha paragraph before the table.");
+        document
+            .add_table(1, 1)
+            .row(0)
+            .unwrap()
+            .cell(0)
+            .unwrap()
+            .set_text("cell");
+        document.add_paragraph("Beta paragraph after the table.");
+        document.add_paragraph("Gamma paragraph at the end.");
+        let beta = document.find_content_index("Beta").unwrap();
+        assert_eq!(beta, 2);
+
+        assert_eq!(document.split_run(beta, 0, 4).unwrap(), 1);
+        assert_eq!(
+            run_texts(&document),
+            [
+                vec!["Alpha paragraph before the table."],
+                vec!["Beta", " paragraph after the table."],
+                vec!["Gamma paragraph at the end."],
+            ]
+        );
+
+        let id = document
+            .add_comment(one_run_range(beta), "Ada", None, "Which word?")
+            .unwrap();
+        assert_eq!(commented_text(&mut document, id), "Beta");
+
+        document.insert_paragraph(beta, "Inserted.");
+        let texts: Vec<String> = document.paragraphs().iter().map(|p| p.text()).collect();
+        assert_eq!(
+            texts[1..3],
+            ["Inserted.", "Beta paragraph after the table."]
+        );
+    }
+
+    #[test]
+    fn split_run_takes_the_direct_body_index_after_a_block_content_control() {
+        let mut document = document_from_body(&format!(
+            "{}{CONTROL}{}{}",
+            paragraph("Alpha."),
+            paragraph("Beta paragraph."),
+            paragraph("Gamma.")
+        ));
+        let beta = document.find_content_index("Beta").unwrap();
+        assert_eq!(beta, 2);
+        let mut expected = run_texts(&document);
+        expected[3] = vec!["Beta".to_owned(), " paragraph.".to_owned()];
+
+        assert_eq!(document.split_run(beta, 0, 4).unwrap(), 1);
+        assert_eq!(run_texts(&document), expected);
+        let id = document
+            .add_comment(one_run_range(beta), "Ada", None, "Which word?")
+            .unwrap();
+        assert_eq!(commented_text(&mut document, id), "Beta");
+    }
+
+    #[test]
+    fn split_run_names_the_body_child_that_is_not_a_paragraph() {
+        let mut document = document_from_body(&format!(
+            r#"{}{TABLE}{CONTROL}<w:customXml w:element="note">{}</w:customXml>{}"#,
+            paragraph("Alpha."),
+            paragraph("Custom."),
+            paragraph("Beta.")
+        ));
+        let before = document.to_bytes().unwrap();
+        for (body_index, kind) in [(1, "table"), (2, "content control"), (3, "preserved XML")] {
+            let error = document.split_run(body_index, 0, 1).unwrap_err();
+            assert!(
+                error.to_string().contains(kind),
+                "body index {body_index}: {error}"
+            );
+        }
+        let error = document.split_run(5, 0, 1).unwrap_err();
+        assert!(error.to_string().contains("out of range"), "{error}");
+        assert_eq!(document.to_bytes().unwrap(), before);
+    }
+
+    #[test]
+    fn bookmark_direct_range_reports_the_index_add_bookmark_took() {
+        let mut document = document_from_body(&format!(
+            "{}{TABLE}{CONTROL}{}",
+            paragraph("Alpha."),
+            paragraph("Beta paragraph.")
+        ));
+        let beta = document.find_content_index("Beta").unwrap();
+        assert_eq!(beta, 3);
+        document.add_bookmark("beta", one_run_range(beta)).unwrap();
+
+        let bookmark = document.bookmarks().remove(0);
+        assert_eq!(bookmark.text(), "Beta paragraph.");
+        assert_eq!(bookmark.direct_range(), Some(one_run_range(beta)));
+        // range() keeps the recursive paragraph ordinal that REF numbering
+        // reads: Alpha, the four cells and the two control paragraphs.
+        assert_eq!(bookmark.range().unwrap().start.body_index, 7);
+    }
+
+    #[test]
+    fn bookmark_direct_range_is_none_when_a_marker_is_nested() {
+        let marked = |id: u32, name: &str, text: &str| {
+            format!(
+                r#"<w:p><w:bookmarkStart w:id="{id}" w:name="{name}"/><w:r><w:t>{text}</w:t></w:r><w:bookmarkEnd w:id="{id}"/></w:p>"#
+            )
+        };
+        let document = document_from_body(&format!(
+            r#"<w:p><w:bookmarkStart w:id="3" w:name="mixed"/><w:r><w:t>Alpha.</w:t></w:r></w:p><w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>{}</w:tc></w:tr></w:tbl><w:sdt><w:sdtContent>{}<w:p><w:r><w:t>Control end.</w:t></w:r><w:bookmarkEnd w:id="3"/></w:p></w:sdtContent></w:sdt>{}"#,
+            marked(1, "cell", "In a cell."),
+            marked(2, "control", "In a control."),
+            marked(4, "direct", "Direct.")
+        ));
+        let bookmarks = document.bookmarks();
+        let named = |name: &str| {
+            bookmarks
+                .iter()
+                .find(|bookmark| bookmark.name() == Some(name))
+                .unwrap()
+        };
+        for name in ["cell", "control", "mixed"] {
+            assert!(named(name).range().is_some(), "{name}: {:?}", named(name));
+            assert_eq!(named(name).direct_range(), None, "{name}");
+        }
+        assert_eq!(named("direct").direct_range(), Some(one_run_range(3)));
+    }
+
+    fn comment_on_story_paragraph(document: &mut Document, kind: StoryKind, text: &str) -> i32 {
+        let story = super::f254_story(document, kind);
+        let location = document
+            .story_items(&story)
+            .unwrap()
+            .into_iter()
+            .find(|item| {
+                item.kind() == StoryItemKind::Paragraph
+                    && item.text().unwrap().as_deref() == Some(text)
+            })
+            .unwrap()
+            .location()
+            .clone();
+        document
+            .add_story_comment(
+                StoryRunRange {
+                    start: StoryRunPosition {
+                        location: location.clone(),
+                        run_index: 0,
+                    },
+                    end: StoryRunPosition {
+                        location,
+                        run_index: 1,
+                    },
+                },
+                "Ada",
+                None,
+                "Here",
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn story_comment_after_a_block_content_control_anchors_on_its_paragraph() {
+        let mut document = document_from_body(&format!(
+            "{}{CONTROL}{}",
+            paragraph("Alpha."),
+            paragraph("Beta paragraph.")
+        ));
+        let id = comment_on_story_paragraph(&mut document, StoryKind::Body, "Beta paragraph.");
+        assert_eq!(commented_text(&mut document, id), "Beta paragraph.");
+    }
+
+    #[test]
+    fn story_comment_in_a_cell_after_a_block_content_control_anchors_on_its_paragraph() {
+        let mut document = document_from_body(&format!(
+            r#"<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>{CONTROL}{}</w:tc></w:tr></w:tbl>{}"#,
+            paragraph("Target cell paragraph."),
+            paragraph("After.")
+        ));
+        let id = comment_on_story_paragraph(
+            &mut document,
+            StoryKind::TableCell,
+            "Target cell paragraph.",
+        );
+        assert_eq!(commented_text(&mut document, id), "Target cell paragraph.");
+    }
+}
+
+/// GitHub issue #172: a run index read from `Paragraph::runs` or
+/// `rdocx text --json` counts the runs inside inline content controls and
+/// tracked insertions, and comment and bookmark anchoring use the same count.
+mod accepted_run_index_anchoring {
+    use rdocx::{
+        Document, RunPosition, RunRange, StoryItemKind, StoryKind, StoryRunPosition, StoryRunRange,
+    };
+
+    /// `before ` | control `TARGET` | ` after`, the issue reproduction.
+    const INLINE_CONTROL: &str = r#"<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r><w:sdt><w:sdtPr><w:alias w:val="Inline"/></w:sdtPr><w:sdtContent><w:r><w:t>TARGET</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>"#;
+    /// `before ` | control `A` `B` | ` after`.
+    const TWO_RUN_CONTROL: &str = r#"<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r><w:sdt><w:sdtPr><w:alias w:val="Inline"/></w:sdtPr><w:sdtContent><w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>"#;
+    /// The same paragraph in a document that names the Word namespace `ns0`,
+    /// as ElementTree-based producers write it.
+    const NS0_TWO_RUN_CONTROL: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ns0:document xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><ns0:body><ns0:p><ns0:r><ns0:t xml:space="preserve">before </ns0:t></ns0:r><ns0:sdt><ns0:sdtPr/><ns0:sdtContent><ns0:r><ns0:t>A</ns0:t></ns0:r><ns0:r><ns0:t>B</ns0:t></ns0:r></ns0:sdtContent></ns0:sdt><ns0:r><ns0:t xml:space="preserve"> after</ns0:t></ns0:r></ns0:p></ns0:body></ns0:document>"#;
+
+    fn document_from_body(body: &str) -> Document {
+        super::document_with_content_controls(&super::wrap_word_body(body))
+    }
+
+    fn range(start: (usize, usize), end: (usize, usize)) -> RunRange {
+        RunRange {
+            start: RunPosition {
+                body_index: start.0,
+                run_index: start.1,
+            },
+            end: RunPosition {
+                body_index: end.0,
+                run_index: end.1,
+            },
+        }
+    }
+
+    fn run_texts(document: &Document, index: usize) -> Vec<String> {
+        document
+            .paragraph(index)
+            .unwrap()
+            .runs()
+            .map(|run| run.text())
+            .collect()
+    }
+
+    /// The `w:t` text of an XML slice that may cross element boundaries.
+    pub(super) fn slice_text(xml: &str) -> String {
+        let mut text = String::new();
+        let mut rest = xml;
+        while let Some(index) = rest.find("<w:t") {
+            rest = &rest[index + "<w:t".len()..];
+            let Some(open_end) = rest.find('>') else {
+                break;
+            };
+            if !(rest.starts_with('>') || rest.starts_with(' ')) || rest[..open_end].ends_with('/')
+            {
+                continue;
+            }
+            rest = &rest[open_end + 1..];
+            let close = rest.find("</w:t>").expect("text element end");
+            text.push_str(&rest[..close]);
+            rest = &rest[close..];
+        }
+        text
+    }
+
+    /// The saved main part and the part between the range markers of `id`,
+    /// markers included.
+    fn anchored_xml(document: &mut Document, id: i32) -> (String, String) {
+        let xml = super::document_xml(document);
+        let start = xml
+            .find(&format!(r#"<w:commentRangeStart w:id="{id}"/>"#))
+            .expect("comment start marker");
+        let end_marker = format!(r#"<w:commentRangeEnd w:id="{id}"/>"#);
+        let end = xml.find(&end_marker).expect("comment end marker") + end_marker.len();
+        let anchored = xml[start..end].to_owned();
+        (xml, anchored)
+    }
+
+    fn comment(document: &mut Document, range: RunRange) -> rdocx::Result<i32> {
+        document.add_comment(range, "Ada", None, "Here")
+    }
+
+    #[test]
+    fn comment_run_index_counts_the_runs_of_an_inline_control() {
+        let mut document = document_from_body(INLINE_CONTROL);
+        assert_eq!(run_texts(&document, 0), ["before ", "TARGET", " after"]);
+
+        let id = comment(&mut document, range((0, 1), (0, 2))).unwrap();
+        let (xml, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "TARGET");
+        // The range covers the whole control, so its markers surround it.
+        assert!(anchored.contains("<w:sdt>") && anchored.contains("</w:sdt>"));
+        let end = xml.find("<w:commentRangeEnd").unwrap();
+        let reference = xml.find("<w:commentReference").unwrap();
+        let after = xml.find(" after</w:t>").unwrap();
+        assert!(end < reference && reference < after, "{xml}");
+
+        // The last run of the paragraph is addressable too.
+        let id = comment(&mut document, range((0, 3), (0, 4))).unwrap();
+        let (_, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), " after");
+
+        let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.comments().len(), 2);
+        assert_eq!(reopened.content_controls()[0].text(), "TARGET");
+        let (_, anchored) = anchored_xml(&mut reopened, id);
+        assert_eq!(slice_text(&anchored), " after");
+    }
+
+    #[test]
+    fn comment_inside_a_control_is_written_inside_its_content() {
+        let mut document = document_from_body(TWO_RUN_CONTROL);
+        assert_eq!(run_texts(&document, 0), ["before ", "A", "B", " after"]);
+
+        let id = comment(&mut document, range((0, 1), (0, 2))).unwrap();
+        let (xml, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "A");
+        let content = xml.find("<w:sdtContent>").unwrap();
+        let start = xml.find("<w:commentRangeStart").unwrap();
+        let reference = xml.find("<w:commentReference").unwrap();
+        let b = xml.find("<w:t>B</w:t>").unwrap();
+        let content_end = xml.find("</w:sdtContent>").unwrap();
+        assert!(content < start && reference < b && b < content_end, "{xml}");
+
+        let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.content_controls()[0].text(), "AB");
+        let (_, anchored) = anchored_xml(&mut reopened, id);
+        assert_eq!(slice_text(&anchored), "A");
+    }
+
+    #[test]
+    fn comment_on_a_nested_control_goes_around_it_inside_the_outer_one() {
+        let mut document = document_from_body(
+            r#"<w:p><w:sdt><w:sdtContent><w:r><w:t>X</w:t></w:r><w:sdt><w:sdtContent><w:r><w:t>Y</w:t></w:r></w:sdtContent></w:sdt><w:r><w:t>Z</w:t></w:r></w:sdtContent></w:sdt></w:p>"#,
+        );
+        assert_eq!(run_texts(&document, 0), ["X", "Y", "Z"]);
+        let id = comment(&mut document, range((0, 1), (0, 2))).unwrap();
+        let (xml, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "Y");
+        let x = xml.find("<w:t>X</w:t>").unwrap();
+        let z = xml.find("<w:t>Z</w:t>").unwrap();
+        let inner = xml.rfind("<w:sdt>").unwrap();
+        let start = xml.find("<w:commentRangeStart").unwrap();
+        let reference = xml.find("<w:commentReference").unwrap();
+        assert!(x < start && start < inner && reference < z, "{xml}");
+    }
+
+    #[test]
+    fn ranges_that_cannot_be_anchored_exactly_are_refused() {
+        let mut document = document_from_body(&format!(
+            r#"{TWO_RUN_CONTROL}<w:p><w:r><w:t>A </w:t></w:r><w:ins w:id="7" w:author="Ada"><w:r><w:t>B</w:t></w:r><w:r><w:t>C</w:t></w:r></w:ins></w:p>"#
+        ));
+        assert_eq!(run_texts(&document, 1), ["A ", "B", "C"]);
+        let before = document.to_bytes().unwrap();
+        for (range, reason) in [
+            // From outside the control to between its two runs.
+            (
+                range((0, 0), (0, 2)),
+                "crosses the edge of an inline content control",
+            ),
+            (
+                range((0, 2), (0, 4)),
+                "crosses the edge of an inline content control",
+            ),
+            // Between two runs of one tracked insertion.
+            (range((1, 2), (1, 3)), "inside a tracked insertion"),
+            // A range that continues into another paragraph from inside a control.
+            (range((0, 2), (1, 1)), "inside an inline content control"),
+            (range((0, 4), (0, 5)), "exceeds paragraph run count 4"),
+        ] {
+            let error = comment(&mut document, range).unwrap_err().to_string();
+            assert!(error.contains(reason), "{range:?}: {error}");
+            let error = document.add_bookmark("refused", range).unwrap_err();
+            assert!(error.to_string().contains(reason), "{range:?}: {error}");
+        }
+        assert_eq!(document.to_bytes().unwrap(), before);
+
+        // The whole insertion can be commented, and so can a range that
+        // starts before the control and continues into the next paragraph.
+        let id = comment(&mut document, range((1, 1), (1, 3))).unwrap();
+        let (_, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "BC");
+        let id = comment(&mut document, range((0, 1), (1, 1))).unwrap();
+        let (_, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "AB afterA ");
+    }
+
+    #[test]
+    fn removing_a_comment_clears_markers_inside_control_content() {
+        let mut document = document_from_body(TWO_RUN_CONTROL);
+        let original = super::document_xml(&mut document);
+        let id = comment(&mut document, range((0, 2), (0, 3))).unwrap();
+        assert!(super::document_xml(&mut document).contains("<w:commentReference"));
+
+        assert!(document.remove_comment(id).unwrap());
+        let removed = super::document_xml(&mut document);
+        assert!(!removed.contains("commentRange"), "{removed}");
+        assert!(!removed.contains("commentReference"), "{removed}");
+        assert_eq!(run_texts(&document, 0), ["before ", "A", "B", " after"]);
+
+        let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(super::document_xml(&mut reopened), original);
+    }
+
+    #[test]
+    fn removing_a_producer_comment_clears_its_markers_inside_control_content() {
+        let (mut document, id) = super::document_with_comment_paragraphs(&format!(
+            r#"<w:p><w:sdt><w:sdtContent><w:r><w:t>A</w:t></w:r><w:commentRangeStart w:id="{id}"/><w:r><w:t>B</w:t></w:r><w:commentRangeEnd w:id="{id}"/><w:r><w:commentReference w:id="{id}"/></w:r></w:sdtContent></w:sdt></w:p>"#,
+            id = 0
+        ));
+        assert!(document.remove_comment(id).unwrap());
+        let removed = super::document_xml(&mut document);
+        assert!(!removed.contains("commentRange"), "{removed}");
+        assert!(!removed.contains("commentReference"), "{removed}");
+        assert!(
+            removed.contains("<w:sdtContent><w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r>"),
+            "{removed}"
+        );
+    }
+
+    #[test]
+    fn removing_a_comment_clears_fixed_prefix_markers_in_a_document_of_another_prefix() {
+        // The markers added inside the control use the fixed `w` prefix.
+        let mut document = super::document_with_content_controls(NS0_TWO_RUN_CONTROL);
+        assert_eq!(run_texts(&document, 0), ["before ", "A", "B", " after"]);
+        let marker_counts = |xml: &str| {
+            ["commentRangeStart", "commentRangeEnd", "commentReference"]
+                .map(|name| xml.matches(name).count())
+        };
+
+        let id = comment(&mut document, range((0, 2), (0, 3))).unwrap();
+        assert_eq!(marker_counts(&super::document_xml(&mut document)), [1; 3]);
+        assert!(document.remove_comment(id).unwrap());
+        let removed = super::document_xml(&mut document);
+        assert_eq!(marker_counts(&removed), [0; 3], "{removed}");
+
+        // The next comment reuses the id and owns the only marker pair.
+        let next = comment(&mut document, range((0, 0), (0, 1))).unwrap();
+        assert_eq!(next, id);
+        let xml = super::document_xml(&mut document);
+        assert_eq!(marker_counts(&xml), [1; 3], "{xml}");
+        let (_, anchored) = anchored_xml(&mut document, next);
+        assert_eq!(slice_text(&anchored), "before ");
+
+        // A comment on text inside the control is removed as cleanly.
+        let on_text = document
+            .add_comment_on_text("B", 0, "Ada", None, "Here", None)
+            .unwrap();
+        assert_eq!(marker_counts(&super::document_xml(&mut document)), [2; 3]);
+        assert!(document.remove_comment(on_text).unwrap());
+        assert_eq!(marker_counts(&super::document_xml(&mut document)), [1; 3]);
+    }
+
+    #[test]
+    fn bookmarks_inside_and_around_a_control_keep_their_text_and_distinct_ids() {
+        for body in [
+            super::wrap_word_body(TWO_RUN_CONTROL),
+            NS0_TWO_RUN_CONTROL.to_owned(),
+        ] {
+            let mut document = super::document_with_content_controls(&body);
+            // Saving renumbers added bookmarks in document order, which runs
+            // against the order they were added in.
+            for (name, range) in [
+                ("inside", range((0, 2), (0, 3))),
+                ("after", range((0, 3), (0, 4))),
+                ("before", range((0, 0), (0, 1))),
+            ] {
+                document.add_bookmark(name, range).unwrap();
+            }
+            let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+            for document in [&document, &reopened] {
+                let bookmarks = document
+                    .bookmarks()
+                    .iter()
+                    .map(|bookmark| {
+                        (
+                            bookmark.name().unwrap().to_owned(),
+                            bookmark.text().to_owned(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    bookmarks,
+                    [
+                        ("before".to_owned(), "before ".to_owned()),
+                        ("inside".to_owned(), "B".to_owned()),
+                        ("after".to_owned(), " after".to_owned()),
+                    ]
+                );
+            }
+            let mut ids = reopened
+                .bookmarks()
+                .iter()
+                .map(|bookmark| bookmark.id())
+                .collect::<Vec<_>>();
+            ids.dedup();
+            assert_eq!(ids, [Some(0), Some(1), Some(2)]);
+        }
+    }
+
+    #[test]
+    fn story_comment_and_bookmark_use_the_same_run_index() {
+        let mut document = document_from_body(INLINE_CONTROL);
+        let story = super::f254_story(&document, StoryKind::Body);
+        let location = document
+            .story_items(&story)
+            .unwrap()
+            .into_iter()
+            .find(|item| item.kind() == StoryItemKind::Paragraph)
+            .unwrap()
+            .location()
+            .clone();
+        let position = |run_index| StoryRunPosition {
+            location: location.clone(),
+            run_index,
+        };
+        let id = document
+            .add_story_comment(
+                StoryRunRange {
+                    start: position(1),
+                    end: position(2),
+                },
+                "Ada",
+                None,
+                "Here",
+            )
+            .unwrap();
+        let (_, anchored) = anchored_xml(&mut document, id);
+        assert_eq!(slice_text(&anchored), "TARGET");
+
+        let mut document = document_from_body(TWO_RUN_CONTROL);
+        document
+            .add_bookmark("second", range((0, 2), (0, 3)))
+            .unwrap();
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        for document in [&document, &reopened] {
+            let bookmark = &document.bookmarks()[0];
+            assert_eq!(bookmark.text(), "B");
+            assert_eq!(bookmark.direct_range(), Some(range((0, 2), (0, 3))));
+        }
+    }
+}
+
+/// GitHub issue #163: a comment reaches a paragraph inside a block
+/// content control through a two-segment story location.
+mod block_control_comment_positions {
+    use rdocx::{ContentLocation, Document, StoryItemKind, StoryRunPosition, StoryRunRange};
+
+    const BODY: &str = r#"<w:p><w:r><w:t>Alpha.</w:t></w:r></w:p><w:sdt><w:sdtPr><w:alias w:val="Block"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>Control one.</w:t></w:r></w:p><w:p><w:r><w:t>Control two.</w:t></w:r></w:p></w:sdtContent></w:sdt><w:p><w:r><w:t>Beta.</w:t></w:r></w:p>"#;
+
+    fn comment_on(document: &mut Document, location: &ContentLocation) -> rdocx::Result<i32> {
+        let position = |run_index| StoryRunPosition {
+            location: location.clone(),
+            run_index,
+        };
+        document.add_story_comment(
+            StoryRunRange {
+                start: position(0),
+                end: position(1),
+            },
+            "Ada",
+            None,
+            "Here",
+        )
+    }
+
+    #[test]
+    fn story_comment_reaches_a_paragraph_inside_a_block_control() {
+        let mut document = super::document_with_content_controls(&super::wrap_word_body(BODY));
+        assert_eq!(document.paragraph(2).unwrap().text(), "Control two.");
+        let location = document.paragraph_story_location(2).unwrap().unwrap();
+        let control_item = document
+            .story_item_snapshots()
+            .unwrap()
+            .into_iter()
+            .position(|item| item.location().item_kind() == StoryItemKind::ContentControl)
+            .unwrap();
+        assert_eq!(location.index_path(), [control_item, 1]);
+
+        let id = comment_on(&mut document, &location).unwrap();
+        let xml = super::document_xml(&mut document);
+        let start = xml
+            .find(&format!(r#"<w:commentRangeStart w:id="{id}"/>"#))
+            .unwrap();
+        let end = xml
+            .find(&format!(r#"<w:commentRangeEnd w:id="{id}"/>"#))
+            .unwrap();
+        assert_eq!(super::f_x093_visible_text(&xml[start..end]), "Control two.");
+        let content = xml.find("<w:sdtContent>").unwrap();
+        let content_end = xml.find("</w:sdtContent>").unwrap();
+        assert!(content < start && end < content_end, "{xml}");
+
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.comments()[0].id(), id);
+        assert_eq!(
+            reopened.content_controls()[0].text(),
+            "Control one.Control two."
+        );
+
+        // A direct paragraph keeps the one-segment path of its story item.
+        let beta = document.paragraph_story_location(3).unwrap().unwrap();
+        assert_eq!(beta.index_path().len(), 1);
+        let id = comment_on(&mut document, &beta).unwrap();
+        let xml = super::document_xml(&mut document);
+        let start = xml
+            .find(&format!(r#"<w:commentRangeStart w:id="{id}"/>"#))
+            .unwrap();
+        let end = xml
+            .find(&format!(r#"<w:commentRangeEnd w:id="{id}"/>"#))
+            .unwrap();
+        assert_eq!(super::f_x093_visible_text(&xml[start..end]), "Beta.");
+        assert!(document.paragraph_story_location(4).unwrap().is_none());
+    }
+
+    #[test]
+    fn two_segment_positions_must_name_a_paragraph_of_a_block_control() {
+        let mut document = super::document_with_content_controls(&super::wrap_word_body(BODY));
+        let location = document.paragraph_story_location(1).unwrap().unwrap();
+        let alpha = document.paragraph_story_location(0).unwrap().unwrap();
+        let before = document.to_bytes().unwrap();
+        for (path, reason) in [
+            (
+                vec![alpha.index_path()[0], 0],
+                "must start with a block content control",
+            ),
+            (vec![location.index_path()[0], 2], "has no paragraph 2"),
+            (vec![location.index_path()[0], 0, 0], "invalid"),
+        ] {
+            let bad =
+                ContentLocation::new(location.story().clone(), StoryItemKind::Paragraph, path);
+            let error = comment_on(&mut document, &bad).unwrap_err().to_string();
+            assert!(error.to_lowercase().contains(reason), "{error}");
+        }
+        assert_eq!(document.to_bytes().unwrap(), before);
+    }
+}
+
+/// GitHub issue #163: `add_comment_on_text` anchors a comment on a
+/// piece of text without index bookkeeping.
+mod comment_on_text {
+    use rdocx::Document;
+
+    fn issue_fixture() -> Document {
+        let mut document = Document::new();
+        document.add_paragraph("Alpha paragraph before the table.");
+        document
+            .add_table(1, 1)
+            .row(0)
+            .unwrap()
+            .cell(0)
+            .unwrap()
+            .set_text("cell");
+        document.add_paragraph("Beta paragraph after the table.");
+        document.add_paragraph("Gamma paragraph at the end.");
+        document
+    }
+
+    /// The paragraph text around the markers of comment `id`, split as
+    /// before, inside and after the range.
+    fn anchored(document: &mut Document, id: i32) -> [String; 3] {
+        let xml = super::document_xml(document);
+        let start = xml
+            .find(&format!(r#"<w:commentRangeStart w:id="{id}"/>"#))
+            .unwrap();
+        let end = xml
+            .find(&format!(r#"<w:commentRangeEnd w:id="{id}"/>"#))
+            .unwrap();
+        let paragraph_start = xml[..start].rfind("<w:p>").unwrap();
+        let paragraph_end = end + xml[end..].find("</w:p>").unwrap();
+        [
+            super::accepted_run_index_anchoring::slice_text(&xml[paragraph_start..start]),
+            super::accepted_run_index_anchoring::slice_text(&xml[start..end]),
+            super::accepted_run_index_anchoring::slice_text(&xml[end..paragraph_end]),
+        ]
+    }
+
+    fn comment(document: &mut Document, anchor: &str, occurrence: usize) -> rdocx::Result<i32> {
+        document.add_comment_on_text(anchor, occurrence, "Ada", None, "Here", None)
+    }
+
+    #[test]
+    fn comment_on_text_anchors_the_requested_occurrence_after_a_table() {
+        let mut document = issue_fixture();
+        let id = comment(&mut document, "Beta", 0).unwrap();
+        assert_eq!(
+            anchored(&mut document, id),
+            ["", "Beta", " paragraph after the table."]
+        );
+
+        // Zero-based and in document order: Alpha, then Beta.
+        let mut document = issue_fixture();
+        let id = comment(&mut document, "paragraph", 1).unwrap();
+        assert_eq!(
+            anchored(&mut document, id),
+            ["Beta ", "paragraph", " after the table."]
+        );
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.comments()[0].text(), "Here");
+        assert_eq!(
+            reopened.paragraphs()[1].text(),
+            "Beta paragraph after the table."
+        );
+
+        // Matches do not overlap, and a table cell is searched too.
+        let mut document = issue_fixture();
+        document.add_paragraph("aaaa");
+        let id = comment(&mut document, "aa", 1).unwrap();
+        assert_eq!(anchored(&mut document, id), ["aa", "aa", ""]);
+        let id = comment(&mut document, "cell", 0).unwrap();
+        assert_eq!(anchored(&mut document, id), ["", "cell", ""]);
+    }
+
+    #[test]
+    fn comment_on_text_splits_runs_and_keeps_their_formatting() {
+        let mut document = Document::new();
+        let mut paragraph = document.add_paragraph("");
+        paragraph.add_run("Hello ").bold(true);
+        paragraph.add_run("world").italic(true);
+        let id = comment(&mut document, "lo wo", 0).unwrap();
+        assert_eq!(anchored(&mut document, id), ["Hel", "lo wo", "rld"]);
+        let paragraph = document.paragraph(0).unwrap();
+        let runs = paragraph
+            .runs()
+            .filter(|run| !run.text().is_empty())
+            .map(|run| (run.text(), run.is_bold(), run.is_italic()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            runs,
+            [
+                ("Hel".to_owned(), true, false),
+                ("lo ".to_owned(), true, false),
+                ("wo".to_owned(), false, true),
+                ("rld".to_owned(), false, true),
+            ]
+        );
+    }
+
+    #[test]
+    fn comment_on_text_refuses_a_range_that_would_show_a_field_result() {
+        // The literal text `AB after tail xy` leaves out the tab, the
+        // `w:fldSimple` result `7` and the complex field result `9`.
+        let mut document = super::document_with_content_controls(&super::wrap_word_body(
+            r#"<w:p><w:r><w:t>A</w:t><w:tab/><w:t>B</w:t></w:r><w:r><w:t xml:space="preserve"> after</w:t></w:r><w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple><w:r><w:t xml:space="preserve"> tail x</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> NUMPAGES </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>9</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>y</w:t></w:r></w:p>"#,
+        ));
+        let before = document.to_bytes().unwrap();
+        for (anchor, reason) in [
+            (
+                "after tail",
+                r#"cannot be anchored exactly: its range would show "after7 tail""#,
+            ),
+            (
+                "xy",
+                r#"cannot be anchored exactly: its range would show "x9y""#,
+            ),
+            ("7", "has no occurrence 0"),
+            ("x9y", "has no occurrence 0"),
+        ] {
+            let error = comment(&mut document, anchor, 0).unwrap_err();
+            assert!(error.to_string().contains(reason), "{anchor}: {error}");
+        }
+        assert_eq!(document.to_bytes().unwrap(), before);
+
+        // A tab has no width, and a range next to a field leaves it out.
+        let id = comment(&mut document, "AB", 0).unwrap();
+        assert_eq!(anchored(&mut document, id), ["", "AB", " after7 tail x9y"]);
+        let id = comment(&mut document, " after", 0).unwrap();
+        assert_eq!(anchored(&mut document, id)[1], " after");
+        let id = comment(&mut document, " tail x", 0).unwrap();
+        assert_eq!(anchored(&mut document, id)[1], " tail x");
+    }
+
+    #[test]
+    fn comment_on_text_reaches_controls_and_refuses_what_it_cannot_anchor() {
+        let mut document = super::document_with_content_controls(&super::wrap_word_body(
+            r#"<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r><w:sdt><w:sdtContent><w:r><w:t>TARGET</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sdt><w:sdtContent><w:p><w:r><w:t>Inside a block control.</w:t></w:r></w:p></w:sdtContent></w:sdt>"#,
+        ));
+        let before = document.to_bytes().unwrap();
+        for (anchor, occurrence, reason) in [
+            ("missing", 0, "has no occurrence 0"),
+            ("target", 0, "has no occurrence 0"),
+            ("TARGET", 1, "has no occurrence 1"),
+            ("", 0, "must not be empty"),
+            ("e TAR", 0, "crosses the edge of an inline content control"),
+        ] {
+            let error = comment(&mut document, anchor, occurrence).unwrap_err();
+            assert!(error.to_string().contains(reason), "{anchor}: {error}");
+        }
+        assert_eq!(document.to_bytes().unwrap(), before);
+
+        let id = comment(&mut document, "ARG", 0).unwrap();
+        let xml = super::document_xml(&mut document);
+        let start = xml.find("<w:commentRangeStart").unwrap();
+        assert!(xml.find("<w:sdtContent>").unwrap() < start, "{xml}");
+        assert_eq!(anchored(&mut document, id)[1], "ARG");
+        let id = comment(&mut document, "block", 0).unwrap();
+        assert_eq!(
+            anchored(&mut document, id),
+            ["Inside a ", "block", " control."]
+        );
+    }
 }
 
 fn f_x090_cross_part_drawing_package() -> Vec<u8> {
@@ -4080,7 +4930,8 @@ fn actual_flattened_locations_resolve_only_their_direct_destination_child() {
             .into_iter()
             .map(|paragraph| paragraph.text())
             .collect::<Vec<_>>(),
-        ["first", "inserted", "later"]
+        // The first paragraph reads the cached result of its simple field.
+        ["first1", "inserted", "later"]
     );
 
     let body = f254_story(&document, StoryKind::Body);
@@ -12339,6 +13190,248 @@ fn namespace_classification_metadata_exists_only_for_raw_children() {
     ));
 }
 
+/// The body read walkers see through content controls (GitHub issue #160).
+mod content_control_read_walker_regressions {
+    use super::*;
+
+    fn control(tag: &str, content: &str) -> String {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:tag w:val="{tag}"/></w:sdtPr><w:sdtContent>{content}</w:sdtContent></w:sdt>"#
+        )
+    }
+
+    fn table(rows: &str) -> String {
+        format!(r#"<w:tbl><w:tblPr/><w:tblGrid/>{rows}</w:tbl>"#)
+    }
+
+    fn row(cells: &str) -> String {
+        format!("<w:tr>{cells}</w:tr>")
+    }
+
+    fn cell(content: &str) -> String {
+        format!("<w:tc><w:tcPr/>{content}</w:tc>")
+    }
+
+    fn paragraph(text: &str) -> String {
+        format!(r#"<w:p><w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>"#)
+    }
+
+    #[test]
+    fn text_reads_every_content_control_location_in_document_order() {
+        let body = [
+            paragraph("first"),
+            control("goog_rdk_1", &paragraph("block")),
+            table(&format!(
+                "{}{}",
+                control("rows", &row(&cell(&paragraph("wrapped row")))),
+                row(&format!(
+                    "{}{}{}{}",
+                    cell(&paragraph("plain")),
+                    control("cells", &cell(&paragraph("wrapped cell"))),
+                    cell(&control("goog_rdk_2", &paragraph("cell control"))),
+                    cell(&format!(
+                        "{}{}",
+                        table(&row(&format!(
+                            "{}{}",
+                            cell(&paragraph("inner a")),
+                            cell(&paragraph("inner b"))
+                        ))),
+                        paragraph("after inner")
+                    )),
+                ))
+            )),
+            control("outer", &control("goog_rdk_3", &paragraph("nested"))),
+            format!(
+                r#"<w:p>{}<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>"#,
+                control("goog_rdk_4", r#"<w:r><w:t>inline</w:t></w:r>"#)
+            ),
+            paragraph("last"),
+        ]
+        .concat();
+        let document = document_with_content_controls(&wrap_word_body(&body));
+
+        assert_eq!(
+            document.text(),
+            "first\nblock\nwrapped row\t\nplain\twrapped cell\tcell control\tinner a\tinner b\tafter inner\t\nnested\ninline tail\nlast\n"
+        );
+    }
+
+    #[test]
+    fn nested_table_cells_contribute_text_inside_their_outer_row() {
+        let body = table(&row(&format!(
+            "{}{}",
+            cell(&paragraph("outer")),
+            cell(&format!(
+                "{}{}",
+                table(&format!(
+                    "{}{}",
+                    row(&cell(&paragraph("first inner row"))),
+                    row(&cell(&paragraph("second inner row")))
+                )),
+                paragraph("after")
+            ))
+        )));
+        let document = document_with_content_controls(&wrap_word_body(&body));
+
+        assert_eq!(
+            document.text(),
+            "outer\tfirst inner row\tsecond inner row\tafter\t\n"
+        );
+    }
+
+    fn picture(id: usize, name: &str) -> String {
+        format!(
+            r#"<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><wp:extent cx="1" cy="2"/><wp:docPr id="{id}" name="{name}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rId{id}"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#
+        )
+    }
+
+    /// A heading paragraph holding a word, an internal link and a picture.
+    fn probe_paragraph() -> String {
+        format!(
+            r#"<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">probe </w:t></w:r><w:hyperlink w:anchor="target"><w:r><w:t>link</w:t></w:r></w:hyperlink>{}</w:p>"#,
+            picture(7, "probe picture")
+        )
+    }
+
+    /// The same heading with its word and picture runs passed through `wrap`.
+    fn inline_probe_paragraph(wrap: impl Fn(&str) -> String) -> String {
+        let runs = format!(
+            r#"<w:r><w:t xml:space="preserve">probe </w:t></w:r>{}"#,
+            picture(7, "probe picture")
+        );
+        format!(
+            r#"<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>{}<w:hyperlink w:anchor="target"><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>"#,
+            wrap(&runs)
+        )
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct Walked {
+        text: String,
+        images: Vec<(String, Option<String>)>,
+        word_count: usize,
+        headings: Vec<(u32, String)>,
+        links: Vec<(String, Option<String>)>,
+    }
+
+    fn walk(body: &str) -> Walked {
+        let document = document_with_content_controls(&wrap_word_body(body));
+        Walked {
+            text: document.text(),
+            images: document
+                .images()
+                .into_iter()
+                .map(|image| (image.embed_id, image.name))
+                .collect(),
+            word_count: document.word_count(),
+            headings: document.headings(),
+            links: document
+                .links()
+                .into_iter()
+                .map(|link| (link.text, link.anchor))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_content_control_hides_nothing_from_any_body_read_walker() {
+        let probe = probe_paragraph();
+        let in_cell = |content: &str| table(&row(&cell(content)));
+        // (location, wrapped body, the same body without the control, body level)
+        let locations = [
+            (
+                "body block control",
+                control("goog_rdk_1", &probe),
+                probe.clone(),
+                true,
+            ),
+            (
+                "nested body control",
+                control("outer", &control("goog_rdk_2", &probe)),
+                probe.clone(),
+                true,
+            ),
+            (
+                "inline control",
+                inline_probe_paragraph(|runs| control("goog_rdk_3", runs)),
+                inline_probe_paragraph(str::to_owned),
+                true,
+            ),
+            (
+                "nested inline control",
+                inline_probe_paragraph(|runs| control("outer", &control("goog_rdk_4", runs))),
+                inline_probe_paragraph(str::to_owned),
+                true,
+            ),
+            (
+                "cell control",
+                in_cell(&control("goog_rdk_5", &probe)),
+                in_cell(&probe),
+                false,
+            ),
+            (
+                "nested cell control",
+                in_cell(&control("outer", &control("goog_rdk_6", &probe))),
+                in_cell(&probe),
+                false,
+            ),
+            (
+                "row control around a cell",
+                table(&row(&control("goog_rdk_7", &cell(&probe)))),
+                in_cell(&probe),
+                false,
+            ),
+            (
+                "table control around a row",
+                table(&control("goog_rdk_8", &row(&cell(&probe)))),
+                in_cell(&probe),
+                false,
+            ),
+            (
+                "control in a nested table",
+                in_cell(&format!(
+                    "{}<w:p/>",
+                    in_cell(&control("goog_rdk_9", &probe))
+                )),
+                in_cell(&format!("{}<w:p/>", in_cell(&probe))),
+                false,
+            ),
+            (
+                "body control around a table",
+                control("goog_rdk_10", &in_cell(&probe)),
+                in_cell(&probe),
+                false,
+            ),
+        ];
+        for (location, wrapped, unwrapped, body_level) in locations {
+            let body = format!("{}{wrapped}{}", paragraph("before"), paragraph("end"));
+            let plain = format!("{}{unwrapped}{}", paragraph("before"), paragraph("end"));
+            let seen = walk(&body);
+            assert_eq!(seen, walk(&plain), "{location}");
+
+            assert!(seen.text.contains("probe link"), "{location}: text");
+            assert_eq!(seen.text.matches("probe").count(), 1, "{location}: text");
+            assert_eq!(
+                seen.images,
+                [("rId7".to_owned(), Some("probe picture".to_owned()))],
+                "{location}: images"
+            );
+            assert_eq!(seen.word_count, 4, "{location}: word count");
+            let (headings, links) = if body_level {
+                (
+                    vec![(2, "probe link".to_owned())],
+                    vec![("link".to_owned(), Some("target".to_owned()))],
+                )
+            } else {
+                // Headings and links do not search table cells.
+                (Vec::new(), Vec::new())
+            };
+            assert_eq!(seen.headings, headings, "{location}: headings");
+            assert_eq!(seen.links, links, "{location}: links");
+        }
+    }
+}
+
 fn ordered_reader_fixture() -> &'static str {
     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
         <q:document xmlns:q="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -15479,30 +16572,48 @@ fn comment_insertion_keeps_content_at_the_hyperlink_end_boundary() {
         r#"<w:p><w:hyperlink><w:r><w:t>one</w:t></w:r><w:r><w:t>two</w:t></w:r><w:ins w:id="43" w:author="Ada"><w:r><w:t>end</w:t></w:r></w:ins>{raw}</w:hyperlink></w:p>"#
     ));
     let mut document = document_with_content_controls(&xml);
+    let range = |end| RunRange {
+        start: RunPosition {
+            body_index: 0,
+            run_index: 0,
+        },
+        end: RunPosition {
+            body_index: 0,
+            run_index: end,
+        },
+    };
+    // The accepted view lists `one`, `two` and the inserted `end`. Ending the
+    // range after `two` would need an end marker inside the hyperlink before
+    // the insertion, which the paragraph model cannot place, so it is refused
+    // rather than silently widened over `end` as before GitHub issue #172.
+    let before = document.to_bytes().unwrap();
+    let error = document
+        .add_comment(range(2), "Ada", None, "review")
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("next to a tracked change inside a hyperlink"),
+        "{error}"
+    );
+    assert_eq!(document.to_bytes().unwrap(), before);
+
     let comment_id = document
-        .add_comment(
-            RunRange {
-                start: RunPosition {
-                    body_index: 0,
-                    run_index: 0,
-                },
-                end: RunPosition {
-                    body_index: 0,
-                    run_index: 2,
-                },
-            },
-            "Ada",
-            None,
-            "review",
-        )
+        .add_comment(range(3), "Ada", None, "review")
         .unwrap();
 
     let inserted = document_xml(&mut document);
     let revision = inserted.find(r#"w:id="43""#).unwrap();
     let raw_position = inserted.find(raw).unwrap();
     let hyperlink_end = inserted.find("</w:hyperlink>").unwrap();
+    let range_end = inserted.find("<w:commentRangeEnd").unwrap();
     let reference = inserted.find("<w:commentReference").unwrap();
-    assert!(revision < raw_position && raw_position < hyperlink_end && hyperlink_end < reference);
+    assert!(
+        revision < raw_position
+            && raw_position < hyperlink_end
+            && hyperlink_end < range_end
+            && range_end < reference
+    );
 
     assert!(document.remove_comment(comment_id).unwrap());
     let removed = document_xml(&mut document);
@@ -16103,17 +17214,20 @@ fn new_bookmark_after_an_accepted_control_has_live_accepted_coordinates() {
     "#;
     let mut document = document_with_field_parts(&wrap_word_body(body), None, None);
 
+    // `add_bookmark` takes the accepted-view run index that `bookmarks()`
+    // reports, so `direct target` is run 1 after the wrapped prefix, as
+    // `Paragraph::runs` lists it since GitHub issue #172.
     document
         .add_bookmark(
             "destination",
             RunRange {
                 start: RunPosition {
                     body_index: 1,
-                    run_index: 0,
+                    run_index: 1,
                 },
                 end: RunPosition {
                     body_index: 1,
-                    run_index: 1,
+                    run_index: 2,
                 },
             },
         )
@@ -16488,6 +17602,1417 @@ fn zero_width_regex_match_terminates() {
     let count = doc.replace_regex("x*", "-").unwrap();
 
     assert!(count <= 4, "should not loop indefinitely, got {count}");
+}
+
+/// Replacement in a text box parses the paragraphs of its `w:txbxContent` and
+/// used to write back nothing else, so a hit there deleted the tables,
+/// content controls, bookmarks and empty paragraphs of that text box.
+mod text_box_replacement_keeps_every_child {
+    use rdocx::Document;
+    use rdocx_oxml::namespace::W_NS;
+
+    /// One copy of the text box: the paragraph the replacement edits, then a
+    /// table, a block content control and a bookmark around an empty
+    /// paragraph. Each copy needs its own bookmark id for the file to open.
+    fn text_box_content(text: &str, id: u32) -> String {
+        format!(
+            r#"<w:txbxContent><w:p><w:r><w:t>{text}</w:t></w:r></w:p><w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:sdt><w:sdtPr><w:alias w:val="Signature"/><w:id w:val="{id}"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>control</w:t></w:r></w:p></w:sdtContent></w:sdt><w:bookmarkStart w:id="{id}" w:name="boxed{id}"/><w:p/><w:bookmarkEnd w:id="{id}"/></w:txbxContent>"#
+        )
+    }
+
+    /// A text box as Word saves it, the DrawingML shape in `mc:Choice` and its
+    /// VML copy in `mc:Fallback`, or the bare `wp:anchor` alone.
+    fn text_box_document(compatibility_block: bool) -> Document {
+        let content = text_box_content("Dear {{name}}", 7);
+        let drawing = format!(
+            r#"<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="2743200" cy="914400"/><wp:wrapTopAndBottom/><wp:docPr id="1" name="Text Box 1"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr><wps:txbx>{content}</wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>"#
+        );
+        let shape = if compatibility_block {
+            format!(
+                r#"<mc:AlternateContent><mc:Choice Requires="wps">{drawing}</mc:Choice><mc:Fallback><w:pict><v:shape style="position:absolute;width:216pt;height:72pt"><v:textbox>{}</v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent>"#,
+                text_box_content("Dear {{name}}", 8)
+            )
+        } else {
+            drawing
+        };
+        super::document_with_content_controls(&format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:v="urn:schemas-microsoft-com:vml"><w:body><w:p><w:r><w:t>Host paragraph</w:t></w:r><w:r>{shape}</w:r></w:p></w:body></w:document>"#
+        ))
+    }
+
+    /// Replace in both text box forms, then check that every copy holds the
+    /// edited paragraph and every other child byte for byte and in order. The
+    /// two copies of the compatibility block count as one match.
+    fn assert_replacement_keeps_every_child(replace: impl Fn(&mut Document) -> usize) {
+        for (compatibility_block, ids) in [(true, &[7, 8][..]), (false, &[7][..])] {
+            let mut document = text_box_document(compatibility_block);
+            assert_eq!(replace(&mut document), 1, "{compatibility_block}");
+            let saved = super::document_xml(&mut document);
+            assert_eq!(saved.matches("<w:txbxContent>").count(), ids.len());
+            for &id in ids {
+                let expected = text_box_content("Dear Ada", id);
+                assert!(saved.contains(&expected), "{expected}\n{saved}");
+            }
+        }
+    }
+
+    #[test]
+    fn replacing_text_keeps_the_tables_controls_and_bookmarks_of_a_text_box() {
+        assert_replacement_keeps_every_child(|document| {
+            document.try_replace_text("{{name}}", "Ada").unwrap()
+        });
+    }
+
+    #[test]
+    fn regex_replacement_keeps_the_tables_controls_and_bookmarks_of_a_text_box() {
+        assert_replacement_keeps_every_child(|document| {
+            document.replace_regex(r"\{\{(\w+)\}\}", "Ada").unwrap()
+        });
+    }
+
+    #[test]
+    fn a_template_keeps_the_tables_controls_and_bookmarks_of_a_text_box() {
+        assert_replacement_keeps_every_child(|document| {
+            document
+                .render_template(&serde_json::json!({"name": "Ada"}))
+                .unwrap()
+        });
+    }
+}
+
+/// Word writes a text box twice, the DrawingML shape in `mc:Choice` and a VML
+/// copy in `mc:Fallback`. The story walkers skipped the whole
+/// `mc:AlternateContent`, so such a text box was no story, and replacement
+/// edited both copies and counted every match twice.
+mod text_boxes_word_writes_twice {
+    use quick_xml::events::Event;
+    use rdocx::{Document, StoryId, StoryItemKind, StoryKind};
+    use rdocx_oxml::namespace::W_NS;
+
+    const WPS_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+
+    /// The DrawingML text box of Word, holding `text`.
+    fn drawing_text_box(text: &str) -> String {
+        format!(
+            r#"<w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="1270000" cy="635000"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="10" name="Text Box 10"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="{WPS_NS}"><wps:wsp xmlns:wps="{WPS_NS}"><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>"#
+        )
+    }
+
+    /// The VML copy of the text box, holding `text`.
+    fn vml_text_box(text: &str) -> String {
+        format!(
+            r#"<w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:50pt"><v:textbox><w:txbxContent><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape></w:pict>"#
+        )
+    }
+
+    /// The two copies of a text box in `mc:AlternateContent`, as Word writes
+    /// them.
+    fn alternate_content(choice: &str, fallback: &str) -> String {
+        format!(
+            r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:wps="{WPS_NS}" Requires="wps">{choice}</mc:Choice><mc:Fallback>{fallback}</mc:Fallback></mc:AlternateContent>"#
+        )
+    }
+
+    /// A body paragraph with a run of its own and a run holding `shape`.
+    fn document_with_shape(shape: &str) -> Document {
+        super::document_with_content_controls(&format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}"><w:body><w:p><w:r><w:t>Anchor paragraph</w:t></w:r><w:r>{shape}</w:r></w:p></w:body></w:document>"#
+        ))
+    }
+
+    /// A text box as Word writes it, the same text in both copies.
+    fn word_text_box_document(text: &str) -> Document {
+        document_with_shape(&alternate_content(
+            &drawing_text_box(text),
+            &vml_text_box(text),
+        ))
+    }
+
+    /// Every story item as the story kind, the item kind and the text.
+    fn story_items(document: &Document) -> Vec<(StoryKind, StoryItemKind, Option<String>)> {
+        document
+            .story_item_snapshots()
+            .unwrap()
+            .into_iter()
+            .map(|item| {
+                (
+                    item.location().story().kind(),
+                    item.location().item_kind(),
+                    item.text().map(str::to_owned),
+                )
+            })
+            .collect()
+    }
+
+    /// The one text-box story of the document.
+    fn text_box_story(document: &Document) -> StoryId {
+        let stories = document.stories().unwrap();
+        let text_boxes = stories
+            .iter()
+            .filter(|story| story.kind() == StoryKind::TextBox)
+            .collect::<Vec<_>>();
+        assert_eq!(text_boxes.len(), 1, "{stories:?}");
+        text_boxes[0].clone()
+    }
+
+    fn text_box_items(document: &Document) -> Vec<(StoryItemKind, Option<String>, Vec<u8>)> {
+        document
+            .story_items(&text_box_story(document))
+            .unwrap()
+            .iter()
+            .map(|item| {
+                (
+                    item.kind(),
+                    item.text().unwrap(),
+                    item.xml().unwrap().to_vec(),
+                )
+            })
+            .collect()
+    }
+
+    /// The text box is one story, read from the Choice, with the paragraph
+    /// items of a text box written without `mc:AlternateContent`. The body
+    /// lists its own paragraph only, as it did.
+    #[test]
+    fn a_word_text_box_is_one_story_read_from_its_choice() {
+        let document = word_text_box_document("Box NEEDLE");
+
+        assert_eq!(
+            story_items(&document),
+            [
+                (
+                    StoryKind::Body,
+                    StoryItemKind::Paragraph,
+                    Some("Anchor paragraph".to_owned())
+                ),
+                (
+                    StoryKind::TextBox,
+                    StoryItemKind::Paragraph,
+                    Some("Box NEEDLE".to_owned())
+                ),
+            ]
+        );
+        let bare = document_with_shape(&drawing_text_box("Box NEEDLE"));
+        assert_eq!(text_box_items(&document), text_box_items(&bare));
+    }
+
+    fn saved_text_boxes(document: &mut Document) -> String {
+        let saved = super::document_xml(document);
+        let start = saved.find("<mc:AlternateContent").unwrap();
+        let end = saved.find("</mc:AlternateContent>").unwrap();
+        saved[start..end + "</mc:AlternateContent>".len()].to_owned()
+    }
+
+    /// The text of every `w:txbxContent` of the saved main part, in order.
+    fn saved_text_box_texts(document: &mut Document) -> Vec<String> {
+        let saved = super::document_xml(document);
+        let mut reader = quick_xml::Reader::from_str(&saved);
+        let mut texts = Vec::new();
+        let (mut in_text_box, mut in_text) = (false, false);
+        loop {
+            match reader.read_event().unwrap() {
+                Event::Start(element) => match element.local_name().as_ref() {
+                    b"txbxContent" => {
+                        in_text_box = true;
+                        texts.push(String::new());
+                    }
+                    local_name => in_text = in_text_box && local_name == b"t",
+                },
+                Event::End(element) => {
+                    in_text = false;
+                    in_text_box &= element.local_name().as_ref() != b"txbxContent";
+                }
+                Event::Text(text) if in_text => {
+                    texts.last_mut().unwrap().push_str(&text.decode().unwrap());
+                }
+                Event::Eof => return texts,
+                _ => {}
+            }
+        }
+    }
+
+    /// A replacement entry point, returning its count.
+    type Replace = fn(&mut Document) -> usize;
+
+    /// Replacement edits both copies, so that a reader of the VML sees the
+    /// same text, and counts each match once.
+    #[test]
+    fn a_word_text_box_is_replaced_in_both_copies_and_counted_once() {
+        let replacements: [(&str, Replace); 4] = [
+            ("try_replace_text", |document| {
+                document.try_replace_text("NEEDLE", "X").unwrap()
+            }),
+            ("replace_regex", |document| {
+                document.replace_regex("NEE+DLE", "X").unwrap()
+            }),
+            ("replace_all_regex", |document| {
+                document
+                    .replace_all_regex(&[("NEEDLE".to_owned(), "X".to_owned())])
+                    .unwrap()
+            }),
+            ("replace_all", |document| {
+                document.replace_all(&std::collections::HashMap::from([("NEEDLE", "X")]))
+            }),
+        ];
+        for (name, replace) in replacements {
+            let mut document = word_text_box_document("Box NEEDLE");
+            assert_eq!(replace(&mut document), 1, "{name}");
+            assert_eq!(
+                saved_text_boxes(&mut document),
+                alternate_content(&drawing_text_box("Box X"), &vml_text_box("Box X")),
+                "{name}"
+            );
+        }
+    }
+
+    /// A template counts its tags against the texts it reads, so the text box
+    /// holds its tag once there too, and both copies are rendered.
+    #[test]
+    fn a_template_renders_both_copies_of_a_word_text_box() {
+        let mut document = word_text_box_document("Box {{name}}");
+
+        let count = document
+            .render_template(&serde_json::json!({"name": "Ada"}))
+            .unwrap();
+
+        assert_eq!(count, 1);
+        assert_eq!(
+            saved_text_boxes(&mut document),
+            alternate_content(&drawing_text_box("Box Ada"), &vml_text_box("Box Ada"))
+        );
+    }
+
+    /// Word never writes a Fallback whose text box is not a copy of the
+    /// Choice. Such a Fallback is edited all the same, and the count is the
+    /// Choice's.
+    #[test]
+    fn a_fallback_that_is_no_copy_of_its_choice_is_edited_without_being_counted() {
+        for (fallback, expected_fallback) in
+            [("Old NEEDLE NEEDLE", "Old X X"), ("Old text", "Old text")]
+        {
+            let mut document = document_with_shape(&alternate_content(
+                &drawing_text_box("Box NEEDLE"),
+                &vml_text_box(fallback),
+            ));
+
+            assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 1);
+
+            assert_eq!(
+                saved_text_boxes(&mut document),
+                alternate_content(&drawing_text_box("Box X"), &vml_text_box(expected_fallback))
+            );
+        }
+    }
+
+    /// A story edit changes the Choice only, so the Fallback keeps the text
+    /// it had. A later replacement still reaches that Fallback, and counts
+    /// the matches of the Choice alone.
+    #[test]
+    fn a_replacement_after_a_story_edit_reaches_the_fallback() {
+        let mut document = word_text_box_document("Box NEEDLE");
+        let paragraph = super::f254_item(&document, &text_box_story(&document), 0);
+        document.set_story_text(&paragraph, "Edited text").unwrap();
+        assert_eq!(
+            saved_text_box_texts(&mut document),
+            ["Edited text", "Box NEEDLE"]
+        );
+
+        assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 0);
+        assert_eq!(
+            saved_text_box_texts(&mut document),
+            ["Edited text", "Box X"]
+        );
+
+        let mut document = word_text_box_document("Box NEEDLE");
+        let mut paragraph = rdocx_oxml::text::CT_P::new();
+        paragraph.add_run("Second NEEDLE");
+        document
+            .insert_content(
+                &rdocx::ContentLocation::end(text_box_story(&document)),
+                rdocx::ContentFragment::paragraph(paragraph).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            saved_text_box_texts(&mut document),
+            ["Box NEEDLESecond NEEDLE", "Box NEEDLE"]
+        );
+
+        assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 2);
+        assert_eq!(
+            saved_text_box_texts(&mut document),
+            ["Box XSecond X", "Box X"]
+        );
+    }
+
+    /// A text box that `add_text_box_to_story` authors has the same two
+    /// copies, and a replacement after a story edit reaches its Fallback too.
+    #[test]
+    fn a_replacement_after_a_story_edit_reaches_an_authored_fallback() {
+        let mut document = Document::new();
+        document.add_paragraph("Host");
+        let body = super::f254_story(&document, StoryKind::Body);
+        let zero = rdocx::Length::pt(0.0);
+        let options = rdocx::TextBoxOptions {
+            width: rdocx::Length::pt(144.0),
+            height: rdocx::Length::pt(54.0),
+            anchor: rdocx::PictureAnchor {
+                horizontal_relative_from: rdocx::DrawingHorizontalRelativeFrom::Column,
+                horizontal_offset: zero,
+                horizontal_alignment: None,
+                vertical_relative_from: rdocx::DrawingVerticalRelativeFrom::Paragraph,
+                vertical_offset: zero,
+                vertical_alignment: None,
+                wrap: rdocx::DrawingWrap::TopAndBottom,
+                distance_top: zero,
+                distance_bottom: zero,
+                distance_left: zero,
+                distance_right: zero,
+                relative_height: 1,
+                behind_text: false,
+            },
+            rotation_degrees: 0.0,
+            text_direction: rdocx::TextBoxDirection::Horizontal,
+            fill_color: None,
+        };
+        document
+            .add_text_box_to_story(&body, "Hello NEEDLE", options)
+            .unwrap();
+        let paragraph = super::f254_item(&document, &text_box_story(&document), 0);
+        document.set_story_text(&paragraph, "Edited").unwrap();
+
+        assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 0);
+        assert_eq!(saved_text_box_texts(&mut document), ["Edited", "Hello X"]);
+    }
+
+    /// With several Choice branches, the text box is read from the first one
+    /// that holds one, as layout draws the first Choice drawing. A later
+    /// Choice is a copy, edited as the Fallback is, and neither listed nor
+    /// counted.
+    #[test]
+    fn the_first_choice_that_holds_a_text_box_is_read_and_counted() {
+        let mut document = document_with_shape(&format!(
+            r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:w16x="urn:unknown:w16x" xmlns:wps="{WPS_NS}" Requires="w16x">{}</mc:Choice><mc:Choice xmlns:wps="{WPS_NS}" Requires="wps">{}</mc:Choice><mc:Fallback>{}</mc:Fallback></mc:AlternateContent>"#,
+            drawing_text_box("First NEEDLE"),
+            drawing_text_box("Second NEEDLE")
+                .replace("Box 10\"", "Box 11\"")
+                .replace("id=\"10\"", "id=\"11\""),
+            vml_text_box("Box NEEDLE"),
+        ));
+
+        assert_eq!(
+            story_items(&document),
+            [
+                (
+                    StoryKind::Body,
+                    StoryItemKind::Paragraph,
+                    Some("Anchor paragraph".to_owned())
+                ),
+                (
+                    StoryKind::TextBox,
+                    StoryItemKind::Paragraph,
+                    Some("First NEEDLE".to_owned())
+                ),
+            ]
+        );
+        assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 1);
+        assert_eq!(
+            saved_text_box_texts(&mut document),
+            ["First X", "Second X", "Box X"]
+        );
+    }
+
+    /// When the Choice holds no text box, a picture here, the text box of the
+    /// Fallback is the only one. The story walkers list neither it nor the
+    /// picture, and replacement counts it, as before.
+    #[test]
+    fn a_fallback_text_box_beside_a_picture_is_unchanged() {
+        let picture = r#"<w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="10" cy="10"/><wp:docPr id="11" name="Picture 11"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="11" name="Picture 11"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill/><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>"#;
+        let mut document =
+            document_with_shape(&alternate_content(picture, &vml_text_box("Box NEEDLE")));
+
+        assert_eq!(
+            story_items(&document),
+            [(
+                StoryKind::Body,
+                StoryItemKind::Paragraph,
+                Some("Anchor paragraph".to_owned())
+            )]
+        );
+        assert_eq!(document.try_replace_text("NEEDLE", "X").unwrap(), 1);
+        assert_eq!(
+            saved_text_boxes(&mut document),
+            alternate_content(picture, &vml_text_box("Box X"))
+        );
+    }
+}
+
+/// Replacement skipped the text of content controls. It never entered a
+/// body-level control, read the runs of an inline control at no level, and
+/// reached neither the tables and controls of a header or footer nor those
+/// of a text box. Each location below holds its own tag, which every walker
+/// must replace exactly once.
+mod replacement_reaches_content_controls {
+    use std::collections::HashMap;
+
+    use rdocx::Document;
+    use rdocx_oxml::namespace::W_NS;
+
+    const DOCUMENT: &str = "/word/document.xml";
+    const HEADER: &str = "/word/header1.xml";
+    const FOOTER: &str = "/word/footer1.xml";
+
+    /// Every location with the part that holds it. The tag of a location is
+    /// its name in double braces and its replacement the name in brackets.
+    const LOCATIONS: [(&str, &str); 10] = [
+        ("block", DOCUMENT),
+        ("inline", DOCUMENT),
+        ("cell", DOCUMENT),
+        ("nested", DOCUMENT),
+        ("box", DOCUMENT),
+        ("box_inline", DOCUMENT),
+        ("header_table", HEADER),
+        ("header_control", HEADER),
+        ("footer_control", FOOTER),
+        ("footer_inline", FOOTER),
+    ];
+
+    /// The `w:tag` of every control, by part.
+    const CONTROL_TAGS: [(&str, &[&str]); 3] = [
+        (
+            DOCUMENT,
+            &[
+                "goog_rdk_1",
+                "goog_rdk_0",
+                "cell",
+                "outer",
+                "middle",
+                "inner",
+                "innermost",
+                "box",
+                "box-inline",
+            ],
+        ),
+        (HEADER, &["header"]),
+        (FOOTER, &["goog_rdk_2"]),
+    ];
+
+    fn tag(name: &str) -> String {
+        format!("{{{{{name}}}}}")
+    }
+
+    fn value(name: &str) -> String {
+        format!("[{name}]")
+    }
+
+    fn run(text: &str) -> String {
+        format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#)
+    }
+
+    fn paragraph(content: &str) -> String {
+        format!("<w:p>{content}</w:p>")
+    }
+
+    fn control(tag: &str, content: &str) -> String {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:tag w:val="{tag}"/></w:sdtPr><w:sdtContent>{content}</w:sdtContent></w:sdt>"#
+        )
+    }
+
+    fn table(cell: &str) -> String {
+        format!(
+            r#"<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>{cell}</w:tc></w:tr></w:tbl>"#
+        )
+    }
+
+    /// A DrawingML text box holding a block control and an inline control.
+    fn text_box() -> String {
+        let content = [
+            control("box", &paragraph(&run("Boxed {{box}}."))),
+            paragraph(&[run("Boxed "), control("box-inline", &run("{{box_inline}}"))].concat()),
+        ]
+        .concat();
+        format!(
+            r#"<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="2743200" cy="914400"/><wp:wrapTopAndBottom/><wp:docPr id="1" name="Text Box 1"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr><wps:txbx><w:txbxContent>{content}</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>"#
+        )
+    }
+
+    /// The runs of a header or footer block that the model keeps as raw XML.
+    /// The first one ends in a space, as "Page " does before a page number.
+    fn raw_block_runs(text: &str, name: &str) -> String {
+        paragraph(&[run(text), run(&format!("{}.", tag(name)))].concat())
+    }
+
+    /// The table and the control of the header, which the model keeps as
+    /// raw XML, before its paragraph.
+    fn header_blocks() -> [String; 2] {
+        [
+            table(&raw_block_runs("Header cell ", "header_table")),
+            control(
+                "header",
+                &raw_block_runs("Header control ", "header_control"),
+            ),
+        ]
+    }
+
+    /// The page-number control Word writes in a footer, before a paragraph
+    /// that wraps a run in a Google Docs control.
+    fn footer_block() -> String {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Page Numbers (Bottom of Page)"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>{}</w:sdtContent></w:sdt>"#,
+            raw_block_runs("Footer control ", "footer_control")
+        )
+    }
+
+    fn document() -> Document {
+        let body = [
+            control("goog_rdk_1", &paragraph(&run("Block {{block}}."))),
+            paragraph(
+                &[
+                    run("Body text, "),
+                    control("goog_rdk_0", &run("{{inline}}")),
+                    run(" dolor."),
+                ]
+                .concat(),
+            ),
+            table(&control("cell", &paragraph(&run("Cell {{cell}}.")))),
+            control(
+                "outer",
+                &control(
+                    "middle",
+                    &paragraph(
+                        &[
+                            run("Nested "),
+                            control("inner", &control("innermost", &run("{{nested}}"))),
+                        ]
+                        .concat(),
+                    ),
+                ),
+            ),
+            paragraph(&[run("Host "), format!("<w:r>{}</w:r>", text_box())].concat()),
+        ]
+        .concat();
+        let header = format!(
+            r#"<w:hdr xmlns:w="{W_NS}">{}{}</w:hdr>"#,
+            header_blocks().concat(),
+            paragraph(&run("Header paragraph."))
+        );
+        let footer = format!(
+            r#"<w:ftr xmlns:w="{W_NS}">{}{}</w:ftr>"#,
+            footer_block(),
+            paragraph(
+                &[
+                    run("Confidential "),
+                    control("goog_rdk_2", &run("{{footer_inline}}")),
+                ]
+                .concat()
+            )
+        );
+
+        let mut seed = Document::new();
+        let mut package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap()))
+                .unwrap();
+        let mut references = Vec::new();
+        for (part, xml, kind, rel_type) in [
+            (
+                HEADER,
+                header,
+                "header",
+                oxml_opc::relationship::rel_types::HEADER,
+            ),
+            (
+                FOOTER,
+                footer,
+                "footer",
+                oxml_opc::relationship::rel_types::FOOTER,
+            ),
+        ] {
+            package.set_part(part, xml.into_bytes());
+            package.content_types.add_override(
+                part,
+                &format!(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.{kind}+xml"
+                ),
+            );
+            let id = package
+                .get_or_create_part_rels(DOCUMENT)
+                .add(rel_type, part.trim_start_matches("/word/"));
+            references.push(format!(
+                r#"<w:{kind}Reference w:type="default" r:id="{id}"/>"#
+            ));
+        }
+        package.set_part(
+            DOCUMENT,
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><w:body>{body}<w:sectPr>{}</w:sectPr></w:body></w:document>"#,
+                references.concat()
+            )
+            .into_bytes(),
+        );
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut bytes).unwrap();
+        Document::from_bytes(bytes.get_ref()).unwrap()
+    }
+
+    fn saved_parts(document: &mut Document) -> HashMap<&'static str, String> {
+        let package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+                .unwrap();
+        [DOCUMENT, HEADER, FOOTER]
+            .into_iter()
+            .map(|part| {
+                let xml = String::from_utf8(package.get_part(part).unwrap().to_vec()).unwrap();
+                (part, xml)
+            })
+            .collect()
+    }
+
+    /// Check that the tag of every location in `replaced` gave way to its
+    /// value once, that every other tag is still there once, that every
+    /// control kept its `w:tag`, and that the header and footer kept their
+    /// blocks in order, byte for byte where nothing was replaced, and the
+    /// edge spaces of their text everywhere.
+    fn assert_replaced(parts: &HashMap<&str, String>, replaced: &[&str]) {
+        for (name, part) in LOCATIONS {
+            let xml = &parts[part];
+            if replaced.contains(&name) {
+                assert!(!xml.contains(&tag(name)), "{name}: {xml}");
+                assert_eq!(xml.matches(&value(name)).count(), 1, "{name}: {xml}");
+            } else {
+                assert_eq!(xml.matches(&tag(name)).count(), 1, "{name}: {xml}");
+            }
+        }
+        for (part, tags) in CONTROL_TAGS {
+            for tag in tags {
+                let element = format!(r#"<w:tag w:val="{tag}"/>"#);
+                assert!(parts[part].contains(&element), "{tag}: {}", parts[part]);
+            }
+        }
+        for (part, markers) in [
+            (
+                HEADER,
+                ["Header cell", "Header control", "Header paragraph."],
+            ),
+            (FOOTER, ["docPartGallery", "Footer control", "Confidential"]),
+        ] {
+            let positions = markers.map(|marker| parts[part].find(marker).unwrap());
+            assert!(positions.is_sorted(), "{part}: {}", parts[part]);
+        }
+        let raw_blocks = header_blocks()
+            .into_iter()
+            .map(|block| (HEADER, block))
+            .chain([(FOOTER, footer_block())]);
+        for (part, block) in raw_blocks {
+            if !replaced.iter().any(|name| block.contains(&tag(name))) {
+                assert!(parts[part].contains(&block), "{block}\n{}", parts[part]);
+            }
+        }
+        for (part, text) in [
+            (HEADER, ">Header cell </w:t>"),
+            (HEADER, ">Header control </w:t>"),
+            (FOOTER, ">Footer control </w:t>"),
+        ] {
+            assert!(parts[part].contains(text), "{text}\n{}", parts[part]);
+        }
+    }
+
+    #[test]
+    fn every_walker_replaces_the_tag_of_every_location_once() {
+        for (name, _) in LOCATIONS {
+            let (tag, value) = (tag(name), value(name));
+            for walker in ["try_replace_text", "replace_regex", "replace_all"] {
+                let mut document = document();
+                let count = match walker {
+                    "try_replace_text" => document.try_replace_text(&tag, &value).unwrap(),
+                    "replace_regex" => document
+                        .replace_regex(&regex::escape(&tag), &value)
+                        .unwrap(),
+                    _ => document.replace_all(&HashMap::from([(tag.as_str(), value.as_str())])),
+                };
+                assert_eq!(count, 1, "{walker} at {name}");
+                assert_replaced(&saved_parts(&mut document), &[name]);
+            }
+        }
+    }
+
+    #[test]
+    fn a_template_renders_the_tag_of_every_location() {
+        let mut document = document();
+        let data = LOCATIONS
+            .iter()
+            .map(|(name, _)| ((*name).to_owned(), serde_json::Value::from(value(name))))
+            .collect::<serde_json::Map<_, _>>();
+
+        let count = document
+            .render_template(&serde_json::Value::Object(data))
+            .unwrap();
+
+        assert_eq!(count, LOCATIONS.len());
+        let names = LOCATIONS.map(|(name, _)| name);
+        assert_replaced(&saved_parts(&mut document), &names);
+    }
+
+    /// A match that straddles a control boundary is no match. A reader sees
+    /// "alpha one" in the first paragraph and "alXpha two" in the second,
+    /// and neither changes, while the match inside the control of the third
+    /// is replaced. Direct runs on both sides of a control used to be read as
+    /// one text, which matched "alpha" in the second paragraph.
+    #[test]
+    fn a_match_that_straddles_a_control_boundary_is_not_replaced() {
+        let body = [
+            paragraph(&[run("al"), control("a", &run("pha one"))].concat()),
+            paragraph(&[run("al"), control("b", &run("X")), run("pha two")].concat()),
+            paragraph(&[run("al"), control("c", &run("alpha three"))].concat()),
+        ]
+        .concat();
+        for regex in [false, true] {
+            let mut document = super::document_with_content_controls(&super::wrap_word_body(&body));
+            let count = if regex {
+                document.replace_regex("alpha", "ALPHA").unwrap()
+            } else {
+                document.try_replace_text("alpha", "ALPHA").unwrap()
+            };
+            assert_eq!(count, 1, "regex: {regex}");
+            let texts = document
+                .paragraphs()
+                .iter()
+                .map(|paragraph| paragraph.text())
+                .collect::<Vec<_>>();
+            assert_eq!(texts, ["alpha one", "alXpha two", "alALPHA three"]);
+            let xml = super::document_xml(&mut document);
+            assert_eq!(xml.matches(">al</w:t>").count(), 3, "{xml}");
+        }
+    }
+
+    /// A quantified pattern also matches the digits after the boundary
+    /// alone, and replaced them, which left the number a reader sees half
+    /// replaced. The search now goes on after the straddling match, and
+    /// still reaches the number after the control.
+    #[test]
+    fn a_quantified_match_that_straddles_a_control_boundary_is_not_replaced() {
+        let body = paragraph(&[run("Order 12"), control("a", &run("34 end")), run(" 56")].concat());
+        for pattern in [r"\d+", r"\d{2,}"] {
+            let mut document = super::document_with_content_controls(&super::wrap_word_body(&body));
+
+            assert_eq!(
+                document.replace_regex(pattern, "N").unwrap(),
+                1,
+                "{pattern}"
+            );
+
+            assert_eq!(
+                document.paragraph(0).unwrap().text(),
+                "Order 1234 end N",
+                "{pattern}"
+            );
+        }
+    }
+
+    /// Word writes its table of contents as a body-level control whose
+    /// entries repeat the heading text. Replacement reaches them as it does
+    /// any other control, so a heading word counts once more for its entry,
+    /// and the entry still reads as its heading until the next update.
+    #[test]
+    fn a_table_of_contents_entry_is_replaced_with_its_heading() {
+        let toc = r#"<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent><w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \o "1-3" \h \z \u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:hyperlink w:anchor="_Toc1" w:history="1"><w:r><w:t>Introduction</w:t></w:r><w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGEREF _Toc1 \h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:hyperlink></w:p><w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:sdtContent></w:sdt>"#;
+        let heading = r#"<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:bookmarkStart w:id="0" w:name="_Toc1"/><w:r><w:t>Introduction</w:t></w:r><w:bookmarkEnd w:id="0"/></w:p>"#;
+        let mut document =
+            super::document_with_content_controls(&super::wrap_word_body(&[toc, heading].concat()));
+
+        assert_eq!(
+            document
+                .try_replace_text("Introduction", "Overview")
+                .unwrap(),
+            2
+        );
+
+        let xml = super::document_xml(&mut document);
+        assert_eq!(xml.matches(">Overview<").count(), 2, "{xml}");
+        assert!(xml.contains(r#"<w:hyperlink w:anchor="_Toc1""#), "{xml}");
+    }
+
+    /// A table that declares a namespace on its start tag came back from a
+    /// replacement in a header or a text box without the declaration, so
+    /// the saved part used an unbound prefix. A table that declares it on a
+    /// cell cannot be rewritten, so it keeps its bytes and counts nothing.
+    #[test]
+    fn a_rewritten_table_keeps_the_namespaces_it_declares() {
+        use quick_xml::events::Event as XmlEvent;
+        use quick_xml::name::ResolveResult;
+
+        let w14 = r#" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml""#;
+        let table = |table: &str, cell: &str, text: &str| {
+            format!(
+                r#"<w:tbl{table}><w:tblGrid/><w:tr><w:tc{cell}><w:p w14:paraId="0000ABCD"><w:r><w:t>{text}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#
+            )
+        };
+        let on_cell = table("", w14, "cell {{x}}");
+        let tables = [table(w14, "", "table {{x}}"), on_cell.clone()].concat();
+        let mut header = super::document_with_header_story(&format!(
+            r#"<w:hdr xmlns:w="{W_NS}">{tables}</w:hdr>"#
+        ));
+        let mut text_box = super::document_with_content_controls(&format!(
+            r#"<w:document xmlns:w="{W_NS}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body><w:p><w:r><w:pict><v:shape><v:textbox><w:txbxContent>{tables}</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p></w:body></w:document>"#
+        ));
+
+        assert_eq!(header.try_replace_text("{{x}}", "Y").unwrap(), 1);
+        assert_eq!(text_box.try_replace_text("{{x}}", "Y").unwrap(), 1);
+
+        for xml in [
+            super::header_story_xml(&mut header),
+            super::document_xml(&mut text_box),
+        ] {
+            // Every element and attribute prefix resolves.
+            let mut reader = quick_xml::NsReader::from_str(&xml);
+            loop {
+                let (namespace, event) = reader.read_resolved_event().unwrap();
+                assert!(!matches!(namespace, ResolveResult::Unknown(_)), "{xml}");
+                match event {
+                    XmlEvent::Start(element) | XmlEvent::Empty(element) => {
+                        for attribute in element.attributes() {
+                            let key = attribute.unwrap().key;
+                            let (namespace, _) = reader.resolver().resolve_attribute(key);
+                            assert!(!matches!(namespace, ResolveResult::Unknown(_)), "{xml}");
+                        }
+                    }
+                    XmlEvent::Eof => break,
+                    _ => {}
+                }
+            }
+            assert!(xml.contains(">table Y<"), "{xml}");
+            assert!(xml.contains(&on_cell), "{xml}");
+        }
+    }
+
+    /// A template tag that a control boundary splits cannot be rendered
+    /// whole, so the template is rejected rather than left half rendered.
+    #[test]
+    fn a_template_tag_that_straddles_a_control_boundary_is_an_error() {
+        let body = paragraph(&[run("{{na"), control("a", &run("me}}"))].concat());
+        let mut document = super::document_with_content_controls(&super::wrap_word_body(&body));
+        let before = document.to_bytes().unwrap();
+
+        let error = document
+            .render_template(&serde_json::json!({"name": "Ada"}))
+            .unwrap_err();
+
+        assert!(error.to_string().contains("invalid template"), "{error}");
+        assert_eq!(document.to_bytes().unwrap(), before);
+    }
+
+    /// The two shapes of the report: a Google Docs export wraps a run in a
+    /// control inside its paragraph, or a whole paragraph at body level.
+    /// Both replaced nothing. The text the paragraph reads is the text the
+    /// replacement changed.
+    #[test]
+    fn the_reported_google_docs_controls_are_replaced() {
+        let text = run("Body text, lorem alpha dolor.");
+        for body in [
+            paragraph(&text),
+            paragraph(&control("goog_rdk_0", &text)),
+            control("goog_rdk_1", &paragraph(&text)),
+        ] {
+            let mut document = super::document_with_content_controls(&super::wrap_word_body(&body));
+            assert_eq!(
+                document.paragraph(0).unwrap().text(),
+                "Body text, lorem alpha dolor."
+            );
+
+            assert_eq!(document.try_replace_text("alpha", "ALPHA").unwrap(), 1);
+
+            assert_eq!(
+                document.paragraph(0).unwrap().text(),
+                "Body text, lorem ALPHA dolor."
+            );
+            let xml = super::document_xml(&mut document);
+            assert!(xml.contains("Body text, lorem ALPHA dolor."), "{xml}");
+            assert_eq!(xml.contains("goog_rdk"), body.contains("goog_rdk"), "{xml}");
+        }
+    }
+}
+
+/// Replacement never read the footnotes and endnotes parts, and did not
+/// read the runs of a tracked insertion, which `Paragraph::text` shows, so
+/// the text a reader sees there could not be replaced. The fixture holds a
+/// token once in every story a reader sees, as the skills suite builds it,
+/// and once more in a deletion, which a reader does not see.
+mod replacement_reaches_notes_and_tracked_insertions {
+    use std::collections::HashMap;
+
+    use rdocx::Document;
+    use rdocx_oxml::namespace::W_NS;
+
+    const DOCUMENT: &str = "/word/document.xml";
+    const FOOTNOTES: &str = "/word/footnotes.xml";
+    const ENDNOTES: &str = "/word/endnotes.xml";
+    const PARTS: [&str; 6] = [
+        DOCUMENT,
+        "/word/header1.xml",
+        "/word/footer1.xml",
+        "/word/footer2.xml",
+        FOOTNOTES,
+        ENDNOTES,
+    ];
+
+    /// The body, a cell, an inline and a block control, a tracked insertion,
+    /// a text box, the header, the default and first-page footers, a footer
+    /// table, a footnote and an endnote.
+    const VISIBLE: usize = 12;
+
+    const INSERTION: &str = r#"<w:ins w:id="901" w:author="Editor" w:date="2026-01-01T00:00:00Z">"#;
+
+    fn run(text: &str) -> String {
+        format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#)
+    }
+
+    fn paragraph(content: &str) -> String {
+        format!("<w:p>{content}</w:p>")
+    }
+
+    fn table(cells: &[&str]) -> String {
+        let cells = cells
+            .iter()
+            .map(|content| format!("<w:tc>{}</w:tc>", paragraph(content)))
+            .collect::<String>();
+        format!(
+            r#"<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr>{cells}</w:tr></w:tbl>"#
+        )
+    }
+
+    fn control(tag: &str, content: &str) -> String {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:tag w:val="{tag}"/></w:sdtPr><w:sdtContent>{content}</w:sdtContent></w:sdt>"#
+        )
+    }
+
+    /// A notes part as Word writes it: the separator, the continuation
+    /// separator, and note 1.
+    fn notes(kind: &str, text: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:{kind}s xmlns:w="{W_NS}"><w:{kind} w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:{kind}><w:{kind} w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:{kind}><w:{kind} w:id="1"><w:p><w:r><w:{kind}Ref/></w:r>{}</w:p></w:{kind}></w:{kind}s>"#,
+            run(&format!(" {text}"))
+        )
+    }
+
+    /// The tracked paragraph: "Tracked: ", then `token` in an insertion and
+    /// in a deletion.
+    fn tracked(token: &str) -> String {
+        paragraph(&format!(
+            r#"{}{INSERTION}<w:r><w:t>ins {token}</w:t></w:r></w:ins><w:del w:id="902" w:author="Editor" w:date="2026-01-01T00:00:00Z"><w:r><w:delText xml:space="preserve">del {token}</w:delText></w:r></w:del>"#,
+            run("Tracked: ")
+        ))
+    }
+
+    /// The fixture, with the tracked paragraph or without it.
+    fn document(token: &str, with_revisions: bool) -> Document {
+        let body = [
+            paragraph(&run(&format!("Body {token} one."))),
+            table(&["", &run(&format!("Cell {token}"))]),
+            paragraph(&[run("Inline control: "), control("goog_rdk_9", &run(&format!("sdt {token}")))].concat()),
+            control("goog_rdk_8", &paragraph(&run(&format!("Block control {token}")))),
+            if with_revisions { tracked(token) } else { String::new() },
+            paragraph(&[
+                run("Footnote here"),
+                r#"<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r><w:r><w:endnoteReference w:id="1"/></w:r>"#.to_owned(),
+                format!(
+                    r#"<w:r><w:pict><v:shape style="width:100pt;height:50pt"><v:textbox><w:txbxContent>{}</w:txbxContent></v:textbox></v:shape></w:pict></w:r>"#,
+                    paragraph(&run(&format!("Text box {token}")))
+                ),
+            ].concat()),
+        ]
+        .concat();
+        let story = |root: &str, content: String| {
+            format!(r#"<w:{root} xmlns:w="{W_NS}">{content}</w:{root}>"#)
+        };
+        let parts = [
+            (
+                "header1.xml",
+                story("hdr", paragraph(&run(&format!("Header {token}")))),
+                oxml_opc::relationship::rel_types::HEADER,
+                "header",
+                Some(r#"<w:headerReference w:type="default" r:id="{id}"/>"#),
+            ),
+            (
+                "footer1.xml",
+                story(
+                    "ftr",
+                    [
+                        paragraph(&run(&format!("Footer {token}"))),
+                        table(&[&run(&format!("Footer cell {token}"))]),
+                    ]
+                    .concat(),
+                ),
+                oxml_opc::relationship::rel_types::FOOTER,
+                "footer",
+                Some(r#"<w:footerReference w:type="default" r:id="{id}"/>"#),
+            ),
+            (
+                "footer2.xml",
+                story("ftr", paragraph(&run(&format!("First footer {token}")))),
+                oxml_opc::relationship::rel_types::FOOTER,
+                "footer",
+                Some(r#"<w:footerReference w:type="first" r:id="{id}"/>"#),
+            ),
+            (
+                "footnotes.xml",
+                notes("footnote", &format!("Footnote {token}.")),
+                oxml_opc::relationship::rel_types::FOOTNOTES,
+                "footnotes",
+                None,
+            ),
+            (
+                "endnotes.xml",
+                notes("endnote", &format!("Endnote {token}.")),
+                oxml_opc::relationship::rel_types::ENDNOTES,
+                "endnotes",
+                None,
+            ),
+        ];
+
+        let mut seed = Document::new();
+        let mut package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap()))
+                .unwrap();
+        let mut references = String::new();
+        for (target, xml, rel_type, kind, reference) in parts {
+            let part = format!("/word/{target}");
+            package.set_part(&part, xml.into_bytes());
+            package.content_types.add_override(
+                &part,
+                &format!(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.{kind}+xml"
+                ),
+            );
+            let id = package
+                .get_or_create_part_rels(DOCUMENT)
+                .add(rel_type, target);
+            if let Some(reference) = reference {
+                references.push_str(&reference.replace("{id}", &id));
+            }
+        }
+        package.set_part(
+            DOCUMENT,
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>{body}<w:sectPr>{references}<w:titlePg/></w:sectPr></w:body></w:document>"#
+            )
+            .into_bytes(),
+        );
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut bytes).unwrap();
+        Document::from_bytes(bytes.get_ref()).unwrap()
+    }
+
+    fn saved_parts(document: &mut Document) -> HashMap<&'static str, String> {
+        let package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+                .unwrap();
+        PARTS
+            .into_iter()
+            .map(|part| {
+                let xml = String::from_utf8(package.get_part(part).unwrap().to_vec()).unwrap();
+                (part, xml)
+            })
+            .collect()
+    }
+
+    fn paragraph_texts(document: &Document) -> Vec<String> {
+        document
+            .paragraphs()
+            .iter()
+            .map(|paragraph| paragraph.text())
+            .collect()
+    }
+
+    /// Every walker replaces the token once in each story a reader sees, the
+    /// notes and the insertion included. The deletion keeps it, the
+    /// insertion keeps its id, author and date, the references keep their
+    /// ids, and the notes parts change only in the text of note 1.
+    #[test]
+    fn every_walker_replaces_the_notes_and_the_tracked_insertion() {
+        for walker in [
+            "try_replace_text",
+            "replace_regex",
+            "replace_all",
+            "replace_all_regex",
+        ] {
+            let mut document = document("NEEDLE", true);
+            let count = match walker {
+                "try_replace_text" => document.try_replace_text("NEEDLE", "X").unwrap(),
+                "replace_regex" => document.replace_regex("NEEDLE", "X").unwrap(),
+                "replace_all" => document.replace_all(&HashMap::from([("NEEDLE", "X")])),
+                _ => document
+                    .replace_all_regex(&[("NEEDLE".to_owned(), "X".to_owned())])
+                    .unwrap(),
+            };
+
+            assert_eq!(count, VISIBLE, "{walker}");
+            let parts = saved_parts(&mut document);
+            for (part, xml) in &parts {
+                let left = usize::from(*part == DOCUMENT);
+                assert_eq!(
+                    xml.matches("NEEDLE").count(),
+                    left,
+                    "{walker} {part}: {xml}"
+                );
+            }
+            let body = &parts[DOCUMENT];
+            for expected in [
+                format!("{INSERTION}<w:r><w:t>ins X</w:t></w:r></w:ins>"),
+                ">del NEEDLE</w:delText>".to_owned(),
+                r#"<w:footnoteReference w:id="1"/>"#.to_owned(),
+                r#"<w:endnoteReference w:id="1"/>"#.to_owned(),
+            ] {
+                assert!(body.contains(&expected), "{walker} {expected}: {body}");
+            }
+            assert_eq!(
+                parts[FOOTNOTES],
+                notes("footnote", "Footnote X."),
+                "{walker}"
+            );
+            assert_eq!(parts[ENDNOTES], notes("endnote", "Endnote X."), "{walker}");
+            assert_eq!(
+                document.footnotes(),
+                [(1, " Footnote X.".to_owned())],
+                "{walker}"
+            );
+            assert!(
+                paragraph_texts(&document).contains(&"Tracked: ins X".to_owned()),
+                "{walker}"
+            );
+        }
+    }
+
+    /// `Paragraph::text` shows the text of the insertion, and that text is
+    /// replaced inside it. A match across its boundary is no match.
+    #[test]
+    fn the_text_a_reader_sees_in_an_insertion_is_replaced() {
+        let mut document = document("NEEDLE", true);
+        assert!(paragraph_texts(&document).contains(&"Tracked: ins NEEDLE".to_owned()));
+
+        assert_eq!(document.try_replace_text("Tracked: ins", "-").unwrap(), 0);
+        assert_eq!(document.try_replace_text("ins NEEDLE", "ins X").unwrap(), 1);
+
+        assert!(paragraph_texts(&document).contains(&"Tracked: ins X".to_owned()));
+        let body = &saved_parts(&mut document)[DOCUMENT];
+        let insertion = format!("{INSERTION}<w:r><w:t>ins X</w:t></w:r></w:ins>");
+        assert!(body.contains(&insertion), "{body}");
+    }
+
+    /// A notes part without a match keeps its bytes, and so does a note
+    /// without a match in a part that changes.
+    #[test]
+    fn untouched_notes_keep_their_bytes() {
+        let mut document = document("NEEDLE", true);
+
+        assert_eq!(
+            document.try_replace_text("Body NEEDLE", "Body X").unwrap(),
+            1
+        );
+        let parts = saved_parts(&mut document);
+        assert_eq!(parts[FOOTNOTES], notes("footnote", "Footnote NEEDLE."));
+        assert_eq!(parts[ENDNOTES], notes("endnote", "Endnote NEEDLE."));
+
+        assert_eq!(
+            document
+                .try_replace_text("Footnote NEEDLE", "Footnote X")
+                .unwrap(),
+            1
+        );
+        let parts = saved_parts(&mut document);
+        assert_eq!(parts[FOOTNOTES], notes("footnote", "Footnote X."));
+        assert_eq!(parts[ENDNOTES], notes("endnote", "Endnote NEEDLE."));
+    }
+
+    /// A template reads its tags in the notes and in the insertion, as the
+    /// replacement reaches them, and renders them. The tag of the deletion
+    /// stays, as a reader does not see it.
+    #[test]
+    fn a_template_renders_the_tags_of_the_notes_and_the_insertion() {
+        let mut document = document("{{name}}", true);
+
+        let count = document
+            .render_template(&serde_json::json!({"name": "Ada"}))
+            .unwrap();
+
+        assert_eq!(count, VISIBLE);
+        let parts = saved_parts(&mut document);
+        for (part, xml) in &parts {
+            let left = usize::from(*part == DOCUMENT);
+            assert_eq!(xml.matches("{{name}}").count(), left, "{part}: {xml}");
+        }
+        assert_eq!(parts[FOOTNOTES], notes("footnote", "Footnote Ada."));
+        assert!(parts[DOCUMENT].contains(">del {{name}}</w:delText>"));
+    }
+
+    /// Comparing a file with its replaced copy marks the words replaced in
+    /// the body, the footnote and the endnote as revisions of each story.
+    #[test]
+    fn a_file_compares_with_its_replaced_copy() {
+        let mut original = document("NEEDLE", false);
+        let mut replaced = document("NEEDLE", false);
+        let pairs = HashMap::from([
+            ("Body NEEDLE", "Body X"),
+            ("Footnote NEEDLE", "Footnote X"),
+            ("Endnote NEEDLE", "Endnote X"),
+        ]);
+        assert_eq!(replaced.replace_all(&pairs), 3);
+
+        original
+            .compare(&replaced, "Ada", "2026-09-29T00:00:00Z")
+            .unwrap();
+
+        let parts = saved_parts(&mut original);
+        for (part, before, after) in [
+            (DOCUMENT, "Body NEEDLE one.", "Body X one."),
+            (FOOTNOTES, " Footnote NEEDLE.", " Footnote X."),
+            (ENDNOTES, " Endnote NEEDLE.", " Endnote X."),
+        ] {
+            let xml = &parts[part];
+            for expected in [
+                format!(">{before}</w:delText></w:r></w:del>"),
+                format!(">{after}</w:t></w:r></w:ins>"),
+            ] {
+                assert!(xml.contains(&expected), "{part} {expected}: {xml}");
+            }
+        }
+    }
+
+    /// A replacement inside an insertion stays part of that tracked change.
+    /// The revisions keep their ids, authors and dates. Accepting them keeps
+    /// the replaced text, and rejecting them gives what rejecting the source
+    /// gives, since the insertion goes away with the text replaced in it.
+    #[test]
+    fn a_replaced_insertion_is_accepted_and_rejected_as_one_revision() {
+        let revisions = |document: &Document| {
+            document
+                .revisions()
+                .iter()
+                .map(|revision| {
+                    (
+                        revision.id(),
+                        revision.author().to_owned(),
+                        revision.timestamp().map(str::to_owned),
+                        format!("{:?}", revision.kind()),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let replaced = || {
+            let mut document = document("NEEDLE", true);
+            assert_eq!(document.try_replace_text("ins NEEDLE", "ins X").unwrap(), 1);
+            document
+        };
+        assert_eq!(revisions(&replaced()), revisions(&document("NEEDLE", true)));
+
+        for accept in [true, false] {
+            let mut source = document("NEEDLE", true);
+            let mut edited = replaced();
+            let resolve = |document: &mut Document| {
+                if accept {
+                    document.accept_all().unwrap()
+                } else {
+                    document.reject_all().unwrap()
+                }
+            };
+            assert_eq!(
+                resolve(&mut edited),
+                resolve(&mut source),
+                "accept: {accept}"
+            );
+
+            let expected = paragraph_texts(&source)
+                .into_iter()
+                .map(|text| text.replace("ins NEEDLE", "ins X"))
+                .collect::<Vec<_>>();
+            assert_eq!(paragraph_texts(&edited), expected, "accept: {accept}");
+            let tracked = if accept {
+                "Tracked: ins X"
+            } else {
+                "Tracked: del NEEDLE"
+            };
+            assert!(expected.contains(&tracked.to_owned()), "{expected:?}");
+            let xml = saved_parts(&mut edited)[DOCUMENT].clone();
+            assert!(
+                !xml.contains("<w:ins ") && !xml.contains("<w:del "),
+                "{xml}"
+            );
+            assert_eq!(xml.contains(">ins X<"), accept, "{xml}");
+        }
+    }
+}
+
+/// `Paragraph::text` and replacement did not read the runs inside a simple
+/// field, a smart tag or an inline custom XML element. The fixture is the
+/// one the skills suite builds: "before ", then "MID" inside the wrapper,
+/// then " after".
+mod text_and_replacement_reach_simple_fields_smart_tags_and_custom_xml {
+    use rdocx::Document;
+    use rdocx_oxml::namespace::W_NS;
+
+    use super::{document_with_content_controls, document_xml};
+
+    const WRAPPERS: [(&str, &str); 3] = [
+        (
+            r#"<w:fldSimple w:instr=" DOCPROPERTY Title ">"#,
+            "</w:fldSimple>",
+        ),
+        (r#"<w:smartTag w:element="place">"#, "</w:smartTag>"),
+        (r#"<w:customXml w:element="item">"#, "</w:customXml>"),
+    ];
+
+    fn document((start, end): (&str, &str)) -> (Document, String) {
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{W_NS}"><w:body><w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>{start}<w:r><w:t>MID</w:t></w:r>{end}<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
+        );
+        (document_with_content_controls(&xml), xml)
+    }
+
+    /// The paragraph reads the text inside the wrapper, which a no-op save
+    /// keeps byte for byte, and the run index space does not change.
+    #[test]
+    fn the_paragraph_text_reads_the_wrapper() {
+        for wrapper in WRAPPERS {
+            let (mut document, xml) = document(wrapper);
+            let run_count = document.paragraph(0).unwrap().run_count();
+
+            assert_eq!(
+                document.paragraph(0).unwrap().text(),
+                "before MID after",
+                "{}",
+                wrapper.0
+            );
+            assert_eq!(document.paragraph(0).unwrap().run_count(), run_count);
+            assert_eq!(document_xml(&mut document), xml);
+        }
+    }
+
+    /// Literal and regex replacement change the text inside the wrapper,
+    /// whose start tag, the instruction of a field included, keeps its
+    /// bytes. A match across the wrapper is not replaced.
+    #[test]
+    fn replacement_reaches_the_wrapper() {
+        for regex in [false, true] {
+            for wrapper in WRAPPERS {
+                let (mut document, _) = document(wrapper);
+                let replace = |document: &mut Document, from: &str, to: &str| {
+                    if regex {
+                        document.replace_regex(from, to).unwrap()
+                    } else {
+                        document.try_replace_text(from, to).unwrap()
+                    }
+                };
+
+                assert_eq!(replace(&mut document, "before MID", "-"), 0);
+                assert_eq!(replace(&mut document, "MID", "X"), 1, "{}", wrapper.0);
+
+                assert_eq!(document.paragraph(0).unwrap().text(), "before X after");
+                let body = document_xml(&mut document);
+                let expected = format!("{}<w:r><w:t>X</w:t></w:r>{}", wrapper.0, wrapper.1);
+                assert!(body.contains(&expected), "{body}");
+            }
+        }
+    }
 }
 
 /// `9360 / cols` panicked when a caller asked for a zero-column table.

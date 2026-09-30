@@ -22,7 +22,7 @@ and produces fixed or flow output without an Office host.
 
 | Measurement | Value | Version | Platform | Build mode | Input | Command | Statistic | Measured on |
 |---|---|---|---|---|---|---|---|---|
-| Crates.io archive: rdocx-cli | 37,853 compressed bytes, 162,093 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-29 |
+| Crates.io archive: rdocx-cli | 41,495 compressed bytes, 179,902 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-29 |
 
 ## Use it when
 
@@ -56,8 +56,11 @@ rdocx toc rebuild report.docx -o refreshed.docx
 ```
 
 Comment `add` ranges use zero-based body paragraph and run boundaries. The
-start is inclusive and the end is exclusive. Comment replies, resolution, and
-removal select a decimal comment id.
+start is inclusive and the end is exclusive. Run boundaries count the runs that
+`text --json` lists, including the runs inside inline content controls and
+tracked insertions. A range that cannot be anchored exactly, such as one that
+crosses the edge of an inline content control, is refused. Comment replies,
+resolution, and removal select a decimal comment id.
 
 Revision `list` reports the main story. Revision `accept` and `reject` operate
 across every supported story and accept at most one selector: `--id`,
@@ -71,7 +74,9 @@ input that carries a VBA project cannot change to a macro-free extension.
 
 `text --json` reports accepted-view paragraphs in source order. Each paragraph
 has a zero-based `body_index`, a typed zero-based path within that body item,
-its direct style and numbering, and accepted-view runs. Run `formatting` is
+its direct style and numbering, and accepted-view runs. Its `text` also holds
+the text inside smart tags, inline custom XML elements, and simple fields,
+which `runs` does not list. Run `formatting` is
 `null` when no direct run properties exist. Otherwise it records nullable
 direct bold, italic, strike, underline, font, point size, colour, highlight,
 language, and character style values.
@@ -86,6 +91,14 @@ fragment on each occupied page.
 exactly `N`. A mismatch exits unsuccessfully without creating or replacing the
 requested output.
 
+The count covers the text a reader sees in the body, tables,
+content controls, headers, footers, footnotes, endnotes, and tracked insertions,
+in the text boxes of the body, headers, and footers, in the labels of the
+charts in the body, and inside smart tags, inline custom XML elements, and the
+cached results of simple fields. Deleted text is not counted, except in a text
+box inside a deleted run, which is replaced like any other text box. A text box
+inside a note and the separators of the notes parts are not counted.
+
 `convert` and `render` refuse an output file that already exists unless
 `--force` is given. Even with `--force` they refuse their own input file under
 any spelling of its path, and an output that is not a regular file, such as a
@@ -97,5 +110,6 @@ file only once it is complete, so a failed run leaves no truncated output.
 missing part, a part without a content type, or a prefix that `mc:Ignorable`
 or `mc:MustUnderstand` lists without a namespace declaration. Empty
 paragraphs, heading level gaps, and missing metadata are warnings only.
+
 
 Run `rdocx --help` or `rdocx <command> --help` for the complete option set.

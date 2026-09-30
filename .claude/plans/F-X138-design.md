@@ -1,6 +1,6 @@
 # F-X138, Word story and content contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S76
 **Size**: L
 **Depends on**: F-X137
@@ -19,6 +19,7 @@ behavior and blur attribution.
 
 - `docs/hld/03-architecture.md`, "What stays put" and "Facade conventions".
 - `docs/hld/04-opc-and-packaging.md`, "The package".
+- `docs/hld/05-drawingml-model.md`, "What already exists", text boxes.
 - `docs/hld/10-bindings-spec.md`, "Native Word facade stability" and "CLIs".
 - `docs/hld/12-testing-strategy.md`, "Test taxonomy" and "Binding tests".
 
@@ -31,6 +32,9 @@ public run and body indexes to direct body coordinates, traverse modeled
 content controls and related stories once, and preserve every text-box child
 and inherited namespace scope during replacement. Anchor comments using the
 same run space exposed by the public paragraph view. Keep unknown XML opaque.
+The semver impact is additive for pre-1.0 native and Python comment and story
+entry points. Existing body-index behavior is corrected to its documented
+direct-child contract.
 
 ## Rejected alternatives
 
@@ -57,6 +61,7 @@ gate.
 
 - `docs/hld/03-architecture.md`
 - `docs/hld/04-opc-and-packaging.md`
+- `docs/hld/05-drawingml-model.md`
 - `docs/hld/10-bindings-spec.md`
 - `docs/hld/12-testing-strategy.md`
 
@@ -78,10 +83,10 @@ the F-X138 checkpoint.
 
 ## Implementation checklist
 
-- [ ] Review each incremental PR diff and identify ancestor commits already accepted.
-- [ ] Reconcile body coordinates, story traversal, replacement and text boxes.
-- [ ] Add source-built regression cases to existing test binaries.
-- [ ] Run focused and risk checks, then microscope to zero findings.
+- [x] Review each incremental PR diff and identify ancestor commits already accepted.
+- [x] Reconcile body coordinates, story traversal, replacement and text boxes.
+- [x] Add source-built regression cases to existing test binaries.
+- [x] Run focused and risk checks, then microscope to zero findings.
 
 ## Open questions
 
