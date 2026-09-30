@@ -1,6 +1,6 @@
 # F-X142, Presentation Python contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S77
 **Size**: L
 **Depends on**: F-X140
@@ -97,13 +97,13 @@ updates.
 
 ## Implementation checklist
 
-- [ ] Review incremental PR diffs and remove inherited PR 189 changes.
-- [ ] Reconcile Python bindings, stubs, native facade, OXML and tests.
-- [ ] Run held-handle, checked mutation and Issue 169 workflow cases.
-- [ ] Complete shape hyperlinks, anchored comments and built-in table style
+- [x] Review incremental PR diffs and remove inherited PR 189 changes.
+- [x] Reconcile Python bindings, stubs, native facade, OXML and tests.
+- [x] Run held-handle, checked mutation and Issue 169 workflow cases.
+- [x] Complete shape hyperlinks, anchored comments and built-in table style
   rendering, with Python, native and saved-package parity.
-- [ ] Round-trip, validate and render the resulting deck.
-- [ ] Run focused checks, risk riders and microscope to zero findings.
+- [x] Round-trip, validate and render the resulting deck.
+- [x] Run focused checks, risk riders and microscope to zero findings.
 
 ## Open questions
 

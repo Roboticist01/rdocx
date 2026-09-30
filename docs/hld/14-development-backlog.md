@@ -6117,9 +6117,9 @@ and Rust parity cases pass after save and reopen.
 
 Review and integrate PRs 173, 181, 189, 192, 208 and 209. PRs 208 and
 209 follow 189. Reconcile the shared shape, table, layout and binding
-files before running the Issue 169 deck workflow. Complete every Issue 169
-checklist item beyond the PRs with a working API or an explicit reviewed scope
-decision and documented fallback.
+files before running the Issue 169 deck workflow. Complete its remaining
+shape hyperlinks, shape and text range comments, and built-in table style
+rendering alongside the contributed APIs.
 **Depends on**: F-X140.
 **Test gate**: integration. Python and Rust deck operations round-trip,
 validate and render with correct shape geometry and table structure.
@@ -6247,7 +6247,7 @@ python-pptx, validate and match the pinned cross-viewer renders.
 ### F-X156, Presentation slide and table contribution (L)
 
 Review PRs 231, 235 and 238. Replay PR 231 after 181 and reconcile scoped
-replacement, slide import and built-in table style resolution.
+replacement and slide import against F-X142's built-in table style resolution.
 **Depends on**: F-X142, F-X155.
 **Test gate**: integration. Imported and edited decks reopen, validate and
 render without losing media, notes or relationships.

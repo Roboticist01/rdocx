@@ -1598,6 +1598,10 @@ font files already present in `RenderInput` before lowering every slide.
 The `rpptx` facade assembles a presentation package into this input through its
 deterministic render boundary. It rejects a source-to-resolved shape-count
 difference and verifies that page count matches slide count before returning.
+Tables with a known built-in PowerPoint style ID receive the resolved family
+and theme accent even when `ppt/tableStyles.xml` omits the definition. The
+renderer consumes those resolved fills, text colours, and borders through the
+same deterministic page path as package-defined styles.
 The CLI thumbnail path uses this same boundary for slide one. It derives DPI
 from the rendered page width so the PNG is exactly 320 pixels wide while its
 height remains proportional, then applies the normal per-slide pixel bound.

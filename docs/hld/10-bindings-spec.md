@@ -399,9 +399,11 @@ document revision. A rejected image, filename, dimension pair, or stale path
 leaves package bytes and binding revisions unchanged.
 
 `rpptx` mirrors python-pptx through an unpublished mixed-layout `rpptx-py`
-crate. `Presentation` owns the Rust facade and one revision counter. Lazy
-layouts, slides, shapes, placeholders, text frames, paragraphs, runs, columns
-and cells store only a presentation reference and `ContentPath`. The bounded
+crate. `Presentation` owns the Rust facade and one revision counter.
+`Presentation(path)` opens a file and the static `Presentation.from_bytes`
+opens in-memory package bytes, as the rdocx `Document` does. Lazy layouts,
+slides, shapes, placeholders, text frames, paragraphs, runs, columns and cells
+store only a presentation reference and `ContentPath`. The bounded
 source-compatibility surface is the seven python-pptx 1.0.2 Getting Started
 workflows. They change the import namespace and re-fetch through the public
 path after each structural write, because strict global revision invalidation
@@ -414,23 +416,40 @@ preset name as `xml_value`. `UP_ARROW` is absent because the generated preset
 table has no `upArrow`.
 
 Presentation `Shape` handles expose optional `Length` values for left, top,
-width, and height plus optional non-visual id and name.
+width, and height plus optional non-visual id and name. Those values are the
+shape's own. `Shape.effective_geometry()` returns the four as rendering places
+the shape: its own transform, or for a placeholder without one, the transform
+it inherits from its layout placeholder, then from that placeholder's master
+counterpart. It returns `None` when the resolved transform has no extent.
 
 `Presentation.slide_width` and `slide_height` read the optional `p:sldSz` as
 `Length` values. Assigning one keeps the other, and a deck without `p:sldSz`
 pairs the assigned value with the bundled 16:9 size. `Slide.slide_layout`
 returns the layout the slide relates to, equal to the same entry of
 `slide_layouts`, and `SlideLayoutCollection.index` returns its position.
+Assigning a layout of the same presentation to `slide_layout` uses the native
+staged layout change and advances the revision once. A placeholder the new
+layout does not place keeps the transform it inherited.
 `Slide.hidden` reads and writes `p:sld/@show`. `Slide.background.fill` is a
 live `FillFormat` over the direct background fill that never changes the slide
 when read, and `follow_master_background` reports and sets whether the slide
 has no `p:bg`. `SlideCollection.remove` and `SlideCollection.move(from_, to)`
 use the native staged slide operations and advance the revision once.
+`SlideCollection.duplicate(slide)` copies a slide of the same presentation,
+with its speaker notes, to the position right after it through the native
+staged `duplicate_slide`, advances the revision once, and returns the new slide
+captured at that revision. As in the facade, a slide that owns a modern
+comments part is refused, even when removing its last comment left that part
+empty, and the refusal leaves the package and the revision unchanged.
 
 `Shape` geometry, `name`, and `rotation` are writable without a revision bump.
-A missing partner coordinate becomes zero, as in python-pptx, and a negative
-extent is a `ValueError`. `rotation` reads clockwise degrees normalized below
-360 and writes them with round-half-even into the 60000-per-degree angle.
+Assigning one coordinate or the rotation of a placeholder first copies the
+missing parts of its inherited transform onto the shape, so the values not
+assigned keep their effective values and rendering keeps drawing it. On any
+other shape a missing partner coordinate becomes zero, as in python-pptx. A
+negative extent is a `ValueError`. `rotation` reads clockwise degrees
+normalized below 360 and writes them with round-half-even into the
+60000-per-degree angle.
 `shape_type` reports an `MSO_SHAPE_TYPE` member or `None`. `fill` and `line`
 return live `FillFormat` and `LineFormat` views for ordinary shapes, pictures,
 and connectors, and raise `ValueError` for other kinds. `FillFormat` offers
@@ -444,20 +463,96 @@ the effective preset adjustments, normalized so that 1.0 is 100000, and
 assignment truncates as python-pptx does. `xml` returns the element serialized
 on its own as bytes. A picture's `image` is a frozen `Image` snapshot with
 `blob`, `content_type`, and the python-pptx `ext`, and `replace_image` changes
-only that picture through the native staged replacement.
+only that picture through the native staged replacement. `crop_left`,
+`crop_top`, `crop_right`, and `crop_bottom` read and write the picture's
+`a:srcRect` insets as python-pptx floats, where 0.25 is a quarter of the image.
+A missing edge reads 0.0, a write rounds half to even as python-pptx does and
+changes nothing when the value is unchanged, and a value that is not finite or
+outside the `ST_Percentage` range raises `ValueError`. Other shape kinds raise
+`ValueError`, and crop writes do not advance the revision.
+`Shape.click_action.hyperlink.address` reads and writes the click hyperlink
+of the shape's non-visual properties. It shares relationship reuse and pruning
+with run hyperlinks, and a write does not advance the revision. `None` or an
+empty string clears it.
 
 `ShapeCollection.add_shape` accepts a DrawingML preset name or an `MSO_SHAPE`
 member. `add_connector` follows the python-pptx signature, `add_group_shape`
 appends an empty group, and `add_picture` accepts a path, bytes, or a binary
 file-like object, which is rewound first when it can seek. `remove` deletes one
 shape of a slide with the relationships and parts only it used and advances the
-revision once. Nested collections stay read-only.
+revision once. `move(from_, to)` changes the z-order like
+`SlideCollection.move`, so the shape ends up at index `to` and draws above the
+shapes before it, and advances the revision once. python-pptx has no z-order
+API.
+
+A group's `shapes` collection has the same `add_textbox`, `add_shape`,
+`add_connector`, `add_group_shape`, `add_table`, and `add_picture` through the
+native `ShapesMut`, so groups nest to any depth. A member takes a `p:cNvPr` id
+unused across the slide, and the group, then every group enclosing it, is refit
+to the union of its members as python-pptx does, so members of a new group keep
+their slide coordinates. An addition to a group advances the revision once,
+like any addition, so the group handle and its collection go stale and the
+returned member is captured at the new revision. The next addition re-fetches
+the group, for example through `prs.slides[0].shapes[0].shapes`.
+A group added inside a group has the zero `a:xfrm` python-pptx writes, so its
+`left`, `top`, `width`, and `height` read zero until its first member arrives,
+while a group added to a slide's own shapes reads `None`. `add_group_shape` has
+no python-pptx `shapes` argument for moving existing shapes into the new group.
+Adding to the collection of a shape that is not a group raises `ValueError`
+before any image is read, and so does adding to a group inside an
+`mc:AlternateContent` fallback, which stays read-only. `remove` and `move` on a
+nested collection raise `ValueError` too.
+
+A table `Cell` follows python-pptx for `merge(other_cell)`, `split()`,
+`is_merge_origin`, `is_spanned`, `span_height`, and `span_width`. Merge and
+split run the native staged table operations, which keep the rectangular grid,
+so they do not advance the revision. A cell of another table raises
+`ValueError`, and a merge range that overlaps a merge or a split of a cell that
+is not a merge origin raises `RpptxError` and leaves the table unchanged.
+`Cell.fill` is a live `FillFormat` over the direct cell fill. `margin_left`,
+`margin_right`, `margin_top`, and `margin_bottom` read the `a:tcPr` margins as
+`Length` and follow the text formatting rules below. An absent margin reads
+`None` where python-pptx reports its 91440 and 45720 EMU defaults, and a value
+outside the 32-bit coordinate range raises `ValueError`. python-pptx has no
+cell border API, so `border_left`, `border_right`, `border_top`, and
+`border_bottom` are live `LineFormat` views of `a:lnL`, `a:lnR`, `a:lnT`, and
+`a:lnB`, which reading never creates. `Table.rows` is a lazy `RowCollection`
+of `Row` handles, like `columns`. `Row.height` reads the stored height as
+`Length`, and assigning it keeps the frame height equal to the sum of the rows,
+as a column width keeps the frame width. A height that is not positive raises
+`RpptxError`. None of these writes advances the revision.
+
+python-pptx has no public API to add or remove table rows and columns, and its
+users call `table._tbl.add_tr(height)`, which appends a row without cell
+formatting and leaves the frame height unchanged.
+`RowCollection.add_row(index=None)` inserts a row before `index`, or appends
+one, and returns its `Row`. `ColumnCollection.add_column(index=None)` does the
+same for a grid column.
+Both run the native `insert_row` and `insert_column`, so the new row or column
+copies the size and cell formatting, without the text, of the row above or the
+column to the left, or of the first one at index 0. The frame grows by the new
+row's height or column's width, and text later written into a new cell takes
+the copied formatting. `RowCollection.remove(row)` and
+`ColumnCollection.remove(column)` remove one and shrink the frame by its size,
+so a frame PowerPoint measured taller than its stored rows keeps that excess.
+A negative index counts from the end, as in `list.insert`, and an index outside
+`-len..=len` raises `IndexError`. A row or column of another table raises
+`ValueError`, and removing the only row or column raises `RpptxError`. Each of
+these edits advances the revision once, because row, column, and cell handles
+name indices, and the returned handle is captured after the change.
 
 `TextFrame.autofit`
 reports `none`, `normal`, or `shape` when the body carries an explicit choice.
 `Run.font` reads the run's direct Latin name, size, and sRGB colour, while the
 `Run.text` setter replaces only that run's text and preserves its typed and
-unmodelled properties.
+unmodelled properties. `Run.hyperlink` returns a live `Hyperlink` whose
+`address` reads the target of the run's `a:hlinkClick`, or `None`. Assigning
+an address goes through the native `set_run_hyperlink`, which reuses the
+slide's relationship to the same address and removes the old relationship
+once nothing on the slide names it, so retargeting does not grow the part.
+`None` or an empty string removes the hyperlink, as in python-pptx, an address
+with a control character raises `RpptxError`, and the write does not advance
+the revision.
 
 Text formatting follows python-pptx names and value types. Every property
 reads the direct value only, `None` when the element or attribute is absent,
@@ -509,6 +604,32 @@ place and do not advance the revision. `rpptx` and `rpptx.enum.text` export
   value in place, keeping transforms such as `a:alpha`, replaces any other
   colour, and `None` removes the direct fill.
 
+`Presentation.try_replace_text(placeholder, replacement, *, expect=None)`
+runs the native staged literal replacement over slides and speaker notes with
+the GIL released and returns its count. When `expect` is given, the
+replacement runs on a clone, and a count that differs raises
+`ReplacementCountError`, an `RpptxError` subclass that carries `expected` and
+`found` and words its message like `rpptx replace --expect`. The presentation
+and its revision then stay unchanged. Otherwise the replacement is kept, and
+the revision advances once when the count is nonzero. Without `expect`, zero
+matches return zero rather than raise, as the rdocx `try_replace_text` does.
+Only the CLI refuses zero matches, because it would write an unchanged copy.
+`Presentation.replace_text` is an alias with the same count and optional
+`expect` contract.
+
+`Slide.add_comment` accepts an optional `shape_id` to anchor a modern comment
+to a drawing element. `text_start` and `text_length` together select a range
+in an ordinary shape's UTF-16 text. Invalid targets, duplicate text contexts
+on one slide, and invalid ranges leave the presentation unchanged. Without
+these arguments, the comment uses the
+existing unknown-anchor form.
+
+`Presentation.validate()` runs the native `validate` with the GIL released and
+returns a tuple of frozen `ValidationIssue` snapshots in native order. Each
+carries a `kind` that names the native variant in snake_case, such as
+`duplicate_shape_id`, and a `message` equal to the line `rpptx validate`
+prints for that issue. A clean presentation returns an empty tuple.
+
 The presentation binding exposes `to_pdf`, `render_slide_to_png`,
 `render_all_slides`, `to_notes_pdf`, and `render_all_notes` through the native
 deterministic facade. Every render call releases the GIL.
@@ -534,7 +655,11 @@ snapshots. Each comment contains an ordered tuple of frozen `CommentReply`
 snapshots, and the presentation exposes an ordered tuple of frozen
 `CommentAuthor` snapshots.
 Author, comment, and reply additions accept native GUID and RFC 3339 strings.
-Comment and reply moves retain native final-position semantics. A successful
+Comment and reply moves retain native final-position semantics.
+`Slide.resolve_comment(comment_id)` marks a thread resolved and treats a reply
+id as unknown. `Slide.remove_comment(comment_id)` removes a thread with its
+replies, or one reply. Both use the native staged operations of
+`rpptx comment resolve` and `remove`. A successful
 collaboration operation advances the global revision once. Constructor or
 native validation failure publishes no candidate and leaves existing handles
 valid.
@@ -1884,10 +2009,11 @@ The additive methods are `comment_authors`, `add_comment_author`, `comments`,
 `add_comment`, `reply_to_comment`, `resolve_comment`, `remove_comment`,
 `move_comment`, `move_reply`, `sections`, `set_sections`,
 `notes_header_footer_mut`, and `handout_header_footer_mut`. Python exposes the
-comment snapshots, additions, and moves described with the presentation
-binding, and `rpptx comment` exposes the comment operations described under
-CLIs. WASM consumers gain no collaboration or navigation methods and continue
-to preserve these package parts through their existing `Presentation` owner.
+comment snapshots, additions, moves, resolution, and removal described with the
+presentation binding, and `rpptx comment` exposes the comment operations
+described under CLIs. WASM consumers gain no collaboration or navigation
+methods and continue to preserve these package parts through their existing
+`Presentation` owner.
 
 The low-level `rpptx-oxml` model adds the approved `comments` module and
 extends existing presentation, notes, slide, relationship, and content-type

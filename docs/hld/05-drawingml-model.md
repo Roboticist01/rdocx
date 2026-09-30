@@ -315,6 +315,31 @@ origin in row-major order, and each source keeps one empty paragraph. Splitting
 is valid only at an origin, clears this pattern across its checked rectangle,
 and does not redistribute the migrated content.
 
+The writer matches preserved `a:gridCol` attributes and children, such as
+PowerPoint's `a16:colId` extension, to the public column widths by value, and
+fails with an ambiguity error when an edit leaves repeated widths it cannot
+pair. `CT_Table::set_column_width` first pairs every column with its metadata
+by position, so a width edit keeps the metadata with its column whatever the
+other widths are.
+
+`insert_row`, `remove_row`, `insert_column`, and `remove_column` change the
+explicit grid and require one explicit cell per grid column and merges that fit
+the grid. A new row copies the height of the row above it, or of the first row
+when it becomes the first, and a new column copies the width of the column to
+its left, or of the first column. Each new cell copies the `a:tcPr` of the
+neighbouring cell it was built from. `CT_TextBody::empty_like` gives it that
+cell's body properties, list style, and first paragraph properties, with one
+empty paragraph whose `a:endParaRPr` carries the first run's character
+properties without hyperlinks, as PowerPoint keeps formatting on an empty
+paragraph. New rows, columns, and cells carry no unmodelled content, so the
+`a16:rowId` and `a16:colId` extensions PowerPoint writes are never duplicated.
+An insertion strictly inside a merge extends it, and every other new cell is
+unmerged. A removal inside a merge shrinks it, and removing the first row or
+column of a merge moves the origin state, text, and cell properties to the next
+row or column. A changed span is rewritten on every cell of the merge that
+stored the old span, which keeps the origin and continuation pattern above.
+Removing the only row or column fails.
+
 Table properties expose right-to-left order, first and last row and column
 flags, row and column banding, and the optional table style id. Unsupported
 cell properties remain raw XML at their schema boundary. The rendering subset
@@ -331,6 +356,9 @@ theme font reference, text colour, outer borders, and inside horizontal and
 vertical borders. Producer wrapper elements such as `a:fill`, `a:tcBdr`, and
 its edge children remain part of the modelled schema path. Empty wrappers and
 unmodelled siblings retain their original form.
+The model does not insert definitions for Office's built-in table styles into
+`ppt/tableStyles.xml`. Resolution supplies those definitions when a table names
+a known built-in ID and the package has no matching style record.
 
 Readers accept any element prefix. Writers use fixed `a:` prefixes and schema
 child order for the modelled subset. Table writers emit `a:tblPr`,
