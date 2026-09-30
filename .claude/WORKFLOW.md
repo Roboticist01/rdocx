@@ -26,6 +26,14 @@ Required before completion:
 `/microscope` is not optional and not skippable. Its exit condition is zero
 defects and zero smells, iterating in numbered passes until it reaches that.
 
+Keep each F-ID implementation limited to its approved design. The worker runs
+focused tests, the plan's applicable oracle and risk checks, `/verify --scoped`,
+and a zero-finding `/microscope`. Run `/verify --full` and `/sprint-review`
+over the integrated sprint result. A formal dependency-prefix checkpoint is
+the required earlier full-gate exception when a later F-ID cannot start until
+its prerequisite is completed. Do not rerun the whole workspace or every
+external oracle after each worker merely because a story finished.
+
 Review commands never patch the diff they audit. When an orchestration command
 such as `/run-sprint` invokes a review, the completed review returns control to
 the orchestrator. It may enter a separate remediation phase and launch the next

@@ -64,6 +64,10 @@ incremental diff of each stacked PR, then rebase and rerun CI.
   anchored comments and built-in table styles.
 - Revision listing covers all stories. The CLI detects malformed related
   parts and undefined styles in its stated scope.
+- Each S77 F-ID remains scoped to its design, focused tests, applicable oracle
+  cases, `/verify --scoped` and a zero-finding `/microscope`. F-X140 and later
+  formal dependency prefixes take full integrated checkpoints before their
+  consumers begin.
 - The combined S77 result passes binding smoke, package, rendering,
   documentation and release regression checks, then `/verify --full` and
   `/sprint-review`. Broader issue acceptance remains scheduled for S78 and

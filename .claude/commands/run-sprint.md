@@ -11,6 +11,12 @@ it comes back clean.
 
 Defaults are three review passes and as many workers as the wave allows.
 
+Each worker keeps its implementation scoped to its approved F-ID, with focused
+tests, the applicable oracle cases, `/verify --scoped` and a zero-finding
+`/microscope`. Reserve `/verify --full` and the union of sprint risk riders
+for the integrated final result and the dependency-prefix checkpoints defined
+below. Do not repeat the full workspace or every oracle after each story.
+
 **`scripts/sprint_workflow.py` is the state authority.** Everything below is
 resumable through `.claude/scratch/SNN-run.json`. Reuse it rather than starting
 over.

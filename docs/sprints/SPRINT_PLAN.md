@@ -6,6 +6,11 @@ Sprints are dependency and review boundaries, not fixed two-week containers.
 Sprint clocks start at the first `/start-feature` of that sprint, not at a fixed
 calendar date.
 
+Each F-ID uses focused tests, applicable oracle cases, `/verify --scoped` and
+a zero-finding `/microscope`. Full verification and sprint review cover the
+integrated result at closure, with an earlier full checkpoint only when a
+formal dependency must be completed before its consumer starts.
+
 The active roadmap runs through S98, with earlier deferred cutover boundaries
 retained in place. The sizing rationale and compression options are in
 `docs/hld/14-development-backlog.md`.
