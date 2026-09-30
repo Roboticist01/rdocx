@@ -24,7 +24,7 @@ open until the integrated S79 evidence checks every criterion.
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
 | F-X137 | Package and CLI safety contribution wave | L | done | - |
-| F-X138 | Word story and content contribution wave | L | pending | - |
+| F-X138 | Word story and content contribution wave | L | in-progress | codex |
 | F-X139 | Word identity and comparison contribution wave | L | pending | - |
 
 ## Sequencing note
