@@ -73,11 +73,14 @@ that has to come first. The rules that make it safe:
 - **Never resolve a semantic conflict automatically.** Reconcile against both
   approved design plans, then re-review.
 
-Worker branches and worktrees are **retained** through integration, full
-verification and sprint review. After `/close-sprint` has merged and pushed
-both `main` and the sprint tag, it removes the clean worktrees and local
-branches for completed workers recorded in the sprint state. It never removes
-an uncommitted worktree, a carried worker or an unrelated worktree.
+Worker branches are retained through integration, full verification and sprint
+review. After a handoff is consumed and its local integration commit is
+recorded, a clean completed worker worktree may be removed without `--force`
+to save disk space. The branch remains available to recreate the worktree if
+review needs it. After `/close-sprint` has merged and pushed both `main` and
+the sprint tag, it removes completed worker branches and any remaining clean
+completed worker worktrees. It never removes an uncommitted worktree, a
+carried worker or an unrelated worktree.
 
 ## The command surface
 
@@ -243,9 +246,10 @@ Per-sprint branches off `main`, named `sprint/sNN`. Every F-ID commit lands on
 the active sprint branch, never directly on `main`.
 
 Parallel work adds `work/<fid-lower>-<agent>` branches, cut from the sprint
-branch head at claim time and squashed back by `/integrate-feature`. They are
-retained until `/close-sprint` has pushed the integrated sprint, then removed
-locally. They are never pushed unless asked.
+branch head at claim time and squashed back by `/integrate-feature`. Their
+branches are retained until `/close-sprint` has pushed the integrated sprint.
+Clean integrated worktrees may be removed earlier. Worker branches are never
+pushed unless asked.
 
 - `/sync-sprint SNN` creates the branch off the latest `main`.
 - `/claim-feature` cuts a worker branch from the sprint branch head.

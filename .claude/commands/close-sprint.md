@@ -59,9 +59,10 @@ publication.
    cleanup target recorded in the run state:
    - Confirm the F-ID is `completed`, its handoff was consumed and its recorded
      integration commit is an ancestor of `main`.
-   - Confirm the path is still registered to the recorded worker branch and
-     `git -C <worktree-path> status --porcelain` is empty.
-   - Run `git worktree remove <worktree-path>` without `--force`.
+   - If the path is still registered, confirm it belongs to the recorded
+     worker branch and `git -C <worktree-path> status --porcelain` is empty.
+     Run `git worktree remove <worktree-path>` without `--force`. A worktree
+     safely removed after local integration needs no second removal.
    - Delete the recorded local worker branch. A squash integration means this
      requires `git branch -D <worker-branch>`, so perform it only after all
      preceding checks pass.

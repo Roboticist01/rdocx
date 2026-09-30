@@ -45,8 +45,9 @@ exception described below, and it delegates the release tag to `/release`.
 
 5. Audit for leftovers from an interrupted run. `git worktree list` and
    `git branch --list 'work/*'` against the run state. Report anything the state
-   does not know about. **Do not delete a worktree or branch.** Worker cleanup
-   belongs to `/close-sprint` after the integrated sprint is pushed.
+   does not know about. Remove only clean completed worker worktrees whose
+   handoff and integration commit are recorded. Keep their branches until
+   `/close-sprint` has pushed the integrated sprint.
 6. Report every F-ID that is not `completed`, with its state, its dependencies,
    and the skills its diff will trigger.
 
@@ -179,7 +180,8 @@ sprint closure. Keep the same sprint run state.
    run `/verify --full` or `/sprint-review` at this checkpoint.
 3. Apply the non-release documentation and delivery-record steps in section 7
    for that prerequisite. Mark it `completed`, clear its owner, and commit
-   those records. Keep the worker branch and worktree for final sprint review.
+   those records. Keep the worker branch for final sprint review. Remove its
+   clean worktree after recording the integration commit to save disk space.
 4. Return the phase to `implementation` and start the dependent wave. Record
    that full verification and sprint review are still due at final closure.
 
@@ -329,8 +331,8 @@ When the latest pass is clean:
    - Integrated F-IDs, and anything blocked or carried.
    - The verification evidence, especially the harness result.
    - Review passes and their verdicts.
-   - **Retained worker branches and worktrees**, which `/close-sprint` will
-     remove after the sprint merge and tag are pushed.
+   - **Retained worker branches and any remaining worktrees**, which
+     `/close-sprint` will clean after the sprint merge and tag are pushed.
    - The exact next command:
 
      ```text
@@ -344,8 +346,9 @@ When the latest pass is clean:
   integrated result.** That is precisely the failure `/sprint-review` exists to
   catch.
 - **Re-recording the hash baseline to make step 6 pass.**
-- **Deleting a worker branch or worktree.** `/close-sprint` owns cleanup after
-  the sprint is safely pushed.
+- **Deleting a worker branch before `/close-sprint`, or removing a dirty,
+  carried or unrelated worktree.** Only clean integrated worker worktrees may
+  be removed early.
 - **Running a confirmation pass after a clean review pass.**
 - **Asking the user to rerun `/run-sprint` solely to cross from a completed
   review pass into its remediation phase.**
