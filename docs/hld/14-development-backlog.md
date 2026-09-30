@@ -6102,12 +6102,13 @@ labelled and reviewed.
 
 ### F-X141, Word Python contribution wave (L)
 
-Review and integrate PRs 176, 187, 194, 201, 203 and 212 on the S76
-prefix. PR 203 follows 201. Preserve Python stub, binding and native API
-agreement while exposing the contributed Issue 168 checklist items. Complete
-the named section-default, native common-style and refreshable TOC behavior
-gaps beyond the PRs. Own a separate, reviewed hash baseline update after
-F-X140. The remaining Issue 168 checklist stays with F-X147.
+The Word Python binding, stub and native facade expose the contributed table,
+section, style, field, replacement, story, rendering and core-property APIs
+from PRs 176, 187, 194, 201, 203 and 212 on the S76 prefix. Section updates
+use layout defaults for missing partners, native new documents initialize
+common Word styles, and inserted TOCs rebuild after heading edits. A separate
+reviewed hash baseline records the output changes after F-X140. The remaining
+Issue 168 checklist stays with F-X147.
 **Depends on**: F-X139, F-X140.
 **Test gate**: integration. The contributed Python workflow, typing smoke
 and Rust parity cases pass after save and reopen.

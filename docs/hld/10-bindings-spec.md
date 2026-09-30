@@ -201,10 +201,10 @@ doc.save_pdf("out.pdf")                        # documented as an rdocx extensio
   limited ABI.
 - The bounded core enum inventory is pure-Python `IntEnum`:
   `WD_ALIGN_PARAGRAPH` and `WD_UNDERLINE` in `rdocx.enum.text`, plus
-  `WD_TABLE_ALIGNMENT` and `WD_CELL_VERTICAL_ALIGNMENT` in
-  `rdocx.enum.table`. All four are also top-level exports. Their checked
+  `WD_TABLE_ALIGNMENT`, `WD_CELL_VERTICAL_ALIGNMENT` and `WD_ROW_HEIGHT_RULE`
+  in `rdocx.enum.table`. All five are also top-level exports. Their checked
   integer literals cover the paragraph, run and table variants exposed by the
-  S33 facade, including `WD_ALIGN_PARAGRAPH.CENTER == 1`. Underline codes use a
+  facade, including `WD_ALIGN_PARAGRAPH.CENTER == 1`. Underline codes use a
   total binding-oriented facade value accessor rather than expanding the
   published exhaustive Rust `UnderlineStyle` enum.
 - The package layer owns `RdocxError(Exception)` as the base, with
@@ -236,6 +236,123 @@ revision once, stales every earlier structural handle, and publishes only the
 native staged result. Python index errors are rejected before mutation, while
 native topology and serialization failures use the existing `RdocxError`
 mapping. Removing the only direct row is rejected.
+
+`Table`, `Row` and `Cell` also bind the checked native formatting setters.
+`Table.set_borders(style, *, size, color)` sets every table edge and
+`set_border(edge, style, *, size, color)` sets one. The style is an
+`ST_Border` name from `none`, `single`, `thick`, `double`, `dotted`, `dashed`,
+`dotDash` and `wave`, the edge is `top`, `bottom`, `left`, `right`, `insideH`
+or `insideV`, the size is in eighths of a point and the color is six
+hexadecimal digits or `auto`. `border(edge)` reads a `(style, size, color)`
+tuple or `None`. `set_cell_margins` takes four keyword EMU lengths and
+`cell_margins` reads a `(top, right, bottom, left)` tuple of optional
+`Length` values. `grid_widths` reads and replaces every grid column, and
+`set_column_width(column, width)` changes one. Both keep the table width and
+every covering cell width in step. `Row.height` and `Row.height_rule` follow
+python-docx with `WD_ROW_HEIGHT_RULE.AT_LEAST` and `EXACTLY`. Assigning a
+height keeps an exact rule, and a rule needs a height to apply to. Unlike
+python-docx, a row whose `w:trHeight` has an `auto` rule or no value reads no
+height, and assigning one writes a minimum.
+`Row.cant_split` and `Row.is_header` are tri-state. `Cell.shading`,
+`Cell.border(edge)`, `Cell.set_border`, `Cell.margins` and `Cell.set_margins`
+are the same forms for one cell. These edits move no content, so they keep
+live handles valid and do not advance the revision. An unknown style, edge or
+rule raises `ValueError`, a value the native setter rejects raises
+`RdocxError`, and either way the document is unchanged.
+
+`Document.insert_table(index, rows, cols)` inserts a table at a direct body
+index, rejects an index past the end with `IndexError` before mutation, and
+returns a handle to the new table. Table handles count every table in
+document order, including those inside block content controls, so the handle
+is resolved from the inserted body position rather than assumed. Cells merge
+through the checked table operations, never through the unchecked cell span
+setter. `Table.set_cell_grid_span(row, col, span)` spans columns and absorbs
+or restores untouched empty cells, and `None` or `1` removes the span.
+`Table.set_cell_vertical_merge(row, col, merge)` writes `restart`, `continue`
+or `None` after validating the whole merge topology. Both take the possibly
+negative indexes `Table.cell` takes. A grid span that absorbs or restores
+cells advances the revision once, because later cell indexes move, while a
+vertical merge keeps live handles valid. `Cell.grid_span` reads the span with
+the python-docx default of 1 and `Cell.vertical_merge` reads the merge state.
+
+`Paragraph.text` is writable, in body and table-cell paragraphs, through the
+native `Paragraph::set_text`, which follows the python-docx setter. The
+paragraph keeps its properties and the attributes of `w:p`, while its runs,
+hyperlinks, fields, pictures, content controls, tracked changes and other
+inline children give way to one run without direct formatting. A tab becomes
+`w:tab`, and a line feed or a carriage return becomes `w:br`. Empty text or
+`None` leaves no run, as `add_paragraph("")` does. Unlike python-docx, comment
+ranges, bookmarks and permission ranges found anywhere in the paragraph are
+kept. Their starts move before the new run, their ends after it, and each
+comment reference follows in its own run, so a range over part of the old text
+covers the new text and no anchor loses its partner. Bookmarks are rebuilt from
+their ID and name, and permission markers keep their source XML. Two kinds of
+paragraph are rejected with `RdocxError`, since dropping part of them would
+unbalance the rest of the document. The first is a paragraph whose field
+characters and field code do not balance within it, such as any paragraph of a
+table of contents that spans several paragraphs. The second is a paragraph
+holding only one end of a tracked move range or a custom XML revision range.
+When both ends of such a range are in the paragraph, both are dropped with the
+tracked change they mark. A successful assignment advances the revision once
+and stales every earlier handle, the assigned paragraph included, as
+`Cell.text` does. A rejected one changes nothing.
+`Document::set_story_text` keeps its own behavior.
+
+`Paragraph.style` accepts a style ID the package defines or, as python-docx
+does, a style name, and writes the resolved ID. Among paragraph styles only,
+the ID is tried first, so a value read back always assigns the same style,
+then the exact name, then the name regardless of case, so `Heading 1` finds
+Word's `heading 1`. A character style therefore cannot hide a paragraph style
+of the same name. As in python-docx, a value that names no style raises
+`KeyError`, and one that names only a character, table or numbering style
+raises `ValueError`, both before any change. Assigning a style is a value-only
+mutation and keeps handles valid. The run style, table style and numbering
+setters still write their value unchecked. This changes behavior on documents
+that lack the style. On such a document `p.style = "Heading2"` used to store an
+undefined style, which `rebuild_toc` even read as a level-two heading, and now
+raises `KeyError`. A new `rdocx.Document()` defines `Heading2` and the other
+common Word styles that `Document::add_common_styles` adds.
+
+`Document.add_style(name, style_type="paragraph")` creates a paragraph,
+character or table style through the native `add_style`, as python-docx's
+`styles.add_style` does, and returns its `Style` snapshot. The ID keeps the
+ASCII letters, digits and hyphens of the name, as Word derives one, so `Q&A`
+gives `QA` and `Note (draft)` gives `Notedraft`. A name with none of them, such
+as a Japanese one, gets the first unused of `a`, `a0`, `a1` and so on. The
+exceptions python-docx makes for Word's lowercase built-in names `caption` and
+`heading 1` to `heading 9` still give `Caption` and `Heading1` to `Heading9`.
+The `style_id` keyword overrides the derived ID. `based_on` and `next_style`
+accept an ID or a name, resolved as `Paragraph.style` resolves one among the
+styles of the new style's type, or among paragraph styles for `next_style`. The
+formatting keywords are the font name, size, bold, italic and colour, and the
+spacing before and after, left, right and first-line indentation in EMU. They
+are written as the `Font` and `ParagraphFormat` setters write them on content,
+and a negative first-line indentation becomes a hanging one. A base or next
+style that no style names raises `KeyError`. A duplicate ID, a name another
+style has regardless of case, an unknown type, a base or next style of another
+type, and paragraph formatting on a character style raise `ValueError`. Both
+are raised before any change. `remove_style` and `set_default_style` resolve a
+style of any type the same way. `remove_style` returns `False` when no style
+has the ID or name, and `set_default_style` raises `KeyError` then and
+otherwise makes the style the default of its type. The native refusals, such as
+removing a style that content or another style names, raise `RdocxError`.
+Python does not bind the native `set_style`, whose property merge cannot remove
+the theme font or theme colour that a Word style carries, so existing styles
+keep their formatting.
+
+`ListLevel` is a constructible frozen value with a `format` checked against
+the standard `w:numFmt` names through `ListNumberFormat::from_name`, the level
+`text`, `start`, and `left_indent` and `hanging_indent` in EMU. Omitted values
+take the native defaults, `%1.` or a bullet glyph and half an inch of
+indentation per level with a quarter-inch hanging indent.
+`Document.add_numbering_definition(levels)` creates an abstract definition from
+one to nine levels and returns its ID. `add_numbering_instance(definition_id)`
+creates a `w:num` for it and returns the `numId` that `Paragraph.numbering`
+takes. `link_style_to_numbering(style, num_id, level)` links a paragraph style,
+given by ID or name, to one level through the native method of that name, so
+every paragraph of that style is numbered. Native checks raise `RdocxError`
+and publish nothing. Style and numbering authoring changes no content, so the
+revision and every handle stay valid.
 
 The Python `Document` also exposes the current native comparison, main-body
 comment, deterministic layout, TOC rebuild, revision, counted replacement, and
@@ -448,8 +565,11 @@ style links but do not mutate them independently.
 `Document::link_style_to_numbering` and
 `Document::unlink_style_from_numbering` are additive pre-1.0 native Rust APIs.
 They atomically mutate the paragraph style and effective numbering level for
-one exact style, `numId`, and level tuple. Python, WASM, and CLI bindings gain
-no numbering graph authoring surface.
+one exact style, `numId`, and level tuple. Python binds definition and instance
+creation and the style link, as described for the Python `Document`. WASM and
+CLI bindings gain no numbering graph authoring surface.
+`ListNumberFormat::from_name` reads a `w:numFmt` name, and a name outside the
+standard set is `Other`.
 
 F-248 also adds public fields to the pre-1.0 native Rust projections.
 `ResolvedNumbering` exposes `number_current`, `number_level`,
@@ -502,8 +622,30 @@ profiles select package identity without manufacturing executable content.
 Python, WASM, and CLI construction continues through `Document::new()` and
 therefore receives the compatible DOCX default without a new selector surface.
 
+The minimal profile defines `Normal` and `Heading1`. The Word-compatible
+profile includes the common Word styles at construction.
+`Document::add_common_styles` adds the Word built-in styles most documents use
+and python-docx's default template defines: `heading 2` to `heading 9`,
+`Title`, `Subtitle`, `No Spacing`, `Quote`, `List Paragraph`, `caption` and
+`Table Grid`. Each has the ID, name, UI priority, visibility flags and
+paragraph and run formatting Word writes for it under the Office theme, with
+theme colours written as literal values as in the default `Heading1`. None
+names a font. `Table Grid` has no `Normal Table` base, since a new document
+defines none, so it carries that base's cell margins itself, 108 twips left and
+right. Without them Word gives its cells no side padding and the text touches
+the grid. A style whose ID, or whose name regardless of case, the document
+already defines is skipped, and the call returns how many it added. None is a
+default style, so content that names none of them lays out as before. A
+document without a `Normal` paragraph style is rejected unchanged.
+`Document::new()` and a new Python `Document()` both expose these styles, so
+python-docx code that names them finds them. A Python document opened from a
+file or bytes keeps exactly the styles it has. WASM and CLI construction uses
+the same Word-compatible native default.
+
 Native Rust re-exports `StyleType`, `TableStyleRegion` and
-`ConditionalTableStyle`. `StyleBuilder` authors paragraph, character, and table
+`ConditionalTableStyle`, and `CT_PPr`, `CT_RPr` and `HalfPoint`, the property
+and unit types `StyleBuilder` takes, so a caller of the facade alone can give a
+style its formatting. `StyleBuilder` authors paragraph, character, and table
 styles with inheritance, reciprocal links, next styles, UI flags, base
 properties including a table style's own row and cell properties, and
 conditional table regions carrying all five property layers. `add_style` is
@@ -526,8 +668,9 @@ bitmask together, `Table::clear_look` removes the selection, and the checked
 columns. `Paragraph::set_conditional_formatting` and
 `Paragraph::conditional_formatting` select conditional regions through the same
 `TableConditionalFormatting` shape a row and a cell already use.
-Python, WASM, and CLI retain style package and render behavior without new
-style mutation entry points.
+WASM and CLI retain style package and render behavior without new style
+mutation entry points. Python gains style creation, removal and default
+selection, as described for the Python `Document`.
 
 Native Rust re-exports `CT_OfficeStyleSheet` and adds the concrete
 `FontDefinition`, `EmbeddedFont`, `EmbeddedFontKind`, and
@@ -550,6 +693,24 @@ maps absent or unmodelled producer forms to `None`. Mutating a duplicate or
 malformed form reports the existing XML error without changing package bytes.
 This is additive pre-1.0 native and Python API. WASM and CLI do not gain new
 entry points and otherwise receive preserved package behavior.
+
+Python exposes the core properties as `Document.core_properties`, a
+`CoreProperties` handle with the python-docx attribute names `author`,
+`category`, `comments`, `content_status`, `created`, `identifier`, `keywords`,
+`language`, `last_modified_by`, `last_printed`, `modified`, `revision`,
+`subject`, `title` and `version`. `author` maps to `dc:creator` and `comments`
+to `dc:description`. Text properties read as an empty string when absent and
+accept at most 255 characters, as in python-docx. `revision` reads as an
+integer, zero when absent or unreadable, and accepts only a positive integer.
+The three dates read as timezone-aware UTC `datetime` values, parsed from
+W3CDTF as python-docx parses them, and accept a `datetime`, a naive one being
+taken as UTC. A date that cannot be read, has an offset of a day or more, or
+leaves the `datetime` range in UTC reads as `None` rather than raising. Assigning `None` or empty text removes a property. Each
+assignment replaces the native model through `Document::set_core_properties`,
+which creates `docProps/core.xml` with its package relationship and content
+type when the document has none. It changes no content, so the revision and
+every handle stay valid. A value of the wrong type raises `TypeError` and an
+out-of-range one `ValueError`, both before any change.
 
 Native Word mutations share one private document identifier owner. Existing
 method signatures stay unchanged, but fallible operations can report imported,
@@ -604,7 +765,10 @@ unchanged owner scope. The Python `Document` binds direct-body
 sources must be live direct children of the same Python document. Coordinates
 are zero-based insertion boundaries, and a popped `ContentFragment` exposes
 only its typed kind and remains reusable because insertion clones the native
-value. `try_replace_text` and `replace_all_regex` return exact native counts.
+value. `pop_content` also accepts a `StoryItem` naming a direct child of any
+story, and `insert_content` accepts a `StoryItem` for the boundary before that
+item or a `Story` for the end of that story, so a paragraph authored in the
+body can move into a header or footer. `try_replace_text` and `replace_all_regex` return exact native counts.
 Successful structural mutations stale handles once, successful replacements
 stale them only when their count is nonzero, and every rejected operation
 leaves package bytes and handle revisions unchanged. The native and Python
@@ -648,6 +812,31 @@ existing `LinkInfo` values after checked owner-scoped resolution.
 source position. Python exposes `Document.add_hyperlink_to_story` for a `Story`
 snapshot, resolved the same way as a story item, and `Paragraph.add_hyperlink`,
 which adds a main-document link relationship and returns the new hyperlink run.
+`Document::set_hyperlink_url` and `remove_hyperlink` edit the link at one
+position of a story's `story_links` list in any story, through the relationship
+set of that story's part. A relationship that only this link references is
+retargeted in place. A shared one stays with its other references and the link
+gets a new relationship. An anchor link becomes external and loses its anchor.
+Removal keeps the link's runs in place and clears the built-in Hyperlink and
+FollowedHyperlink character styles, as Word's Remove Hyperlink does. Both remove
+a hyperlink relationship that nothing references any more. Only links that
+`story_links` lists are in reach. An empty `w:hyperlink`, a link inside
+`w:fldSimple`, a link in a text box inside `mc:AlternateContent`, and a
+HYPERLINK field are not. Python exposes
+`Document.set_hyperlink_url` and `Document.remove_hyperlink` for a `Hyperlink`
+record. A snapshot from `Document.hyperlinks` resolves at its recorded position
+only while its story keeps the same link paths and texts and the link keeps
+its fields, and a record built from the public fields resolves only when
+exactly one link matches. Neither call moves content, so live handles stay
+valid.
+`Document::set_picture_size` resizes every main-document `pic:pic` drawing
+whose blip names one image relationship. It writes `wp:extent` and the `a:ext`
+of `pic:spPr/a:xfrm`, scales `wp:effectExtent` with the extent on each axis,
+and leaves anchor positions alone. It rejects a zero size. A VML `w:pict`
+picture on the relationship is not resized, the relationship of an SVG blip
+extension is not matched, and a picture inside a group is not resized. Python
+exposes `Document.set_picture_size` with EMU sizes, and it keeps live handles
+valid too.
 
 Native Rust also exposes concrete borrowed `SectionRef` and `Section` handles.
 Each handle reports its zero-based document ordinal, schema-final ownership,
@@ -656,10 +845,13 @@ properties. Both handles read page size, orientation, margins, gutter,
 equal-width columns, page-number start, header and footer distance, title-page
 state, and break type. The mutable handle adds checked setters for every value,
 normalizes page dimensions when setting orientation, and rejects invalid or
-out-of-range inputs before changing any field. `Document` adds `section_count`,
-`sections`, total `section` and `section_mut` lookup, and fallible staged
-`insert_section` and `remove_section` operations. Its older final-section
-geometry convenience setters remain infallible and unchecked.
+out-of-range inputs before changing any field. The margin, gutter, and header
+and footer distance setters fill every other `w:pgMar` value the section lacks
+with the default that layout already assumes for it, so the written element
+carries all seven attributes `CT_PageMar` requires. `Document` adds
+`section_count`, `sections`, total `section` and `section_mut` lookup, and
+fallible staged `insert_section` and `remove_section` operations. Its older
+final-section geometry convenience setters remain infallible and unchecked.
 
 Native Rust also exposes non-exhaustive `HeaderFooterKind`, the existing
 `HdrFtrType`, and owned `SectionStory`. `Document::section_story` resolves one
@@ -670,18 +862,48 @@ section and inherited state. `create_section_story`, `link_section_story`,
 addressed by the returned `StoryId` through the common story API. The facade
 also exposes `even_and_odd_headers` and `set_even_and_odd_headers`, while first
 story creation enables section `titlePg`. These are additive pre-1.0 native
-Rust APIs. Python exposes immutable inspection snapshots, and only the default
-header and footer text setters `Document.set_header` and `Document.set_footer`
-as mutation entry points. WASM and CLI gain no corresponding binding surface.
+Rust APIs. Python exposes immutable inspection snapshots, the default header
+and footer text setters `Document.set_header` and `Document.set_footer`, and
+`Document.create_section_story`, `link_section_story`, and
+`unlink_section_story`. These take a section index, a `header` or `footer`
+kind, and a `default`, `first`, or `even` variant, the names
+`HeaderFooterVariant` reports, and return the resulting `Story`. An unknown
+name raises `ValueError` and a section index out of range raises `IndexError`,
+both before any change. The native operations publish a reopened package, so
+a successful call advances the revision once, even when the variant already
+had its own story. Rich story content is authored with the typed body
+API and moved with `pop_content` and `insert_content`, which accept story
+coordinates. WASM and CLI gain no corresponding binding surface.
 
 `CT_SectPr` adds typed page-number start and raw child-position state, while
 `PageFrame` adds `displayed_page_number` beside its physical `page_number`.
 These model and handle additions are additive APIs on the published pre-1.0
 Rust crates, though exhaustive struct literals can require new fields. The
 published `CT_SectPr.header_refs` and `footer_refs` types remain
-`Vec<HdrFtrRef>` with the complete native vector surface. Python, WASM, and CLI
-gain no section mutation entry point and retain their existing package and
-render behavior.
+`Vec<HdrFtrRef>` with the complete native vector surface. WASM and CLI gain no
+section mutation entry point and retain their existing package and render
+behavior.
+
+Python `Section` values stay frozen snapshots. `Document.update_section(index,
+**values)` edits one section through the checked native setters and returns
+its new snapshot. The keywords are the snapshot's own field names, from
+`orientation` and `page_width` to `break_type`, with EMU lengths and the
+`ST_PageOrientation` and `ST_SectionType` spellings. The native setters write
+page size, the four margins, equal-width columns and the header and footer
+distances as pairs or quartets, so a value given alone keeps its partners as
+the section already has them. A missing partner takes the native layout
+default, including Letter page size, one-inch margins, half-inch header and
+footer distances, and 720 twip column spacing. Column partners come from the
+equal-width view the snapshot reports. A one-sided column edit on explicit
+unequal-width tracks raises `ValueError` rather than rewriting those tracks.
+Page size applies before orientation, which then normalizes
+the dimensions as the native setter does.
+The whole call is atomic: a name or partner problem raises before any change,
+and a value a native setter rejects restores the section. Section edits move
+no content, so they keep live handles valid and do not advance the revision.
+`Document.insert_section(index)` and `remove_section(index)` call the staged
+native operations, reject an out-of-range index with `IndexError`, and
+advance the revision once, because they add or merge body content.
 
 Python `Document.sections`, `styles`, `stories`, `story_items`,
 `header_footer_variants`, and `hyperlinks` return tuples of frozen typed
@@ -712,6 +934,17 @@ comments part. `rdocx-cli toc rebuild` publishes the validated result to an
 explicit output and reports the counts through a schema-1 main-story record.
 Python exposes the same operation and returns diagnostics as an immutable tuple
 with a derived `diagnostic_count` property. WASM does not expose this operation.
+
+`Document::insert_toc(index, max_level)` writes a refreshable table of contents at
+a direct body index: a title paragraph and one entry per `Heading1` to
+`HeadingN` paragraph, each linked to a new `_TocN` bookmark on its heading. It
+writes a dynamic `TOC` field around the entry cache, so `rebuild_toc` updates
+it after heading changes. Native insertion is staged and returns an error
+without changing the document if bookmark allocation fails. Python
+`Document.insert_toc(index, max_level=3)` binds it. An index past the body end
+raises `IndexError` and a level outside 1 to 9 raises `ValueError`, both before
+any change. Native insertion errors raise `RdocxError`. Success
+advances the revision once.
 
 The native facade re-exports the concrete OfficeMath tree from `rdocx-oxml`.
 `Paragraph::equations`, `Paragraph::equation`, and their read-only equivalents
@@ -937,6 +1170,27 @@ A story edit of such a text box changes the Choice only, see
 `03-architecture.md`. `redact_text` removes the literal from every copy and
 still counts each copy.
 
+`Document::try_replace_all_expected` takes ordered `(placeholder, replacement,
+expected)` pairs and returns the count of each pair. Each pair runs over the
+whole staged document after the pairs before it, so a later pair sees what an
+earlier one wrote. When a pair gives an expected count and finds another, the
+document stays unchanged and the inner result is a `ReplacementCountMismatch`
+naming the pair index, placeholder, expected count, and found count. The outer
+error is a staging failure. The legacy `replace_all` keeps its unordered map
+and panicking preflight.
+
+Python `Document.try_replace_text(placeholder, replacement, *, expect=None)`
+and `Document.replace_all(pairs)` share one contract with the rpptx binding.
+`replace_all` takes `(old, new)` or `(old, new, expected)` tuples and returns a
+tuple of counts. A count that differs from `expect` or from a pair's expected
+count raises `ReplacementCountError`, a subclass of `RdocxError` with
+`expected`, `found`, and `index` attributes, and leaves the package bytes and
+live handles unchanged. `index` names the failing pair of a batch and is
+`None` for `try_replace_text`, whose message is the one `rdocx replace
+--expect` prints. The error pickles. Zero matches without an expected count
+return zero rather than raising. A replacement advances the revision once when
+it replaced something. WASM gains no corresponding method.
+
 The native presentation facade provides the same staged boundary through
 `Presentation::try_replace_text`, with exact counts across slides and speaker
 notes. `rpptx replace` refuses an existing destination, including its input,
@@ -956,8 +1210,12 @@ Native Rust callers can request `PdfA2b` or `PdfA3b` through
 `Document::to_pdfa_deterministic` and
 `Presentation::to_pdfa_deterministic`. Both methods return the PDF backend's
 typed conformance error through the facade error enum. These methods are
-additive on the native pre-1.0 facades. Python, WASM, and CLI method names and
-dependency selections remain unchanged.
+additive on the native pre-1.0 facades. `rdocx` re-exports `PdfConformance`, so
+a caller can name the profile without depending on `oxml-pdf`. Python
+`Document.to_pdfa_deterministic(profile="pdfa-2b")` accepts `pdfa-2b` or
+`pdfa-3b`, raises `ValueError` for any other name, releases the GIL, and maps a
+conformance failure to `LayoutError`. WASM and CLI method names and dependency
+selections remain unchanged.
 
 The pre-1.0 shared layout API carries semantic types, `MarkedContent`, and
 informative `Figure` variants through existing non-exhaustive enums. The image
@@ -1026,10 +1284,10 @@ cell width consistent. A cell with `gridSpan` receives the sum of its covered
 grid columns, and row-level leading and trailing omissions constrain coverage.
 Negative or zero column widths, invalid spans or coverage, and overflowing
 totals are rejected without mutation. The earlier unchecked compatibility
-setters remain available. These are additive pre-1.0 native APIs. Python,
-WASM, and CLI do not gain new table-property methods, but their owned
-`rdocx::Document` remains package-preserving when native code uses the new
-operations.
+setters remain available. These are additive pre-1.0 native APIs. WASM and CLI
+do not gain new table-property methods, and Python binds them as described
+under the Python API shape. Every binding's owned `rdocx::Document` remains
+package-preserving when native code uses the new operations.
 
 Native rows and cells also expose the additive `RowHeight`, `CellBorderEdge`,
 `CellTextDirection`, and `TableConditionalFormatting` values. Row handles have
@@ -1044,8 +1302,9 @@ take checked row and cell indexes. Grid omissions reconcile only untouched
 empty edge cells. Horizontal spans consume or restore only untouched empty
 cells. Vertical continuations require an equal grid range in the immediately
 preceding row. Each operation validates a cloned complete table before
-publication. These are additive pre-1.0 native APIs. Python, WASM, and CLI gain
-no row or cell methods in this story.
+publication. These are additive pre-1.0 native APIs. WASM and CLI gain no row
+or cell methods. Python binds the checked row and cell setters and the span
+and vertical merge operations, as described under the Python API shape.
 
 Row cloning and removal depend on package-wide identities, so the additive
 native operations live on `Document` as `clone_table_row(table, source,
@@ -1128,9 +1387,14 @@ accepted-view boundaries of the range, which are the run indexes
 boundaries, rejects duplicate or producer-reserved names, and returns the
 allocated nonnegative id. The shared recursive `Field` model retains the
 complete `REF` and `PAGEREF` instruction, target argument, cached display,
-dirty state, source form, and producer XML. These additions are native Rust
-APIs only. Python, WASM, and CLI consumers keep their existing surface and
-preserve the typed content when they save the owned document.
+dirty state, source form, and producer XML. Python `Document.bookmarks`
+returns a tuple of frozen `Bookmark` snapshots with the same fields, both
+ranges as `RunRange` values or `None`. `Document.add_bookmark(name, range)`
+returns the id. Its markers sit between runs, so it keeps live handles valid
+and does not advance the revision. A rejected name or range raises
+`RdocxError` and leaves the document unchanged. WASM and CLI consumers keep
+their existing surface and preserve the typed content when they save the owned
+document.
 
 Native Word callers evaluate fields with `Document::evaluate_fields` and an
 explicit `FieldEvaluationContext`. `FieldDateTime` supplies deterministic civil
@@ -1277,8 +1541,16 @@ relationship already created by `Document::embed_image`. `add_field` rejects
 an instruction without a field name before mutation. `add_symbol` stores one
 Unicode scalar as text. `set_text` remains the explicit replacement operation,
 while formatting setters retain the complete ordered content sequence. These
-methods are additive on the pre-1.0 native Rust facade. Python, WASM, and CLI
-gain no implicit surface.
+methods are additive on the pre-1.0 native Rust facade. Python `Run` binds
+`add_tab()` and `add_field(instruction, cached_result="")`. Both append inside
+the run through the same accepted run path as the text setter, so no run index
+moves. A tab keeps live handles valid. A field becomes a story item of its
+own, which moves the index path of every later `StoryItem`, so `add_field`
+advances the revision once. An instruction without a field name raises
+`RdocxError` and leaves the run and the revision unchanged. The field
+serializes as a simple field after the run's earlier content, and
+`update_layout_backed_fields` fills a `PAGE`, `NUMPAGES`, or `PAGEREF` cache.
+WASM and CLI gain no implicit surface.
 
 `add_symbol` keeps that meaning. `add_symbol_char(font, char_code)` is the
 separate method that produces `w:sym`, and `add_special_character` produces
@@ -1409,7 +1681,16 @@ the native default, and `word` or `character` marks only the changed words or
 characters. `--ignore-story` is
 repeatable and takes the Python `Story.kind` names, where `body` selects the
 main story. An unknown granularity or story name is a usage error, and a
-duplicated story keeps the native rejection. Python and WASM preserve
+duplicated story keeps the native rejection. Python
+`Document.compare` takes the `ComparisonOptions` fields as keyword-only
+arguments. `granularity` is `"run"`, `"word"`, or `"character"` and defaults to
+the native `"run"`. `ignore_formatting`, `ignore_whitespace`, `ignore_fields`,
+and `ignore_comments` default to false. `ignored_stories` takes `Story.kind`
+names, where `body` selects the main story and `table_cell` is not a comparison
+category. An unknown granularity or story name raises `RdocxError` before the
+document changes, and a duplicated story keeps the native rejection.
+`ignore_comments` also leaves comment anchors to the original, while ignoring
+the `comment` story excludes only the comments part. Python and WASM preserve
 comparison output when they save their owned document.
 
 Native Word rendering exposes `rdocx::RevisionView` and the concrete
@@ -1427,14 +1708,29 @@ keyword-only `render_pages` arguments, keeps zero-based page indices, releases
 the GIL for rendering, returns `list[bytes]` for PNG or JPEG, and returns one
 `bytes` value for TIFF.
 
+Python `Document.to_pdf(*, fonts=None, font_dir=None)` keeps the plain call on
+`Document::to_pdf`. With `fonts`, a sequence of `(family, bytes)` pairs, or
+`font_dir`, a directory whose `.ttf`, `.otf`, and `.ttc` files
+`Document::load_fonts_from_dir` labels by file name, it calls
+`Document::to_pdf_with_fonts` with the given fonts first, as
+`rdocx convert --font-dir` does. That call lays out with the caller fonts only,
+so a family they do not provide, even through the automatic label aliases and
+metric-compatible names, raises `LayoutError`. The native loader reads a
+missing directory as an empty one, so the binding raises `FileNotFoundError`
+for a missing `font_dir` and `NotADirectoryError` for a file, before any
+layout. SVG and raster output take no caller fonts.
+
 Native Word SVG adds `SvgDiagnostic`, `SvgRenderResult`, and four additive
 `Document` methods. `render_page_to_svg` and
 `render_page_to_svg_with_options` reuse normal layout. Their deterministic
 counterparts reuse bundled-font-only layout. Every method takes a zero-based
 page index and returns `None` beyond the laid-out document. The result contains
 self-contained searchable SVG plus layout-first, path-specific lowering
-diagnostics. Python, WASM, CLI, Presentation, and public `oxml-pdf` APIs do not
-gain SVG methods or values.
+diagnostics. Python `Document.render_page_to_svg(page_index)` binds the normal
+layout method, releases the GIL, and returns a frozen `SvgRenderResult` with the
+SVG text and a tuple of frozen `SvgDiagnostic` values, or `None` beyond the
+last page. WASM, CLI, Presentation, and public `oxml-pdf` APIs do not gain SVG
+methods or values.
 
 Native renderers obtain the complete positioned output through
 `Document::layout` and `Document::layout_with_options`. Accepted calls return a

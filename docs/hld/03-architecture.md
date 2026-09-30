@@ -1208,6 +1208,9 @@ default. `WordCreationProfile` separates package completeness from the four
 or DOTM while retaining an explicit compact package option. The compatible
 profile owns its main document, styles, settings, theme, font table, core
 properties, and application properties without loading a template.
+Fresh Word-compatible documents initialize the common Word paragraph and table
+styles in the native facade. Minimal-profile documents retain the compact
+Normal and Heading1 set.
 
 `Document` keeps relationship-resolved typed theme and font-table state beside
 their resolved part names and dirty flags. The native facade re-exports the
@@ -1424,8 +1427,9 @@ otherwise owns one complete `Document`. It never reaches into
 deterministic variants expose one zero-based page as self-contained searchable
 SVG. Out-of-range pages return `None`. `SvgRenderResult` carries the SVG and
 ordered `SvgDiagnostic` values, with layout diagnostics before recursive
-lowering diagnostics. These additive methods are native Rust only. Python,
-WASM, CLI, Presentation, and the public `oxml-pdf` surface remain unchanged.
+lowering diagnostics. Python binds the normal-layout method as
+`Document.render_page_to_svg`. WASM, CLI, Presentation, and the public
+`oxml-pdf` surface remain unchanged.
 
 `Document::from_html` and `Document::open_html` are additive native facade
 constructors. They return the converted document with stable path-aware

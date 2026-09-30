@@ -7997,7 +7997,7 @@ const F124_ARTIFACT_SHA256: &str =
 const F116_ARTIFACT_SHA256: &str =
     "d36da6e8849eabd4487d2572baea19c3716ee7d0fe03aaa4714a28ce3c41de4f";
 const F116_CURRENT_ARTIFACT_SHA256: &str =
-    "8b2c9a2b3df96c7b8470b8ef4154cb13acdd7feb65511d2b98ecc0491b37af49";
+    "4d469759c0539f1c7947389dc914298d10c984ad204becad26ea700a8bbd0f4b";
 const F116_FINAL_TITLES: [&str; 10] = [
     "F-116 slide 10",
     "F-116 slide 02",
@@ -12536,6 +12536,15 @@ fn ten_slide_write_api_deck_validates_and_reopens() {
     assert_f116_deck_structure(&reopened);
 
     let package = open_opc(&bytes, "F-116 ten-slide candidate");
+    let core = package
+        .get_part("/docProps/core.xml")
+        .expect("F-116 core properties part");
+    assert!(
+        std::str::from_utf8(core)
+            .expect("UTF-8 core properties")
+            .contains("<cp:revision>"),
+        "the updated core-property model must preserve the template revision"
+    );
     let presentation_part = package.main_document_part().unwrap();
     let slide_relationships = package
         .get_part_rels(&presentation_part)

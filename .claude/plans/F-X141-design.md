@@ -1,6 +1,6 @@
 # F-X141, Word Python contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S77
 **Size**: L
 **Depends on**: F-X139, F-X140
@@ -96,23 +96,24 @@ F-X147.
 ## Hash harness
 
 F-X141 owns a second, separately labelled baseline update after F-X140.
-Expected deltas include `word/styles.xml` for all seven samples and
-`word/document.xml` for the three samples that insert TOCs:
-`feature_showcase`, `proposal` and `report`. Rendering keys may change where
-those samples use newly defined headings. Measure and revise this plan with
-the exact key set before recording the baseline. PR 201 also changes a
-bundled presentation template SHA expectation, which must be reviewed
-separately.
+The measured delta is exactly 16 keys: `word/styles.xml` for all seven
+samples, plus `word/document.xml`, `pdf/pages` and `pdf/bytes` for each of
+`feature_showcase`, `proposal` and `report`. The common style definitions
+change every fresh Word styles part. The three samples that insert a TOC gain
+dynamic field markers and an updated PDF page-content stream. All PNG and PDF
+resource keys remain unchanged. Record these keys in a separate labelled
+baseline commit. PR 201 also changes a bundled presentation template SHA
+expectation, which must be reviewed separately.
 
 ## Implementation checklist
 
-- [ ] Review incremental PR diffs and exclude inherited commits.
-- [ ] Reconcile binding, stub, native and test overlap without losing APIs.
-- [ ] Run the contributed Issue 168 workflow after save and reopen.
-- [ ] Complete section defaults, native common styles and refreshable TOC
+- [x] Review incremental PR diffs and exclude inherited commits.
+- [x] Reconcile binding, stub, native and test overlap without losing APIs.
+- [x] Run the contributed Issue 168 workflow after save and reopen.
+- [x] Complete section defaults, native common styles and refreshable TOC
   behavior with parity tests and a distinct reviewed baseline update.
-- [ ] Run typing, native parity, rendering and risk checks.
-- [ ] Run microscope to zero defects and smells.
+- [x] Run typing, native parity, rendering and risk checks.
+- [x] Run microscope to zero defects and smells.
 
 ## Open questions
 

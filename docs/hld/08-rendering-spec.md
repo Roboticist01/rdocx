@@ -1776,6 +1776,11 @@ projection is required, then a second pass resolves both forward and backward
 targets. Facade numbering layout is created lazily only when a REF or TOC
 consumer requires it.
 
+Native TOC insertion writes a dynamic field around its generated entry cache.
+The inserted field therefore uses the same rebuild and pagination path as a
+producer-authored dynamic TOC after headings change. The generated right tab
+uses the section text width, falling back to the Letter default when the width
+is absent, non-positive, or outside the supported twip range.
 Table-of-contents rebuild creates its provisional PAGEREF fields before
 calling the deterministic bundled-font layout. The existing post-pagination
 pass remains the only page-target authority. Rebuild reads those displayed
