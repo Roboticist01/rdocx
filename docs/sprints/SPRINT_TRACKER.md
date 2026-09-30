@@ -500,6 +500,7 @@ defended.
 | F-X136 | S75 | L | 5 | 1 | 2026-09-26 | Split ordinary Word table rows across page boundaries, respected cantSplit and exact heights, and removed the source-built footer-only page |
 | F-X137 | S76 | L | 5 | 1 | 2026-09-30 | Integrated five package and CLI safety PRs with atomic saves, safe output refusal, namespace binding and package class selection |
 | F-X138 | S76 | L | 5 | 1 | 2026-09-30 | Integrated eight Word story PRs with direct body coordinates, comment anchoring, content control traversal and source-preserving replacement |
+| F-X139 | S76 | L | 5 | 1 | 2026-09-30 | Integrated six Word identity and comparison PRs with producer attribute preservation, marker ordering, comparison options and CLI comment dates |
 
 ## Velocity
 

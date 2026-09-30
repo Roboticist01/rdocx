@@ -16438,3 +16438,23 @@ unsupported ownership and geometry cases rather than duplicating content.
 **Hash harness.** Unchanged, 49 of 49 at the integrated checkpoint.
 
 **Notes for future sessions.** F-X139 builds on these story and run coordinates. The broader Issue 160 and 172 matrices remain assigned to S78. Retain `work/f-x138-codex` and its worktree through sprint closure.
+
+### F-X139, Word identity and comparison contribution wave
+
+**Sprint.** S76
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated PRs 183, 184, 190, 193, 198 and 205. TOC and text-box edits accept inherited Word prefixes and retain producer paragraph attributes. Duplicated rows and paragraphs receive safe identities. Comparison ignores identity-only differences, retains marker order, reports unsupported content-control metadata as diagnostics, and exposes granular options through the CLI. CLI comment mutations accept optional dates.
+
+**Non-obvious choices.** Replayed unique behavior commits and omitted their measurement-only tails, then reconciled comparison and text-box edits with F-X138's story traversal and replacement semantics. The CLI plain-text documentation now reflects F-X138's content-control and nested-table traversal. Package archive measurements were re-recorded after the combined edits.
+
+**Deviations from the design plan.** Added `docs/hld/12-testing-strategy.md` to HLD impact for the accepted PR 193 test intent and recorded the layout cache risk rider. No hash baseline change was needed.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md`, `docs/hld/10-bindings-spec.md`, and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The Issue 159 identity-only content-control regression failed on the claimed base and passed after implementation. Focused Rust tests, 77 integrated Python tests, warnings-denied workspace Clippy and rustdoc, workspace tests, 105 no-default-features layout tests, both WASM targets, 131 policy tests with two expected skips, 27 README pages, the clean 22-crate publication dry run, the 10 MiB archive ceiling, and `cargo deny` passed. Microscope pass 1 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged, 49 of 49 at the integrated S76 gate.
+
+**Notes for future sessions.** The broader Issue 159 and 161 acceptance matrices remain assigned to S78. Retain `work/f-x139-codex` and its worktree through sprint closure.
