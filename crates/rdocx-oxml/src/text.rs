@@ -22,7 +22,7 @@ use crate::table::{CT_Row, CT_Tbl, CT_Tc, CellContent};
 static NEXT_FIELD_SOURCE_ID: AtomicU64 = AtomicU64::new(1);
 
 const ROOT_ATTRIBUTES_ELEMENT: &[u8] = b"rdocxRootAttributes";
-const ROOT_ATTRIBUTES_POSITION: usize = usize::MAX;
+pub(crate) const ROOT_ATTRIBUTES_POSITION: usize = usize::MAX;
 const W14_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordml";
 
 fn namespace_declaration(name: &[u8]) -> bool {
@@ -53,7 +53,19 @@ pub(crate) fn capture_root_attribute_record(
     start: &BytesStart<'_>,
     prefixes: &[String],
 ) -> Result<Option<Vec<u8>>> {
-    let bindings = namespace_bindings(prefixes);
+    let mut bindings = namespace_bindings(prefixes);
+    // A plain scope entry names a Word prefix. `word_prefixes_at` adds one
+    // only beside its binding, but the default scope of the public `from_xml`
+    // entrypoints, `CT_P::from_xml` among them, names `w` by convention and
+    // binds nothing. A caller that parses a paragraph cut out of its part in
+    // that scope, as the text-box replacement and template walkers do, reaches
+    // this capture with it, so the Word prefix resolves here instead of
+    // failing on the first `w:rsidR`. An explicit binding always wins.
+    for prefix in prefixes {
+        if !prefix.starts_with('\0') && !bindings.iter().any(|(bound, _)| bound == prefix) {
+            bindings.push((prefix.clone(), crate::namespace::W_NS.to_owned()));
+        }
+    }
     let mut attributes = Vec::new();
     let mut expanded = HashSet::new();
     let mut used_prefixes = Vec::new();
@@ -172,6 +184,138 @@ pub(crate) fn push_root_attribute_record(
         let value =
             attribute.decoded_and_normalized_value(XmlVersion::Implicit1_0, element.decoder())?;
         target.push_attribute((name, value.as_ref()));
+    }
+    Ok(())
+}
+
+/// Remove `w14:paraId` and `w14:textId` from the retained start-tag
+/// attributes of a paragraph or table row, given its `extra_xml`.
+///
+/// A copy must not share them with its source, and Word assigns new ones to
+/// an element that has none. Every other retained attribute stays, with the
+/// declarations its prefix needs.
+#[doc(hidden)]
+pub fn drop_w14_paragraph_identities(extra_xml: &mut Vec<(usize, Vec<u8>)>) -> Result<()> {
+    let mut index = 0;
+    while index < extra_xml.len() {
+        let (position, raw) = &extra_xml[index];
+        if *position == ROOT_ATTRIBUTES_POSITION && is_root_attribute_record(raw) {
+            match root_attribute_record_without_w14_identities(raw)? {
+                Some(record) => extra_xml[index].1 = record,
+                None => {
+                    extra_xml.remove(index);
+                    continue;
+                }
+            }
+        }
+        index += 1;
+    }
+    Ok(())
+}
+
+/// Return the record without its w14 identities, or `None` when nothing else
+/// is left in it.
+fn root_attribute_record_without_w14_identities(raw: &[u8]) -> Result<Option<Vec<u8>>> {
+    let mut reader = NsReader::from_reader(raw);
+    let mut buffer = Vec::new();
+    let element = loop {
+        match reader.read_resolved_event_into(&mut buffer)? {
+            (_, Event::Empty(element)) if element.name().as_ref() == ROOT_ATTRIBUTES_ELEMENT => {
+                break element.into_owned();
+            }
+            (_, Event::Eof) => {
+                return Err(OxmlError::InvalidValue(
+                    "invalid retained root-attribute record".to_owned(),
+                ));
+            }
+            _ => {}
+        }
+        buffer.clear();
+    };
+    let mut dropped = false;
+    let mut attributes = Vec::new();
+    let mut declarations = Vec::new();
+    for attribute in element.attributes() {
+        let attribute = attribute?;
+        let name = std::str::from_utf8(attribute.key.as_ref())?.to_owned();
+        let value = attribute
+            .decoded_and_normalized_value(XmlVersion::Implicit1_0, element.decoder())?
+            .into_owned();
+        if namespace_declaration(name.as_bytes()) {
+            declarations.push((name, value));
+            continue;
+        }
+        let (namespace, local) = reader.resolver().resolve_attribute(attribute.key);
+        if matches!(namespace, ResolveResult::Bound(Namespace(uri)) if uri == W14_NS.as_bytes())
+            && matches!(local.as_ref(), b"paraId" | b"textId")
+        {
+            dropped = true;
+            continue;
+        }
+        attributes.push((name, value));
+    }
+    if !dropped {
+        return Ok(Some(raw.to_vec()));
+    }
+    if attributes.is_empty() {
+        return Ok(None);
+    }
+    let mut record = BytesStart::new(std::str::from_utf8(ROOT_ATTRIBUTES_ELEMENT)?);
+    for (name, value) in &attributes {
+        record.push_attribute((name.as_str(), value.as_str()));
+    }
+    // The record declares exactly the prefixes its attributes use, so a
+    // declaration only the dropped identities used goes with them.
+    for (name, value) in &declarations {
+        let prefix = name.strip_prefix("xmlns:").unwrap_or_default();
+        if attributes.iter().any(|(attribute, _)| {
+            attribute
+                .split_once(':')
+                .is_some_and(|(used, _)| used == prefix)
+        }) {
+            record.push_attribute((name.as_str(), value.as_str()));
+        }
+    }
+    let mut writer = Writer::new(Vec::new());
+    writer.write_event(Event::Empty(record))?;
+    Ok(Some(writer.into_inner()))
+}
+
+/// Declare the canonical `w14` prefix on the root of a serialized part whose
+/// content uses the prefix while the root does not bind it.
+///
+/// A retained root-attribute record writes `w14:paraId` and `w14:textId`
+/// without their declaration, because Word and python-docx declare `w14` on
+/// the part root. A root rdocx wrote does not, and a producer may declare the
+/// prefix on the element that uses it, so the part declares it here once. A
+/// root that binds `w14` itself is left as it is.
+#[doc(hidden)]
+pub fn declare_w14_on_part_root(xml: &mut Vec<u8>) -> Result<()> {
+    let mut reader = Reader::from_reader(xml.as_slice());
+    let mut buffer = Vec::new();
+    let root_end = loop {
+        match reader.read_event_into(&mut buffer)? {
+            Event::Start(root) => {
+                for attribute in root.attributes() {
+                    if attribute?.key.as_ref() == b"xmlns:w14" {
+                        return Ok(());
+                    }
+                }
+                break reader.buffer_position() as usize;
+            }
+            Event::Empty(_) | Event::Eof => return Ok(()),
+            _ => {}
+        }
+        buffer.clear();
+    };
+    // A qualified name starts after `<`, `</` or the whitespace before an
+    // attribute. Text that happens to match only adds a declaration.
+    let uses_w14 = xml[root_end..].windows(5).any(|window| {
+        matches!(window[0], b'<' | b'/' | b' ' | b'\t' | b'\r' | b'\n') && &window[1..] == b"w14:"
+    });
+    if uses_w14 {
+        let declaration = format!(r#" xmlns:w14="{W14_NS}""#);
+        xml.splice(root_end - 1..root_end - 1, declaration.into_bytes());
     }
     Ok(())
 }
@@ -5769,6 +5913,8 @@ impl CT_P {
                         if let Some(field) = field {
                             runs.push(field_run(field, None));
                             run_sources.push(None);
+                            projected_run_count += 1;
+                            tracked_run_count += 1;
                         } else {
                             extra_xml.push((runs.len(), raw));
                         }
@@ -9569,6 +9715,64 @@ mod tests {
     }
 
     #[test]
+    fn dropping_w14_identities_keeps_every_other_retained_attribute() {
+        // An alias prefix goes with the identities it bound, and a record
+        // left with nothing else goes away.
+        let w_ns = crate::namespace::W_NS;
+        let source = format!(
+            r#"<w:p xmlns:w="{w_ns}" xmlns:i="{W14_NS}" xmlns:x="urn:producer" i:paraId="11111111" w:rsidR="00A1B2C3" i:textId="22222222" x:keep="yes"/>"#
+        );
+        let mut paragraph = CT_P::from_xml_fragment(source.as_bytes()).unwrap();
+        drop_w14_paragraph_identities(&mut paragraph.extra_xml).unwrap();
+        let mut output = Vec::new();
+        paragraph.to_xml(&mut Writer::new(&mut output)).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(
+            output.starts_with(r#"<w:p w:rsidR="00A1B2C3" x:keep="yes""#),
+            "{output}"
+        );
+        assert!(output.contains(r#"xmlns:x="urn:producer""#), "{output}");
+        assert!(!output.contains("Id="), "{output}");
+        assert!(!output.contains("xmlns:i="), "{output}");
+
+        let source = format!(
+            r#"<w:p xmlns:w="{w_ns}" xmlns:w14="{W14_NS}" w14:paraId="11111111" w14:textId="22222222"/>"#
+        );
+        let mut paragraph = CT_P::from_xml_fragment(source.as_bytes()).unwrap();
+        drop_w14_paragraph_identities(&mut paragraph.extra_xml).unwrap();
+        assert!(paragraph.extra_xml.is_empty(), "{:?}", paragraph.extra_xml);
+    }
+
+    #[test]
+    fn a_part_root_declares_w14_only_when_its_content_needs_it() {
+        let w_ns = crate::namespace::W_NS;
+        let part = |root: &str, body: &str| {
+            format!(
+                r#"<?xml version="1.0"?><w:document xmlns:w="{w_ns}"{root}><w:body>{body}</w:body></w:document>"#
+            )
+            .into_bytes()
+        };
+        let identity = r#"<w:p w14:paraId="00000001"/>"#;
+        let mut unbound = part("", identity);
+        declare_w14_on_part_root(&mut unbound).unwrap();
+        assert_eq!(
+            unbound,
+            part(&format!(r#" xmlns:w14="{W14_NS}""#), identity)
+        );
+        crate::document::CT_Document::from_xml(&unbound).unwrap();
+
+        for unchanged in [
+            part(&format!(r#" xmlns:w14="{W14_NS}""#), identity),
+            part(r#" xmlns:w14="urn:other""#, identity),
+            part("", r#"<w:p><w:r><w:t>w14</w:t></w:r></w:p>"#),
+        ] {
+            let mut xml = unchanged.clone();
+            declare_w14_on_part_root(&mut xml).unwrap();
+            assert_eq!(xml, unchanged);
+        }
+    }
+
+    #[test]
     fn a_root_with_only_namespace_declarations_records_nothing() {
         let start = BytesStart::from_content(
             r#"w:sectPr xmlns:sa="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:sx="urn:section""#,
@@ -9577,6 +9781,54 @@ mod tests {
         let record =
             capture_root_attribute_record(&start, &["w".to_owned()]).expect("capture succeeds");
         assert!(record.is_none(), "{record:?}");
+    }
+
+    #[test]
+    fn a_run_identity_resolves_the_word_prefix_the_default_scope_names() {
+        // `CT_P::from_xml` names `w` as the Word prefix without binding it,
+        // which is the scope a paragraph cut out of its part can be parsed in.
+        // A run identity under it used to fail the paragraph as unbound.
+        let paragraph = parse_paragraph(
+            r#"<w:r w:rsidR="00A1B2C3" w:rsidRPr="00D4E5F6"><w:t>entry</w:t></w:r>"#,
+        );
+        assert_eq!(paragraph.text(), "entry");
+        let mut output = Vec::new();
+        paragraph.to_xml(&mut Writer::new(&mut output)).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(
+            output.contains(r#"<w:r w:rsidR="00A1B2C3" w:rsidRPr="00D4E5F6""#),
+            "{output}"
+        );
+    }
+
+    #[test]
+    fn the_default_word_prefix_records_what_its_explicit_binding_records() {
+        // The fallback must produce the record a part that binds `w` produces,
+        // must never override an explicit binding, and must not reach a
+        // prefix the scope does not name as Word.
+        let start = BytesStart::from_content(r#"w:r w:rsidR="00A1B2C3""#, "w:r".len());
+        let default_scope = capture_root_attribute_record(&start, &["w".to_owned()]).unwrap();
+        let bound = capture_root_attribute_record(
+            &start,
+            &[format!("\0w\0{}", crate::namespace::W_NS), "w".to_owned()],
+        )
+        .unwrap();
+        assert!(default_scope.is_some());
+        assert_eq!(default_scope, bound);
+
+        let rebound =
+            capture_root_attribute_record(&start, &["w".to_owned(), "\0w\0urn:other".to_owned()])
+                .unwrap()
+                .unwrap();
+        let rebound = String::from_utf8(rebound).unwrap();
+        assert!(rebound.contains(r#"xmlns:w="urn:other""#), "{rebound}");
+
+        let foreign = BytesStart::from_content(r#"w:r x:id="1""#, "w:r".len());
+        let error = capture_root_attribute_record(&foreign, &["w".to_owned()]).unwrap_err();
+        assert!(
+            error.to_string().contains("prefix `x` is unbound"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -12017,6 +12269,29 @@ mod tests {
         assert!(reopened.equations[0].2.has_unsupported_content());
         let second = serialized_paragraph(&reopened);
         assert!(second.contains(&equation), "{second}");
+    }
+
+    #[test]
+    fn self_closing_simple_fields_count_in_bookmark_run_projections() {
+        for field in [
+            r#"<w:fldSimple w:instr=" PAGE "/>"#,
+            r#"<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>"#,
+        ] {
+            let paragraph = parse_paragraph(&format!(
+                r#"{field}<w:bookmarkStart w:id="1" w:name="after"/><w:r><w:t>text</w:t></w:r><w:bookmarkEnd w:id="1"/>"#
+            ));
+
+            assert_eq!(paragraph.runs.len(), 2, "{field}");
+            let marker = &paragraph.bookmark_markers[0];
+            assert_eq!(marker.run_index(), 1, "{field}");
+            assert_eq!(marker.projected_run_index(), 1, "{field}");
+            assert_eq!(marker.tracked_run_index(), 1, "{field}");
+            assert_eq!(
+                paragraph.bookmark_markers[1].projected_run_index(),
+                2,
+                "{field}"
+            );
+        }
     }
 
     #[test]

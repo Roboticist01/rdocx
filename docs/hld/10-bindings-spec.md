@@ -1079,7 +1079,8 @@ literal text leaves out, such as a field result, is not exact. Python exposes
 it with keyword `author`, `text`, `occurrence`, `initials` and `date`
 arguments.
 The Python `add_comment` and `reply_to` methods expose the same value as the
-optional `date` keyword. Omission writes no date and remains deterministic.
+optional `date` keyword, and `rdocx comment add` and `rdocx comment reply` as
+the optional `--date` flag. Omission writes no date and remains deterministic.
 Returned ids keep naming the same comment or reply after rdocx save and reopen,
 although third-party editors may renumber them. `RunPosition` and `RunRange`
 define top-level paragraph run
@@ -1365,11 +1366,24 @@ continue to preserve the resulting document when they save it.
 
 Native callers generate tracked changes with `Document::compare`, supplying an
 edited document, author, and RFC 3339 timestamp. The additive
-`ComparisonDiagnostic` value reports stable formatting-only locations and
-messages without turning those differences into revisions. Comparison rejects
-existing modeled revisions and unsupported structural shell differences, and
-it commits only after accepting and rejecting staged copies reproduce their
-respective package-wide modeled baselines. `Document::compare` keeps its
+`ComparisonDiagnostic` value reports stable locations and messages for
+differences that stay out of the revisions, and the redline keeps the
+original for each. A message starts with a stable prefix,
+`formatting differs` for unsupported formatting and
+`content-control <name> differs` for a content control's metadata, where
+`<name>` is `tag`, `alias`, `lock`, `placeholder`, or `docPartGallery`.
+Comparison rejects existing modeled revisions and unsupported structural shell
+differences, a content control's type or data binding included, and it commits
+only after accepting and rejecting staged copies reproduce their respective
+package-wide modeled baselines. Those baselines read each paragraph as one
+sequence in document order: compared units, preserved raw children such as
+bookmarks, comment range markers, inline content controls, and hyperlink edges.
+A granular revision that splits a run therefore still reproduces a bookmark or
+comment range beside the edit, while a result that moves any of them relative
+to the text or to each other is refused. Ignored whitespace, fields, and comment
+references stay in the sequence where they touch one of those markers, so
+moving a marker across them is refused too, and `ignore_comments` leaves
+comment range markers out. `Document::compare` keeps its
 source-compatible whole-run default and delegates to the additive
 `compare_with_options` method. The concrete `ComparisonOptions` value selects
 `Run`, `Word`, or `Character` granularity and left-biased ignores for
@@ -1388,9 +1402,15 @@ Complex fields map every physical source run to one modeled comparison owner,
 and sibling fields from one physical run share that owner.
 It emits same-story moves and supported run, paragraph, table, and section
 property revisions. Diagnostic locations retain the actual story identity and
-stable owner path. `rdocx-cli compare` exposes the source-compatible whole-run
-comparison with explicit author, RFC 3339 timestamp, and output. Python and
-WASM preserve comparison output when they save their owned document.
+stable owner path. `rdocx-cli compare` takes an explicit author, RFC 3339
+timestamp, and output, and exposes every `ComparisonOptions` field as a flag.
+Its `--granularity` defaults to the source-compatible whole-run `run`, like
+the native default, and `word` or `character` marks only the changed words or
+characters. `--ignore-story` is
+repeatable and takes the Python `Story.kind` names, where `body` selects the
+main story. An unknown granularity or story name is a usage error, and a
+duplicated story keeps the native rejection. Python and WASM preserve
+comparison output when they save their owned document.
 
 Native Word rendering exposes `rdocx::RevisionView` and the concrete
 `rdocx::RenderOptions`, whose default selects the accepted view. Additive
@@ -2144,7 +2164,10 @@ mutually exclusive with the one-based `render --pages` range. Both flags select
 against the same deterministic layout snapshot that is passed to the shared
 raster backend. The legacy `--page 0` default PNG path and single-line stdout
 remain unchanged. The `text` command emits paragraphs and table cells in
-document order through the facade plain-text representation. `text --json`
+document order through the facade plain-text representation. It gives each
+paragraph the same accepted-view text as `text --json`, but it leaves out
+paragraphs inside block-level and cell-level content controls and inside
+nested tables, which `text --json` reports. `text --json`
 emits schema-1 accepted-view paragraphs with a zero-based direct body index,
 typed zero-based nested path, direct style and numbering, text, and ordered
 runs. Run formatting is null when no direct run properties exist. Otherwise it
@@ -2156,11 +2179,13 @@ unlaid items retain an empty fragment list. `replace --expect N` checks the
 run-aware replacement count before staged publication. A mismatch creates no
 output and leaves an existing destination untouched. Both the selected page
 and all-page `render` paths use bundled deterministic fonts. The compiled
-surface also includes nested comment thread commands, main-story revision
-inspection, all-story filtered revision resolution, whole-run comparison, and
-TOC rebuild. Every new mutation requires an explicit output and publishes
-through the shared staged output set. Their schema-1 records state `main` or
-`all-supported-stories` scope. Revision selectors are mutually exclusive, and
+surface also includes nested comment thread commands with optional RFC 3339
+comment dates, main-story revision inspection, all-story filtered revision
+resolution, comparison with explicit granularity and ignore options, and TOC
+rebuild. Every new mutation requires an explicit output and publishes through
+the shared staged output set. Their schema-1 records state `main` or
+`all-supported-stories` scope, and the comparison record also states the
+options that ran. Revision selectors are mutually exclusive, and
 RFC 3339 start and end bounds must be paired. The complete compiled surface is
 covered by one integration binary, with fixtures constructed in code and no
 command-only test dependency.

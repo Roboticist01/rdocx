@@ -9543,7 +9543,7 @@ fn collect_block_control_paragraphs<'a>(control: &'a CT_Sdt, paragraphs: &mut Ve
 
 /// Append a block-level paragraph to [`Document::text`] as one line.
 fn push_paragraph_line(paragraph: &CT_P, text: &mut String) {
-    text.push_str(&paragraph.text());
+    text.push_str(&ParagraphRef { inner: paragraph }.text());
     text.push('\n');
 }
 
@@ -9572,7 +9572,7 @@ fn push_row_text(row: &CT_Row, text: &mut String) {
 }
 
 fn push_cell_paragraph(paragraph: &CT_P, text: &mut String) {
-    text.push_str(&paragraph.text());
+    text.push_str(&ParagraphRef { inner: paragraph }.text());
     text.push('\t');
 }
 
@@ -14676,6 +14676,9 @@ impl Document {
     }
 
     /// Clone one checked direct child into a checked insertion boundary.
+    ///
+    /// Document-wide identities of the copy are made unique, and its
+    /// paragraphs and table rows drop `w14:paraId` and `w14:textId`.
     pub fn clone_content(
         &mut self,
         source_location: &ContentLocation,
@@ -14959,6 +14962,9 @@ impl Document {
     /// every cell paragraph ends with a tab, paragraphs of nested tables
     /// included. Content controls at every level contribute the paragraphs,
     /// rows and cells they wrap at the position they occupy.
+    /// Each paragraph contributes its accepted-view text, the same text as
+    /// [`ParagraphRef::text`]: tracked insertions are included and tracked
+    /// deletions are left out.
     pub fn text(&self) -> String {
         let mut result = String::new();
         for content in &self.document.body.content {
@@ -15073,8 +15079,9 @@ impl Document {
     /// `table_index` counts every table in document order, including nested
     /// tables. `insert_at` may equal the row count to append. The copy keeps
     /// row properties, cell formatting, nested content, relationships, and
-    /// preserved producer XML. Document-wide identities are made unique and
-    /// comment anchors are omitted. The document is unchanged on error.
+    /// preserved producer XML. Document-wide identities are made unique, the
+    /// row and its paragraphs drop `w14:paraId` and `w14:textId`, and comment
+    /// anchors are omitted. The document is unchanged on error.
     pub fn clone_table_row(
         &mut self,
         table_index: usize,

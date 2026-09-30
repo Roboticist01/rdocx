@@ -813,9 +813,12 @@ each non-final body section properties value to a next-page section-ending
 paragraph, and retains the final body-level section properties value. A
 namespace-aware serialized-body pass remaps bookmark, content-control, and
 drawing identities together with bookmark field and hyperlink references,
-including values held in preserved raw XML. The operation does not evaluate
-structured template tags, and ordinary field traversal keeps its existing
-typed story scope.
+including values held in preserved raw XML. The same pass removes `w14:paraId`
+and `w14:textId` from every copied paragraph and table row, since a copy must
+not share them and Word assigns new ones, and keeps revision-save identities.
+Rich merge region copies and imported fragments go through it too. The
+operation does not evaluate structured template tags, and ordinary field
+traversal keeps its existing typed story scope.
 
 The same facade owns additive native rich mail merge over `MailMergeData` and
 owned text, image, and DOCX fragment values. Whole-paragraph and whole-row
@@ -839,7 +842,9 @@ container-aware stack parser. Top-level marker paragraphs clone body entries,
 including section-ending paragraphs and their section properties. Marker rows
 clone every row in a multi-row template group inside their owning table. The
 owning table is retained, and each row and cell is deep-cloned with its merge,
-banding, content-control, and ordered raw XML state. Numbered paragraphs in a
+banding, content-control, and ordered raw XML state. Every paragraph and table
+row a loop renders drops its `w14:paraId` and `w14:textId`, as other copies do,
+and keeps its revision-save identities. Numbered paragraphs in a
 loop retain their source `numId` and level, which keeps one continuous list
 without allocating definitions. Numbering references are validated before
 evaluation. Loop variables form lexical scopes, and dotted lookup searches the
@@ -909,10 +914,25 @@ form changes replace that complete owner. Supported run, paragraph, table, and
 section properties emit property revisions that retain the original property
 sidecars. Unsupported formatting differences retain the original bytes and
 produce stable `ComparisonDiagnostic` values at the actual story path. Inputs
-with existing modeled revisions or differing story and control shells are
-rejected unless their story category is ignored. Attributed text alignment
-retains owner, formatting, content position, and raw-child boundaries, then
-coalesces adjacent equal-owner edits into minimal revision wrappers.
+with existing modeled revisions or differing story shells are rejected unless
+their story category is ignored. The root and owner start tags of a comment
+or note story compare as namespace-resolved trees, so a part written again
+with other declarations, attribute order, or empty-element forms keeps its
+shell. A content control's shell is its type and data binding, and a
+difference there is rejected too. Its `w:id` is producer
+identity and ignored. Its tag, alias, lock, placeholder, and document-part
+gallery are metadata, so controls that differ only by those align, compare,
+keep the original `w:sdtPr`, and report one `content-control <name> differs`
+diagnostic per property. Attributed text alignment retains owner,
+formatting, content position, and raw-child boundaries, then coalesces
+adjacent equal-owner edits into minimal revision wrappers. That alignment
+runs separately between consecutive hyperlink and inline-control boundaries,
+so no text matches across a shell and words inserted or deleted beside a
+shell move it. Text inserted between two boundaries with no original run
+between them, such as before a hyperlink that opens its paragraph, has no
+original bytes to go between and refuses the pair. When every run of a
+paragraph matches, the runs stay whole and only the differing inline
+controls are compared.
 When a main story gains a trailing run of paragraphs, comparison marks the
 original final paragraph boundary once, marks each intermediate inserted
 paragraph boundary once, and leaves the final inserted paragraph mark as the
@@ -1286,7 +1306,8 @@ preserved node. Insert, remove, clone, and move resolve canonical
 children of the matching kind. `ContentLocation::end` is the distinct boundary
 after final direct content. It works for empty and self-closing owners and
 remains before body section properties. Moves stay within one unchanged story
-owner. Clones allocate fresh document identities, while relationship-bearing
+owner. Clones allocate fresh document identities and drop the `w14:paraId` and
+`w14:textId` of their paragraphs and table rows, while relationship-bearing
 fragments require the unchanged owner scope. Every operation serializes and
 reopens a staged candidate before publishing it.
 
@@ -1393,6 +1414,8 @@ same content. `Document::headings` and `Document::links` read the body
 paragraphs and those that body-level content controls wrap, and do not search
 table cells. MHTML export sizes its images from the paragraphs the HTML emitter
 reaches, which leaves content controls out.
+Each paragraph contributes the same accepted-view text as paragraph text, so
+tracked insertions are included and tracked deletions are left out.
 The WASM binding uses `Document::text` for its existing `getText` method and
 otherwise owns one complete `Document`. It never reaches into
 `rdocx-oxml` or maintains a second package representation.

@@ -1,6 +1,6 @@
 # F-X139, Word identity and comparison contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S76
 **Size**: L
 **Depends on**: F-X138
@@ -31,6 +31,9 @@ Normalize only comparison noise that the contract declares equivalent. Report
 unsupported metadata differences as diagnostics rather than refusing a valid
 pair. Keep marker order tied to the accepted run projection. Expose CLI
 comparison options and comment dates through the existing command surface.
+The semver impact is additive for pre-1.0 CLI comparison flags and comment
+date output, with corrected comparison equivalence and producer identity
+preservation in existing native APIs.
 
 ## Rejected alternatives
 
@@ -56,9 +59,13 @@ comparison options and comment dates through the existing command surface.
 - `docs/hld/03-architecture.md`
 - `docs/hld/04-opc-and-packaging.md`
 - `docs/hld/10-bindings-spec.md`
+- `docs/hld/12-testing-strategy.md`
 
 ## Risk routing
 
+- Layout cache safety: read `docs/hld/08-rendering-spec.md`. Keep
+  deterministic font mode for the row-identity cache test and verify the
+  cached table path preserves rendered output.
 - Parser or serialiser: read `docs/hld/04-opc-and-packaging.md` and
   `06-presentationml-model.md`. Verify schema order, prefix-tolerant reads
   and a byte-preserving unmodelled subtree round-trip.
@@ -72,10 +79,10 @@ Expected unchanged. A changed baseline is not part of S76.
 
 ## Implementation checklist
 
-- [ ] Review each incremental PR diff against its actual parent.
-- [ ] Reconcile namespace, identity and comparison changes with F-X138.
-- [ ] Prove native and CLI options and producer cases in existing test binaries.
-- [ ] Run focused and risk checks, then microscope to zero findings.
+- [x] Review each incremental PR diff against its actual parent.
+- [x] Reconcile namespace, identity and comparison changes with F-X138.
+- [x] Prove native and CLI options and producer cases in existing test binaries.
+- [x] Run focused and risk checks, then microscope to zero findings.
 
 ## Open questions
 
