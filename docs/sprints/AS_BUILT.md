@@ -16398,3 +16398,23 @@ zero defects and zero smells.
 **Notes for future sessions.** The original private file still needs reporter
 validation if it becomes available. Keep split-row fallback explicit for
 unsupported ownership and geometry cases rather than duplicating content.
+
+### F-X137, Package and CLI safety contribution wave
+
+**Sprint.** S76
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated PRs 174, 178, 182, 185 and 197. The CLIs refuse input-as-output and existing output without force, and tolerate a closed stdout reader. OPC, Word and PowerPoint saves stage replacement atomically. Edited Word story and comments roots bind their used namespaces, while unchanged producer parts retain their bytes. Word saves select the package class from the destination extension.
+
+**Non-obvious choices.** Replayed each PR's behavior commits rather than its shared archive measurement tail. The overlapping CLI and save paths were reconciled together, with one package writer. The root README credits hadim's community Claude plugin, and package archive measurements were refreshed after that attribution.
+
+**Deviations from the design plan.** Added `docs/hld/06-presentationml-model.md` to the plan's HLD impact list because the accepted atomic save changed PowerPoint behavior. No hash baseline change was needed.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md`, `docs/hld/06-presentationml-model.md`, and `docs/hld/10-bindings-spec.md`.
+
+**Tests.** The CLI overwrite regression failed on the old behavior and passed with the implementation. The integrated full gate passed formatting, warnings-denied workspace clippy, workspace tests, 105 no-default-features layout tests, both WASM targets, warnings-denied rustdoc, README doctests, the repository policy suite with 131 tests and two expected skips, the clean 22-crate verified dry run, the 10 MiB archive ceiling, and `cargo deny`. Worker Python tests passed 28 cases with one skip. Microscope pass 2 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged, 49 of 49 at the integrated checkpoint.
+
+**Notes for future sessions.** Keep the five PR behaviors and the measured archive updates distinct. The retained `work/f-x137-codex` branch and worktree remain available through sprint closure.
