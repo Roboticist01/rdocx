@@ -371,9 +371,11 @@ exact text in the main story without run index bookkeeping. The original
 direct-body constructors and call shape remain unchanged.
 `Comment`, `ComparisonDiagnostic`, `BoundingBox`, `LayoutFragment`,
 `LayoutPage`, `TocRebuildReport`, and `Revision` are frozen typed snapshots.
-`Document.revisions` lists main-document revisions with a snake_case `kind`,
-while the accept and reject methods resolve revisions in every story and return
-how many they resolved. `try_replace_text` and `replace_all_regex` return their
+`Document.revisions` lists the revisions of every story that the accept and
+reject methods resolve, each with a snake_case `kind` and the `Story` that
+holds it, so its length equals the count they return. A `Revision` built
+directly keeps its four-field constructor and has no story unless one is
+passed. `try_replace_text` and `replace_all_regex` return their
 replacement counts. `update_fields` takes the native evaluation context as
 keyword arguments, reads the wall-clock fields of `now` as given, and returns
 the number of updated fields. Comments are
@@ -862,6 +864,9 @@ projections. `StoryItemRef::direct_body_index` adds the safe direct body owner
 coordinate without changing the recursive `index_path`. Python frozen
 `StoryItem` snapshots expose the same optional integer. Items outside the main
 story and final section properties expose no coordinate.
+`StoryItemSnapshot::is_direct_child` tells a direct child of any story owner
+from an item nested in another item of that owner, such as an inline content
+control or a field inside a paragraph.
 `Document::set_story_text` resolves a checked operation-scoped
 location against a staged package and publishes only a serialized and reopened
 candidate. These additions are native Rust APIs on the pre-1.0 `rdocx` crate.
@@ -1648,9 +1653,17 @@ Each immutable `RevisionRef` exposes the revision id, author, optional
 timestamp, and `RevisionKind`. Results recursively cover the main document
 body in document order, including tables, cells, and content controls. The
 facade reads a typed projection while serialization continues to use the
-captured raw WordprocessingML subtree. `rdocx-cli revision list` exposes this
-main-story projection with an explicit scope field. Python and WASM load and
-save paths preserve the revision XML without a revision inspection method.
+captured raw WordprocessingML subtree. The additive
+`Document::story_revisions` returns owned `StoryRevision` snapshots for every
+story that revision resolution reaches: the main document, headers, footers,
+comments, normal footnotes, endnotes, and the text boxes inside them. Each
+snapshot adds the `StoryId` of its Word story, with table cells folded into the
+story that holds the table. It scans the parts as resolution stages them, so
+the list has one entry per revision element that `accept_all` and
+`reject_all` resolve and its length equals their count.
+`rdocx-cli revision list` and Python `Document.revisions` expose this all-story
+listing. WASM load and save paths preserve the revision XML without a revision
+inspection method.
 
 Native Word paragraph handles expose
 `Paragraph::add_run_inheriting_mark(&mut self, text)`. The method appends one
@@ -1755,11 +1768,13 @@ ids select every matching placement, author matching is case-sensitive, and
 missing dates do not match a date range. Invalid bounds and malformed selected
 changes return an error before mutation. Resolution covers the main document,
 headers, footers, comments, normal footnotes, endnotes, and nested text boxes.
-`Document::revisions` remains main-story-only. These eight methods are additive
-on `rdocx::Document`. `rdocx-cli revision accept|reject` exposes the all-story
-resolution boundary with mutually exclusive id, exact-author, or paired date
-selectors. An omitted selector resolves all modeled revisions. Python and WASM
-continue to preserve the resulting document when they save it.
+`Document::revisions` remains main-story-only, while
+`Document::story_revisions` lists exactly the elements these methods resolve.
+These eight methods are additive on `rdocx::Document`.
+`rdocx-cli revision accept|reject` exposes the all-story resolution boundary
+with mutually exclusive id, exact-author, or paired date selectors. An omitted
+selector resolves all modeled revisions. Python and WASM continue to preserve
+the resulting document when they save it.
 
 Native callers generate tracked changes with `Document::compare`, supplying an
 edited document, author, and RFC 3339 timestamp. The additive
@@ -2594,7 +2609,29 @@ emits schema-1 accepted-view paragraphs with a zero-based direct body index,
 typed zero-based nested path, direct style and numbering, text, and ordered
 runs. Run formatting is null when no direct run properties exist. Otherwise it
 contains nullable direct bold, italic, strike, underline, font, point size,
-colour, highlight, language, and character style fields. `layout --json` uses
+colour, highlight, language, and character style fields. Both views then read
+every other story through `Document::story_item_snapshots`, leaving out the
+main body and its table cells, which they already cover. Only the direct
+paragraphs and block content controls of a story are read, so the text of an
+inline control or a field is not repeated after its paragraph. Plain `text`
+prints each package part of those stories under a line such as
+`--- header (/word/header1.xml) ---`, one item text per line, and skips a part
+without any text. `text --json` states `all-supported-stories` scope and adds
+a `stories` array with the Python `Story.kind` name, part name, owner index,
+and items of each story. Each item carries its story `index_path`, its kind,
+and its accepted-view text.
+`convert` to Markdown or HTML appends the same parts after the body under a
+bold label, and leaves comments out as review annotations. A story part that
+cannot be read leaves the body of these views intact. They print one stderr
+warning that names the part when it can, list no other story, keep a zero exit
+status, and `text --json` states `main` scope. `validate` checks
+that every XML part the main document relates to is well formed, and that the
+paragraph, character, and table style ids named in the main document, headers,
+footers, notes, and comments are defined. Both are errors. A style id inside a
+tracked property change or inside `mc:Fallback`, and an empty id, are not
+checked. Parts are scanned before the document
+opens, so a malformed styles, numbering, or settings part is named in the
+report beside the open failure it causes. `layout --json` uses
 bundled deterministic fonts and reports every direct body item. Its point-space
 fragments carry one-based physical and displayed page numbers, and preserved
 unlaid items retain an empty fragment list. `replace --expect N` checks the
@@ -2602,9 +2639,9 @@ run-aware replacement count before staged publication. A mismatch creates no
 output and leaves an existing destination untouched. Both the selected page
 and all-page `render` paths use bundled deterministic fonts. The compiled
 surface also includes nested comment thread commands with optional RFC 3339
-comment dates, main-story revision inspection, all-story filtered revision
-resolution, comparison with explicit granularity and ignore options, and TOC
-rebuild. Every new mutation requires an explicit output and publishes through
+comment dates, all-story revision inspection, all-story filtered revision
+resolution, comparison with explicit granularity, ignore options and per-story
+revision counts, and TOC rebuild. Every new mutation requires an explicit output and publishes through
 the shared staged output set. Their schema-1 records state `main` or
 `all-supported-stories` scope, and the comparison record also states the
 options that ran. Revision selectors are mutually exclusive, and

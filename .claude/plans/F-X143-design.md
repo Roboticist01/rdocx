@@ -1,6 +1,6 @@
 # F-X143, Revision listing and CLI story contribution wave
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S77
 **Size**: M
 **Depends on**: F-X139, F-X141
@@ -90,11 +90,11 @@ updates.
 
 ## Implementation checklist
 
-- [ ] Review PR 186 and the PR 204 incremental diff against S76 PR 198.
-- [ ] Reconcile native and Python overlap with completed F-X141.
-- [ ] Make revision listing agree with supported resolution and story IDs.
-- [ ] Cover story text, related-part validation and style validation.
-- [ ] Run focused checks, risk riders and microscope to zero findings.
+- [x] Review PR 186 and the PR 204 incremental diff against S76 PR 198.
+- [x] Reconcile native and Python overlap with completed F-X141.
+- [x] Make revision listing agree with supported resolution and story IDs.
+- [x] Cover story text, related-part validation and style validation.
+- [x] Run focused checks, risk riders and microscope to zero findings.
 
 ## Open questions
 

@@ -81,6 +81,13 @@ source part, owner kind, source-order ordinal, and a structural fingerprint.
 Any changed owner makes a retained identity stale before indexed content can be
 resolved.
 
+Revision inventory uses these same supported story owners and reports their
+`StoryId` with each record. A revision reachable by resolution without a
+discoverable owner is an error. CLI text extraction retains readable body text
+and names any malformed related part in a warning. Validation instead fails
+on malformed related XML or an undefined style reference, including in a
+package produced by the Rust facade.
+
 Story items are projections over the existing typed and retained package
 sources. Body and comment items can expose owned XML serialized from their
 typed owners. Other package-backed items borrow their exact subtree bytes and
