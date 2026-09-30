@@ -8,8 +8,8 @@ calendar date.
 
 Each F-ID uses focused tests, applicable oracle cases, `/verify --scoped` and
 a zero-finding `/microscope`. Full verification and sprint review cover the
-integrated result at closure, with an earlier full checkpoint only when a
-formal dependency must be completed before its consumer starts.
+final integrated result at closure. A formal dependency checkpoint completes
+a prerequisite from scoped evidence and focused integration checks.
 
 The active roadmap runs through S98, with earlier deferred cutover boundaries
 retained in place. The sizing rationale and compression options are in

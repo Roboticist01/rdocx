@@ -66,8 +66,9 @@ incremental diff of each stacked PR, then rebase and rerun CI.
   parts and undefined styles in its stated scope.
 - Each S77 F-ID remains scoped to its design, focused tests, applicable oracle
   cases, `/verify --scoped` and a zero-finding `/microscope`. F-X140 and later
-  formal dependency prefixes take full integrated checkpoints before their
-  consumers begin.
+  formal dependency prefixes use scoped evidence and focused integration
+  checks before their consumers begin. Full verification and sprint review
+  run after all S77 stories are integrated.
 - The combined S77 result passes binding smoke, package, rendering,
   documentation and release regression checks, then `/verify --full` and
   `/sprint-review`. Broader issue acceptance remains scheduled for S78 and
