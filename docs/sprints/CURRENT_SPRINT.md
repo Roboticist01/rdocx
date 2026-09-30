@@ -30,7 +30,7 @@ boundary. Issue acceptance continues through S82 before the deferred feature wor
 |------|-------|------|--------|-------|
 | F-X140 | Rendering and layout contribution wave | L | done | - |
 | F-X141 | Word Python contribution wave | L | done | - |
-| F-X142 | Presentation Python contribution wave | L | pending | - |
+| F-X142 | Presentation Python contribution wave | L | in-progress | codex |
 | F-X143 | Revision listing and CLI story contribution wave | M | pending | - |
 
 ## Sequencing note
