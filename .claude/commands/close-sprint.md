@@ -71,11 +71,24 @@ publication.
 
    A validation-only sprint has no cleanup targets.
 
-10. **Open the next sprint.** If `--next SMM` was given, run `/sync-sprint SMM`.
+10. **Reconcile contributed PRs and issues.** After the integrated `main` push,
+    compare each PR and issue assigned to this sprint with its full acceptance
+    criteria and the verified integrated evidence. Close each superseded PR with
+    a human-written comment that thanks its contributor, links the integrated
+    work and explains any remaining scope. Close an issue only when every
+    acceptance criterion has evidence on `main`. Thank the reporter and
+    contributors in a human-written closure comment that cites that evidence.
+    Leave partially addressed issues open, comment with the completed work and
+    remaining criteria, and keep their follow-up F-IDs in the backlog. Record
+    every closure or open-item decision in the sprint report. Do not use a
+    generic generated comment or infer issue completion from a PR merge.
 
-11. **Report** what merged, the tag, the velocity for this sprint, whether it
-    diverged from the plan by more than 30 percent, and every worker cleanup
-    outcome. A variance over 30 percent is an escalation trigger.
+11. **Open the next sprint.** If `--next SMM` was given, run `/sync-sprint SMM`.
+
+12. **Report** what merged, the tag, the velocity for this sprint, whether it
+    diverged from the plan by more than 30 percent, every worker cleanup
+    outcome, and the PR and issue reconciliation. A variance over 30 percent
+    is an escalation trigger.
 
 ## Carrying a story
 

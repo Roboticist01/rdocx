@@ -254,8 +254,9 @@ locally. They are never pushed unless asked.
 - `/release vX.Y.Z` tags an already reviewed sprint SHA and starts publication.
 - `/close-sprint SNN --next SMM` validates readiness, merges to `main` with an
   explicit merge commit, creates the annotated `sNN` tag, pushes both, removes
-  completed worker worktrees and local branches, then runs `/sync-sprint` for
-  the next sprint.
+  completed worker worktrees and local branches, reconciles contributed PRs
+  and issues against integrated acceptance evidence with human-written
+  contributor thanks, then runs `/sync-sprint` for the next sprint.
 
 Only `/close-sprint` may touch `main` or create an `sNN` sprint tag. Only
 `/release` may create or push a `v*` release tag or start crates.io

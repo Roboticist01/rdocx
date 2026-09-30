@@ -73,3 +73,7 @@ incremental diff of each stacked PR, then rebase and rerun CI.
   documentation and release regression checks, then `/verify --full` and
   `/sprint-review`. Broader issue acceptance remains scheduled for S78 and
   S79.
+- At `/close-sprint`, reconcile S77 PRs and issues against the verified `main`
+  result. Thank each contributor in a human-written PR closure comment. Close
+  an issue only after every criterion passes, and leave partial issues open
+  with their remaining work recorded.
