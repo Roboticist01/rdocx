@@ -471,9 +471,9 @@ removing executable or opaque parts. `Document::save` and `to_bytes_for_path`
 write the class that a `.docx`, `.docm`, `.dotx`, or `.dotm` extension names,
 compared without regard to case, so a template saved as `.docx` declares a
 document. `to_bytes`, `save_encrypted`, the Flat OPC saves, and a save to any
-other extension retain the opened class. A class change is published through a
-temporary file and a rename, while a save that keeps the class writes the path
-in place. When the class changes, a macro-free extension fails before anything
+other extension retain the opened class. Path saves stage a sibling file and
+atomically replace the destination whether the package class changes or stays
+the same. When the class changes, a macro-free extension fails before anything
 is written if the main part carries a `vbaProject` relationship, whatever the
 source class, because the project would remain in a file that claims to carry
 none. A macro-enabled package without one converts. `from_flat_opc_bytes`, its
