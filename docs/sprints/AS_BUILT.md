@@ -16754,3 +16754,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged by this story. All 49 entries matched the reviewed F-X146 baseline.
 
 **Notes for future sessions.** F-X147 owns the remaining Issue 168 production checklist, including the full fixture chain. The assigned PR head still needs rebase and hosted CI before upstream closure.
+
+### F-X154, Presentation text and preservation repair
+
+**Sprint.** S80
+**Completed.** 2026-10-01
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** DrawingML text bodies retain unmodelled and namespace-qualified body property attributes through shape edits and repeated saves. Assigned presentation text writes LF and CRLF as paragraphs and vertical tabs as line breaks. The presentation layout path accepts producer text containing these separators and reports errors with slide and shape context.
+
+**Non-obvious choices.** Unknown body properties stay in source order beside the typed values. A raw run keeps its literal text contract, while layout normalizes separators when reading that run. This preserves source text without passing multiple paragraphs to one line layout.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/05-drawingml-model.md`, `docs/hld/06-presentationml-model.md` and `docs/hld/08-rendering-spec.md`.
+
+**Tests.** The Issue 215 body property and Issue 216 line-feed regression gates passed after save, reopen, validation and rendering. The scoped gate, 64 Presentation Python tests, pinned python-pptx 1.0.2 structure check and LibreOffice 26.2.5.2 three-band text probe passed. The probe differed by at most one vertical pixel against a two-pixel tolerance. The 22-crate package dry run kept every archive below 10 MiB.
+
+**Hash harness.** Unchanged. All 49 entries matched the S79 baseline in worker scoped verification. The final integrated S80 gate remains due.
+
+**Notes for future sessions.** F-X155 builds its shape and drawing APIs on this reviewed prefix. The full S80 verification and sprint review remain due after that feature is integrated.

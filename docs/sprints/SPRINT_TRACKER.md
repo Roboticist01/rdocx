@@ -517,6 +517,7 @@ defended.
 | F-X146 | S79 | L | 5 | 1 | 2026-10-01 | Integrated PRs 222, 225 and 237 with Word line pitch, inline picture, rich-line, tab and TOC geometry and a reviewed 22-key hash delta |
 | F-X152 | S79 | M | 3 | 1 | 2026-10-01 | Integrated PR 236 with every supported story in CLI diff, bounded matching, one count per changed paragraph and incomplete-story reporting |
 | F-X153 | S79 | M | 3 | 1 | 2026-10-01 | Integrated PR 220 with text-anchored CLI comments, inherited numbering validation and atomic native and Python run removal |
+| F-X154 | S80 | M | 3 | 1 | 2026-10-01 | Repaired DrawingML body property preservation and presentation line-separator layout for Issues 215 and 216 |
 
 ## Velocity
 
