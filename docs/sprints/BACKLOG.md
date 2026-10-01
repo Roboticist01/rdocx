@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)            | 178 | 151 | 0 | 23 |
-| **Total** | **503** | **413** | **0** | **86** |
+| X, Cross-cutting (opportunistic)            | 178 | 151 | 1 | 22 |
+| **Total** | **503** | **413** | **1** | **85** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -699,7 +699,7 @@ regenerated, never hand-edited.
 | F-X143 | Revision listing and CLI story contribution wave | S77 | M | done |
 | F-X144 | Identity and producer matrices across operations | S78 | L | done |
 | F-X145 | Comparison options and redline completion | S78 | L | done |
-| F-X146 | Word line height and inline picture spacing | S79 | L | pending |
+| F-X146 | Word line height and inline picture spacing | S79 | L | in-progress |
 | F-X147 | Complete rdocx Python production checklist | S80 | L | pending |
 | F-X148 | Complete rpptx Python production checklist | S81 | L | pending |
 | F-X149 | Word fixture and workflow acceptance gate | S82 | L | pending |
