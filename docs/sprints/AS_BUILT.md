@@ -16654,3 +16654,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the reviewed worker prefix.
 
 **Notes for future sessions.** F-X144 and F-X145 consume this prefix. The imported PR heads still require rebase and hosted CI before their upstream closure.
+
+### F-X144, Identity and producer matrices across operations
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reproduced all 17 Issue 159 identity rows and 11 Issue 160 producer rows as source-built Python binding regressions. Every producer row exercises picture insertion. Added native coverage for the default-root and block-control picture path, inline-control replacement, rewritten note compatibility roots, and edited styles root metadata. Repaired story picture insertion to retain the current main-part XML through canonical identifier allocation and preserved root attributes when an edited styles part is serialized.
+
+**Non-obvious choices.** The attached identity and producer scripts passed on the completed F-X151 prefix, so F-X144 did not duplicate the earlier comparison and walker repairs. The stronger picture column exposed loss of producer details after save. Microscope pass 1 caught the test gap, and the repaired story picture path leaves ordinary authored output unchanged. The edited styles-root regression failed before its fix and passed after it.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The full native suite and 149 Word Python binding tests passed. Scoped format, Clippy, no-default font, WASM, rustdoc, README, prose, generated-skill and workflow checks passed. Microscope pass 2 found zero defects and zero smells. Final integrated workspace verification and sprint review remain due after F-X145.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed F-X151 and F-X144 prefix.
+
+**Notes for future sessions.** F-X145 consumes this completed prefix. Issue 161 comparison options and redline cases remain for the final sprint wave.
