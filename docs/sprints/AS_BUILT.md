@@ -16674,3 +16674,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the reviewed F-X151 and F-X144 prefix.
 
 **Notes for future sessions.** F-X145 consumes this completed prefix. Issue 161 comparison options and redline cases remain for the final sprint wave.
+
+### F-X145, Comparison options and redline completion
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Completed Issue 161 comparison and redline cases for edited comments, rebuilt TOCs and marker placement. The redline carries edited comment parts and their related assets through a selectable revision, and accept or reject reconstructs the respective input. Structural paragraph changes can be tracked as a whole paragraph while bookmark and comment boundaries stay aligned with changed text.
+
+**Non-obvious choices.** Native, Python and CLI comparison retain `run` as their default granularity. A related custom XML part stores the original comment graph for rejection. New comment assets receive distinct package paths when their names collide with assets used elsewhere in the document. This changes behavior without adding a public API symbol or breaking the existing option defaults.
+
+**Deviations from the design plan.** The Python and CLI option surfaces were already present on the completed dependency prefix. F-X145 verified their parity and implemented the remaining redline cases.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The Issue 161 Python and CLI option matrix, edited comment cases, rebuilt TOC and PR 205 marker regressions passed. The comment and marker gates failed on the pre-fix behavior. Microscope pass 3 reported zero defects and zero smells. The integrated full workspace suite, 161 Word Python tests, no-default font, WASM, rustdoc, README, 22-crate publish dry run and supply chain checks passed. Every generated archive was below 10 MiB.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S78 result.
+
+**Notes for future sessions.** The comment revision sidecar must be resolved before comparing the redline again. The README archive measurement for `rdocx` is 1,216,800 compressed bytes, 7,084,054 member bytes and 36 members.

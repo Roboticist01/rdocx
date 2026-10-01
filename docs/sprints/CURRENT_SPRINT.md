@@ -28,7 +28,7 @@ and finish the comparison and redline acceptance criteria for Issues 157, 159,
 |------|-------|------|--------|-------|
 | F-X151 | Word preservation and comparison PR intake | L | done | - |
 | F-X144 | Identity and producer matrices across operations | L | done | - |
-| F-X145 | Comparison options and redline completion | L | in-progress | codex |
+| F-X145 | Comparison options and redline completion | L | done | - |
 
 ## Sequencing note
 

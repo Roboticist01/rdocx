@@ -511,6 +511,7 @@ defended.
 
 | F-X151 | S78 | L | 5 | 1 | 2026-10-01 | Integrated six Word PR behaviors with scoped review fixes, unchanged hash output and 121 passing Python tests |
 | F-X144 | S78 | L | 5 | 1 | 2026-10-01 | Completed 17 identity rows and 11 producer rows across operations, repaired picture and styles preservation, and kept 49 hash entries unchanged |
+| F-X145 | S78 | L | 5 | 1 | 2026-10-01 | Completed Issue 161 comment, TOC and marker redline cases, preserved run defaults, and kept 49 hash entries unchanged |
 
 ## Velocity
 
