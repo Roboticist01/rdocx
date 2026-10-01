@@ -5,7 +5,8 @@
 **Goal**: integrate the remaining reviewed rendering, layout, Python,
 presentation and CLI contributions on the completed S76 prefix. Reconcile
 stacked and overlapping PRs before one combined verification and review
-boundary. Issue acceptance continues through S82 before the deferred feature work at S83.
+boundary. Issue acceptance continues through S88 before deferred feature work
+at S89.
 
 ## Spec references
 
@@ -50,8 +51,8 @@ incremental diff of each stacked PR, then rebase and rerun CI.
 ## Definition of done for this sprint
 
 - Every S77 PR has a reviewed incremental diff, reconciled overlap and
-  passing relevant focused checks after rebasing. The later 30 September PR
-  intake is assigned to S78 through S81.
+  passing relevant focused checks after rebasing. Later intake is assigned
+  to S78 through S88.
 - F-X140's intentional rendering delta has its own labelled commit and
   reviewed expected hash change. The deterministic Word and presentation
   fidelity gates pass.
@@ -71,8 +72,8 @@ incremental diff of each stacked PR, then rebase and rerun CI.
   run after all S77 stories are integrated.
 - The combined S77 result passes binding smoke, package, rendering,
   documentation and release regression checks, then `/verify --full` and
-  `/sprint-review`. Broader issue acceptance remains scheduled for S78 and
-  S79.
+  `/sprint-review`. Broader issue acceptance remains scheduled for S78
+  through S88.
 - At `/close-sprint`, reconcile S77 PRs and issues against the verified `main`
   result. Thank each contributor in a human-written PR closure comment. Close
   an issue only after every criterion passes, and leave partial issues open
