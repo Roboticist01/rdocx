@@ -709,6 +709,29 @@ class Document:
         style, and `ValueError` for a duplicate ID or name or any other
         invalid argument.
         """
+    def set_style(
+        self,
+        style: str,
+        *,
+        based_on: str | None = None,
+        next_style: str | None = None,
+        font_name: str | None = None,
+        font_size: int | None = None,
+        bold: bool | None = None,
+        italic: bool | None = None,
+        color: _shared.RGBColor | None = None,
+        space_before: int | None = None,
+        space_after: int | None = None,
+        left_indent: int | None = None,
+        right_indent: int | None = None,
+        first_line_indent: int | None = None,
+    ) -> Style:
+        """Update the supplied formatting on a style selected by ID or name.
+
+        Unspecified properties keep their existing values. Lengths and font
+        size are EMU. Invalid style references or graph changes leave the
+        document unchanged.
+        """
     def remove_style(self, style: str) -> bool: ...
     def set_default_style(self, style: str) -> None: ...
     def add_numbering_definition(self, levels: _Sequence[ListLevel]) -> int: ...

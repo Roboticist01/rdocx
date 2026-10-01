@@ -336,9 +336,20 @@ style of any type the same way. `remove_style` returns `False` when no style
 has the ID or name, and `set_default_style` raises `KeyError` then and
 otherwise makes the style the default of its type. The native refusals, such as
 removing a style that content or another style names, raise `RdocxError`.
-Python does not bind the native `set_style`, whose property merge cannot remove
-the theme font or theme colour that a Word style carries, so existing styles
-keep their formatting.
+`set_style(style, **formatting)` resolves an existing style by ID or name and
+passes the supplied formatting, base style and next style through native
+`set_style`. Omitted properties keep their existing values. The staged native
+setter checks the complete style graph before publishing, and Python handles
+stay valid. Unknown or wrong-type style references fail before mutation.
+The update surface does not clear a theme font or theme colour inherited from
+an existing Word style. Its formatting changes are additive overrides.
+
+The Issue 168 package-write escape hatch is an external ZIP and lxml edit of
+an unmodelled package part, followed by reopen and save through `rdocx`.
+The typed binding does not offer arbitrary part replacement. The caller must
+keep package relationships and content types coherent when editing outside
+the binding. The production-chain gate changes an existing application
+property through that escape hatch and proves it survives the typed round trip.
 
 `ListLevel` is a constructible frozen value with a `format` checked against
 the standard `w:numFmt` names through `ListNumberFormat::from_name`, the level
@@ -796,8 +807,8 @@ columns. `Paragraph::set_conditional_formatting` and
 `Paragraph::conditional_formatting` select conditional regions through the same
 `TableConditionalFormatting` shape a row and a cell already use.
 WASM and CLI retain style package and render behavior without new style
-mutation entry points. Python gains style creation, removal and default
-selection, as described for the Python `Document`.
+mutation entry points. Python exposes style creation, checked formatting
+updates, removal and default selection, as described for the Python `Document`.
 
 Native Rust re-exports `CT_OfficeStyleSheet` and adds the concrete
 `FontDefinition`, `EmbeddedFont`, `EmbeddedFontKind`, and

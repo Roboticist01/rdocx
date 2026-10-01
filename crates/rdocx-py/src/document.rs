@@ -2716,6 +2716,99 @@ impl PyDocument {
         ))
     }
 
+    // Update only the supplied formatting on a defined style. The native
+    // setter stages and validates the complete style graph before publishing.
+    #[pyo3(signature = (
+        style,
+        *,
+        based_on = None,
+        next_style = None,
+        font_name = None,
+        font_size = None,
+        bold = None,
+        italic = None,
+        color = None,
+        space_before = None,
+        space_after = None,
+        left_indent = None,
+        right_indent = None,
+        first_line_indent = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn set_style(
+        &mut self,
+        py: Python<'_>,
+        style: &str,
+        based_on: Option<&str>,
+        next_style: Option<&str>,
+        font_name: Option<String>,
+        font_size: Option<i64>,
+        bold: Option<bool>,
+        italic: Option<bool>,
+        color: Option<(u8, u8, u8)>,
+        space_before: Option<i64>,
+        space_after: Option<i64>,
+        left_indent: Option<i64>,
+        right_indent: Option<i64>,
+        first_line_indent: Option<i64>,
+    ) -> PyResult<PyStyle> {
+        let (style_type, style_id) = defined_style(&self.inner, style)?;
+        let existing = self.inner.style(&style_id).expect("the style was found");
+        let name = existing.name().unwrap_or(&style_id).to_owned();
+        let mut builder = match style_type {
+            rdocx::StyleType::Paragraph => rdocx::StyleBuilder::paragraph(&style_id, &name),
+            rdocx::StyleType::Character => rdocx::StyleBuilder::character(&style_id, &name),
+            rdocx::StyleType::Table => rdocx::StyleBuilder::table(&style_id, &name),
+            _ => return Err(PyValueError::new_err("unsupported style type")),
+        };
+        if let Some(parent) = based_on {
+            builder = builder.based_on(&style_id_of_type(&self.inner, parent, style_type)?);
+        }
+        if let Some(next) = next_style {
+            if style_type != rdocx::StyleType::Paragraph {
+                return Err(PyValueError::new_err(
+                    "only a paragraph style has a next style",
+                ));
+            }
+            builder = builder.next_style(&style_id_of_type(
+                &self.inner,
+                next,
+                rdocx::StyleType::Paragraph,
+            )?);
+        }
+        let formatting = StyleFormatting {
+            font_name,
+            font_size,
+            bold,
+            italic,
+            color,
+            space_before,
+            space_after,
+            left_indent,
+            right_indent,
+            first_line_indent,
+        };
+        if let Some(properties) = formatting.paragraph_properties() {
+            if style_type == rdocx::StyleType::Character {
+                return Err(PyValueError::new_err(
+                    "a character style takes no paragraph formatting",
+                ));
+            }
+            builder = builder.paragraph_properties(properties);
+        }
+        if let Some(properties) = formatting.run_properties() {
+            builder = builder.run_properties(properties);
+        }
+        self.inner
+            .set_style(builder)
+            .map_err(|error| rdocx_to_pyerr(py, error))?;
+        Ok(style_snapshot(
+            self.inner
+                .style(&style_id)
+                .expect("the style was just updated"),
+        ))
+    }
+
     // Return false when no style has the ID or name. The native call refuses
     // a style that content, another style or a numbering level still uses.
     fn remove_style(&mut self, py: Python<'_>, style: &str) -> PyResult<bool> {

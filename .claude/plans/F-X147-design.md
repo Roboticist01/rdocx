@@ -1,6 +1,6 @@
 # F-X147, Complete rdocx Python production checklist
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S80
 **Size**: L
 **Depends on**: F-X141, F-X145, F-X153
@@ -55,12 +55,35 @@ Expected unchanged. A code repair that changes a harness input must be declared 
 
 ## Implementation checklist
 
-- [ ] Run every Issue 168 example against the integrated S79 binding and record a per-item result.
-- [ ] Add failing cases for the remaining production-chain gaps to existing test entrypoints.
-- [ ] Implement only the binding or native changes required by those cases.
-- [ ] Save, reopen, validate, lay out and render the complete chain with deterministic fonts.
-- [ ] Record explicit accepted scope decisions and fallbacks for intentionally unsupported items.
-- [ ] Run focused checks, scoped verification and microscope to zero findings.
+- [x] Run every Issue 168 example against the integrated S79 binding and record a per-item result.
+- [x] Add failing cases for the remaining production-chain gaps to existing test entrypoints.
+- [x] Implement only the binding or native changes required by those cases.
+- [x] Save, reopen, validate, lay out and render the complete chain with deterministic fonts.
+- [x] Record explicit accepted scope decisions and fallbacks for intentionally unsupported items.
+- [x] Run focused checks, scoped verification and microscope to zero findings.
+
+## Acceptance results
+
+| Issue 168 item | Result |
+|---|---|
+| Body-index table insertion, horizontal and vertical merge | Passed in `test_issue_168_complete_edit_save_reopen_layout_and_render`. |
+| Table borders, shading, margins, widths and row controls | Passed in the chain and existing table formatting tests. |
+| Style create, apply, update, remove and default | Passed in the chain. Python `set_style` was the missing operation and changes rendered pixels. |
+| Numbering definition, instance and style link | Passed in the chain and existing numbering tests. |
+| Section margins and orientation in layout | Passed in the chain and existing section layout tests. |
+| Bookmark range, PAGEREF and layout-backed fields | Passed in the chain and existing field tests. |
+| Rich per-section footer with run text, tab and page fields | Passed in the chain after moving a typed body paragraph into the section footer. |
+| Expected-count replacement and atomic three-pair replacement | Passed in the chain, including byte identity and live handles on a mismatched pair. |
+| PDF with a font directory | Passed with the bundled deterministic fonts. |
+| Paragraph text and run removal | Passed in the chain and existing removal tests. |
+| Hyperlink retarget and removal | Passed in the chain and existing relationship tests. |
+| Existing picture resize | Passed in the chain and existing picture tests. |
+| Arbitrary XML or package write | Accepted external lxml ZIP fallback, exercised on `docProps/app.xml` and documented in the Python README. No typed arbitrary-part writer. |
+| Text-anchored comment | Passed in the chain and after reopen. |
+
+The pinned `python-docx==1.2.0` reader opened the final package and confirmed
+authored paragraphs, relationships, table and footer content. The complete
+Python binding suite passed with the reviewed Poppler 26.01.0 oracle.
 
 ## Open questions
 

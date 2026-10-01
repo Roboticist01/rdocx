@@ -3252,3 +3252,140 @@ def test_fx153_run_remove_survives_save_and_reopen():
     paragraph.add_run(" Drop").remove()
     reopened = rdocx.Document.from_bytes(document.to_bytes())
     assert reopened.paragraphs[0].text == "Keep"
+
+
+def test_issue_168_complete_edit_save_reopen_layout_and_render(tmp_path):
+    import importlib.metadata
+    from pathlib import Path
+
+    import docx
+    from lxml import etree
+    import rdocx
+
+    assert importlib.metadata.version("python-docx") == "1.2.0"
+    document = rdocx.Document()
+    document.add_paragraph("Report {{name}}. See ")
+    document.add_paragraph("Target phrase {{date}}")
+    table = document.insert_table(1, 3, 3)
+    table.set_cell_grid_span(0, 0, 2)
+    table = document.tables[0]
+    table.set_cell_vertical_merge(1, 2, "restart")
+    table.set_cell_vertical_merge(2, 2, "continue")
+    table.set_borders("single", size=4, color="000000")
+    table.set_cell_margins(top=0, right=63500, bottom=12700, left=127000)
+    table.grid_widths = [1371600, 1828800, 1828800]
+    table.cell(1, 0).shading = "D9D9D9"
+    table.cell(1, 0).set_margins(top=12700, right=0, bottom=25400, left=6350)
+    table.cell(1, 0).set_border("bottom", "double", size=6, color="auto")
+    table.rows[0].height = 254000
+    table.rows[0].cant_split = True
+    table.rows[0].is_header = True
+
+    document.add_style("Report Note", based_on="Normal", bold=True)
+    definition = document.add_numbering_definition([rdocx.ListLevel(format="decimal")])
+    instance = document.add_numbering_instance(definition)
+    document.link_style_to_numbering("Report Note", instance, 0)
+    document.paragraphs[1].style = "Report Note"
+    document.set_default_style("Report Note")
+    before_style_render = document.render_page_to_png(0, 72)
+    document.set_style("Report Note", bold=False, space_after=rdocx.Pt(6))
+    assert document.render_page_to_png(0, 72) != before_style_render
+    before_invalid_style = document.to_bytes()
+    with pytest.raises(KeyError):
+        document.set_style("Missing", bold=True)
+    assert document.to_bytes() == before_invalid_style
+    assert document.remove_style("Subtitle") is True
+    document.update_section(0, orientation="landscape", margin_left=rdocx.Inches(1.5))
+    document.insert_section(1)
+    document.add_paragraph("Second section {{state}}")
+    footer = document.create_section_story(1, "footer", "default")
+    document.add_paragraph("Confidential").runs[0].add_tab()
+    document.paragraphs[-1].add_run("Page ").add_field("PAGE", "1")
+    document.paragraphs[-1].add_run(" of ").add_field("NUMPAGES", "1")
+    fragment = document.pop_content(document.find_content_index("Confidential"))
+    document.insert_content(footer, fragment)
+
+    target_index = document.find_content_index("Target phrase")
+    document.split_run(target_index, 0, len("Target phrase"))
+    document.add_bookmark(
+        "target",
+        rdocx.RunRange(
+            start=rdocx.RunPosition(body_index=target_index, run_index=0),
+            end=rdocx.RunPosition(body_index=target_index, run_index=1),
+        ),
+    )
+    document.paragraphs[0].runs[0].add_field("PAGEREF target \\h", "?")
+    document.paragraphs[0].add_hyperlink("source", "https://example.com/old")
+    document.set_hyperlink_url(document.hyperlinks[0], "https://example.com/new")
+    document.paragraphs[0].add_hyperlink("remove", "https://example.com/remove")
+    document.remove_hyperlink(document.hyperlinks[-1])
+    document.add_picture(_one_pixel_png(), "pixel.png")
+    relationship_id = re.search(rb'r:embed="([^"]+)"', _document_xml(document)).group(1).decode()
+    assert document.set_picture_size(
+        relationship_id, width=rdocx.Inches(1), height=rdocx.Inches(1)
+    ) == 1
+
+    held = document.paragraphs[0]
+    before = document.to_bytes()
+    with pytest.raises(rdocx.ReplacementCountError) as mismatch:
+        document.replace_all(
+            [("{{name}}", "Ada", 1), ("{{date}}", "October", 2), ("{{state}}", "Done", 1)]
+        )
+    assert mismatch.value.index == 1
+    assert document.to_bytes() == before
+    assert held.text.startswith("Report {{name}}")
+    assert document.try_replace_text("{{missing}}", "x", expect=0) == 0
+    assert document.replace_all(
+        [("{{name}}", "Ada", 1), ("{{date}}", "October", 1), ("{{state}}", "Done", 1)]
+    ) == (1, 1, 1)
+    document.paragraphs[-1].text = "Second section Done"
+    document.paragraphs[1].add_run(" remove").remove()
+    comment_id = document.add_comment_on_text("Target phrase", author="Ada", text="Review")
+    assert _anchored_texts(document, comment_id) == ["Target phrase"]
+    report = document.update_layout_backed_fields()
+    assert (report.page_fields, report.num_pages_fields, report.page_reference_fields) == (
+        1, 1, 1
+    )
+
+    path = tmp_path / "issue-168.docx"
+    document.save(path)
+    # The accepted package-write escape hatch is an external lxml ZIP step.
+    # Change an existing unmodelled part without adding a typed binding writer.
+    changed = tmp_path / "issue-168-package-edited.docx"
+    with zipfile.ZipFile(path) as source, zipfile.ZipFile(changed, "w") as output:
+        for member in source.infolist():
+            data = source.read(member.filename)
+            if member.filename == "docProps/app.xml":
+                root = etree.fromstring(data)
+                application = root.find(
+                    "{http://schemas.openxmlformats.org/officeDocument/2006/extended-properties}Application"
+                )
+                assert application is not None
+                application.text = "Issue 168 workflow"
+                data = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
+            output.writestr(member, data)
+    path = changed
+    reopened = rdocx.Document(path)
+    with zipfile.ZipFile(path) as package:
+        assert package.testzip() is None
+        assert b"<w:tab/>" in package.read(footer.part_name.lstrip("/"))
+        assert b"Issue 168 workflow" in package.read("docProps/app.xml")
+    assert [style.style_id for style in reopened.styles if style.is_default] == ["ReportNote"]
+    assert docx.Document(str(path)).styles["Report Note"].font.bold is False
+    assert [(link.text, link.url) for link in reopened.hyperlinks] == [
+        ("source", "https://example.com/new")
+    ]
+    assert reopened.comments[0].text == "Review"
+    assert reopened.tables[0].rows[0].is_header is True
+    assert reopened.layout_page(0).width == 792.0
+    fonts = Path(__file__).parents[2] / "oxml-layout" / "fonts"
+    assert reopened.to_pdf(font_dir=fonts).startswith(b"%PDF")
+    with zipfile.ZipFile(io.BytesIO(reopened.to_bytes())) as package:
+        assert b"Issue 168 workflow" in package.read("docProps/app.xml")
+    oracle = docx.Document(str(path))
+    assert oracle.paragraphs[0].text.startswith("Report Ada. See ")
+    assert [(link.text, link.url) for link in oracle.paragraphs[0].hyperlinks] == [
+        ("source", "https://example.com/new")
+    ]
+    assert oracle.tables[0].cell(1, 0).text == ""
+    assert oracle.sections[1].footer.paragraphs[0].text.startswith("Confidential")
