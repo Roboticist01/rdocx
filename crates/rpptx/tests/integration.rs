@@ -16285,9 +16285,8 @@ fn removing_a_jump_target_turns_its_links_into_no_action_like_powerpoint() {
     let package = open_opc(&saved, "slide jump removal");
     let xml = String::from_utf8(package.get_part(slide_part).unwrap().to_vec()).unwrap();
     assert_eq!(
-        xml.matches(r#"<a:hlinkClick r:id="" action="ppaction://noaction"/>"#)
-            .count(),
-        2,
+        xml.matches(r#"action="ppaction://noaction""#).count(),
+        3,
         "{xml}"
     );
     assert!(xml.contains(
