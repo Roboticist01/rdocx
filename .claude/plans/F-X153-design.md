@@ -1,6 +1,6 @@
 # F-X153, Word Python supplemental contribution
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S79
 **Size**: M
 **Depends on**: F-X141, F-X144
@@ -53,11 +53,11 @@ Expected unchanged. These operations affect authored documents and validation, n
 
 ## Implementation checklist
 
-- [ ] Review PR 220's incremental diff and reconcile F-X141 overlap.
-- [ ] Add failing CLI, native and Python cases to existing test entrypoints.
-- [ ] Implement text anchors, numbering validation and run removal with atomic refusal.
-- [ ] Run focused CLI, facade, Python and XML preservation checks.
-- [ ] Run scoped verification and a zero-finding microscope.
+- [x] Review PR 220's incremental diff and reconcile F-X141 overlap.
+- [x] Add failing CLI, native and Python cases to existing test entrypoints.
+- [x] Implement text anchors, numbering validation and run removal with atomic refusal.
+- [x] Run focused CLI, facade, Python and XML preservation checks.
+- [x] Run scoped verification and a zero-finding microscope.
 
 ## Open questions
 
