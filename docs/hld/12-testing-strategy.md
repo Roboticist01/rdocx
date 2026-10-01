@@ -863,6 +863,20 @@ Python binding suite, and the unchanged 49-entry hash harness. The binding
 suite includes empty caller-font directories and retains the ordinary PDF
 fallback. Every published archive row is remeasured against the exact source.
 
+The identity acceptance matrix builds one cached-TOC report with headings,
+a table, a block control, and footer page fields. Seventeen paragraph, run,
+field-run, footer-run, control, and row identity variants each exercise save,
+replacement, six-entry TOC rebuild, field refresh, PDF render, identity-only
+comparison, and one-word comparison. The producer matrix applies eleven XML
+traits to the same report and checks byte-identical no-op save, replacement,
+TOC rebuild, field refresh, render, refreshed-field comparison, one-word
+comparison, self-comparison after an rdocx edit, and picture insertion after
+save and reopen. The source-built binding cases use python-docx 1.2.0 only
+for input construction. Native regressions cover content-control read and
+write walkers across body, cell, nested, header, footer, and text-box owners,
+and check `mc:Ignorable` declarations in every rewritten Word story part and
+the styles root after a style edit.
+
 Story revision regressions list body, cell, header, footer, note, comment, and
 text-box owners, then compare their identities and counts with accept and
 reject after save and reopen. CLI regressions retain existing revision output

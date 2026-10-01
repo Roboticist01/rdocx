@@ -1645,6 +1645,77 @@ fn rebinding_namespace_declarations(
     Ok(declarations)
 }
 
+/// Retain producer root metadata when a style edit requires typed serialization.
+/// The serializer owns the canonical `w` and `r` prefixes. Every other root
+/// attribute, including compatibility declarations, stays in source order.
+fn retain_styles_root_attributes(source: &[u8], serialized: Vec<u8>) -> Result<Vec<u8>> {
+    let mut reader = quick_xml::Reader::from_reader(source);
+    let mut buffer = Vec::new();
+    let root = loop {
+        match reader
+            .read_event_into(&mut buffer)
+            .map_err(|error| Error::Other(format!("invalid styles root: {error}")))?
+        {
+            Event::Start(element) | Event::Empty(element) => break element.into_owned(),
+            Event::Eof => return Err(Error::Other("styles part has no root".to_owned())),
+            _ => buffer.clear(),
+        }
+    };
+    let mut retained = Vec::new();
+    for attribute in root.attributes() {
+        let attribute = attribute.map_err(rdocx_oxml::OxmlError::from)?;
+        let name = std::str::from_utf8(attribute.key.as_ref())
+            .map_err(|error| Error::Other(format!("invalid styles attribute name: {error}")))?
+            .to_owned();
+        let value = attribute
+            .decoded_and_normalized_value(XmlVersion::Implicit1_0, root.decoder())
+            .map_err(|error| Error::Other(format!("invalid styles attribute: {error}")))?
+            .into_owned();
+        if name == "xmlns:w" || name == "xmlns:r" {
+            let expected = if name == "xmlns:w" {
+                rdocx_oxml::namespace::W_NS
+            } else {
+                drawing_ns::R
+            };
+            if value != expected {
+                return Err(Error::Other(format!(
+                    "cannot serialize styles with a shadowed `{}` namespace",
+                    &name[6..]
+                )));
+            }
+        } else {
+            retained.push((name, value));
+        }
+    }
+    let mut start = BytesStart::new("w:styles");
+    start.push_attribute(("xmlns:w", rdocx_oxml::namespace::W_NS));
+    start.push_attribute(("xmlns:r", drawing_ns::R));
+    for (name, value) in &retained {
+        start.push_attribute((name.as_str(), value.as_str()));
+    }
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Event::Start(start))
+        .map_err(|error| Error::Other(format!("invalid styles root: {error}")))?;
+    let new_root = writer.into_inner();
+    let opening = b"<w:styles";
+    let position = serialized
+        .windows(opening.len())
+        .position(|window| window == opening)
+        .ok_or_else(|| Error::Other("serialized styles root is missing".to_owned()))?;
+    let end = serialized[position..]
+        .iter()
+        .position(|byte| *byte == b'>')
+        .ok_or_else(|| Error::Other("serialized styles root is incomplete".to_owned()))?
+        + position
+        + 1;
+    let mut output = Vec::with_capacity(serialized.len() + new_root.len());
+    output.extend_from_slice(&serialized[..position]);
+    output.extend_from_slice(&new_root);
+    output.extend_from_slice(&serialized[end..]);
+    Ok(output)
+}
+
 fn root_namespace_declarations(xml: &[u8]) -> Result<Vec<(String, String)>> {
     let mut reader = quick_xml::Reader::from_reader(xml);
     let mut buffer = Vec::new();
@@ -11723,6 +11794,20 @@ impl Document {
     fn canonicalize_drawing_ids(&mut self) -> Result<()> {
         let owner = self.doc_part_name.clone();
         let owner_identity = relationship_owner_identity(&owner);
+        // Story picture insertion keeps current producer XML. Patch its
+        // canonical relationship and drawing IDs into that retained source.
+        let retained_main_xml = self
+            .package
+            .get_part(&owner)
+            .filter(|xml| {
+                self.identifiers
+                    .authored_nested_story_relationship_ids
+                    .get(&owner_identity)
+                    .is_some_and(|ids| !ids.is_empty())
+                    && CT_Document::from_xml(xml).ok().as_ref() == Some(&self.document)
+                    && self.document.to_xml().ok().as_deref() != Some(*xml)
+            })
+            .map(|xml| xml.to_vec());
         if let Some(section) = &mut self.document.body.sect_pr {
             section
                 .header_refs
@@ -12057,12 +12142,14 @@ impl Document {
             }
         }
         let mut drawing_edits = Vec::with_capacity(authored_drawing_slots.len());
+        let mut canonical_drawing_ids = Vec::with_capacity(authored_drawing_slots.len());
         let mut canonical_nested_drawing_ids = HashSet::new();
-        for (slot, span, _) in authored_drawing_slots {
+        for (slot, span, old_id) in authored_drawing_slots {
             let id = reserve_u32(&mut occupied_drawings, 1, "drawing")?;
             if matches!(slot, AuthoredMainDrawing::Nested) {
                 canonical_nested_drawing_ids.insert(id);
             }
+            canonical_drawing_ids.push((old_id, id));
             drawing_edits.push((span.start, span.end, id.to_string().into_bytes()));
         }
         if !drawing_edits.is_empty() {
@@ -12072,6 +12159,30 @@ impl Document {
                 updated.splice(start..end, replacement);
             }
             self.document = CT_Document::from_xml(&updated)?;
+        }
+        if let Some(retained_main_xml) = retained_main_xml {
+            let mut retained = remap_xml_relationship_ids(&retained_main_xml, &relationship_remap)?;
+            let slots = authored_drawing_slots_in_source_order(
+                &retained,
+                &modeled_drawing_ids,
+                &nested_image_relationship_ids,
+            )?;
+            if slots.len() == canonical_drawing_ids.len()
+                && slots
+                    .iter()
+                    .zip(&canonical_drawing_ids)
+                    .all(|((_, _, old), (expected, _))| old == expected)
+            {
+                for ((_, span, _), (_, id)) in slots
+                    .into_iter()
+                    .rev()
+                    .zip(canonical_drawing_ids.iter().rev())
+                {
+                    retained.splice(span, id.to_string().into_bytes());
+                }
+                self.document = CT_Document::from_xml(&retained)?;
+                self.package.set_part(&owner, retained);
+            }
         }
         if canonical_nested_drawing_ids.is_empty() {
             self.identifiers
@@ -13205,6 +13316,11 @@ impl Document {
             .as_ref()
             != Some(&self.styles);
         if styles_changed {
+            let styles_xml = if let Some(source) = self.package.get_part(&styles_part) {
+                retain_styles_root_attributes(source, styles_xml)?
+            } else {
+                styles_xml
+            };
             self.package.set_part(&styles_part, styles_xml);
         }
 
@@ -14563,9 +14679,22 @@ impl Document {
         };
         let mut candidate = self.clone_for_staging();
         candidate.flush_to_package()?;
-        let (source, story_owner) = candidate.story_source_and_owner(story)?;
+        let (source, mut story_owner) = candidate.story_source_and_owner(story)?;
         let part_name = source.part_name.clone();
-        let source_xml = source.xml.into_owned();
+        let mut source_xml = source.xml.into_owned();
+        // The ordinary story projection is typed XML. For picture insertion,
+        // use the retained main part when it still describes the current model.
+        if part_name == candidate.doc_part_name
+            && let Some(retained) = candidate.package.get_part(&part_name)
+            && CT_Document::from_xml(retained).ok().as_ref() == Some(&candidate.document)
+            && retained != source_xml
+        {
+            source_xml = retained.to_vec();
+            story_owner = scan_story_owners(&source_xml, StoryKind::Body)?
+                .into_iter()
+                .find(|owner| owner.kind == story.kind && owner.owner_index == story.owner_index)
+                .ok_or_else(|| Error::Other("picture story source disappeared".to_owned()))?;
+        }
         let direct_items = direct_story_content_items(&source_xml, &story_owner)?;
         let (boundary, inserted_direct_index) = match after {
             Some(after) => {

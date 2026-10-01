@@ -1308,7 +1308,11 @@ before enclosing content controls and exposes every matching body coordinate.
 Paragraph text and run handles use one accepted-view walk. Direct runs, inline
 content-control runs, insertion runs, and move-destination runs retain recursive
 source paths in exact order. Deletion and move-source text stays excluded.
-Literal and regex replacement read the same runs in the same order. The runs of
+Literal and regex replacement read the same runs in the same order. Body,
+table-cell, nested-control, header, footer, and text-box traversal also uses
+the accepted view for readable text, replacement, export, links, and pictures.
+Producer identity on paragraph, run, table-row, and content-control owners
+does not create a content revision or hide an editable run. The runs of
 one inline content control, insertion, or move destination form a stretch of
 their own, and a match must lie within one stretch, so a match that crosses an
 insertion boundary is not replaced and is not counted. A replacement inside an

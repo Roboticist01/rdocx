@@ -463,10 +463,16 @@ rewriting the raw subtree bytes. Prefix aliases, nested shadows, and ordinary
 namespace URI escaping are resolved by the XML parser. Serialization fails
 closed when owner identity or a serializer prefix binding cannot be preserved
 safely, leaving the opened package bytes authoritative.
-The main document, header, and footer roots also retain their other
-attributes, such as `mc:Ignorable`, in source order. A typed rewrite writes
-them after every namespace declaration it keeps, so a compatibility attribute
-survives the rewrite and every prefix it lists stays declared.
+The main document, header, footer, comments, footnotes, endnotes, and styles
+roots retain their other attributes, such as `mc:Ignorable`, in source order.
+A rewrite keeps each compatibility attribute with declarations for every
+prefix it lists. An unchanged part keeps its exact producer bytes, including
+an empty self-closed comments root.
+Story insertion reads the retained main-part XML while it matches the typed
+model. Picture insertion adds one paragraph at its body boundary. Canonical
+relationship and drawing identifiers are patched into that retained XML, so
+unrelated producer toggles, empty properties, and default root declarations
+stay in the package after the picture is saved.
 
 Modeled paragraph, run, table-row, and section-property owners retain every
 ordered root attribute, including producer identity, revision-session, foreign,

@@ -37411,6 +37411,59 @@ mod producer_part_roots_survive_save {
             assert!(xml.contains(r#"w14:paraId="3A2B3C4D""#), "{xml}");
         }
     }
+
+    #[test]
+    fn rewritten_note_parts_keep_mc_ignorable_and_its_declarations() {
+        let document = format!(
+            concat!(
+                "{}<w:document {}><w:body><w:p><w:r><w:t>Body</w:t></w:r>",
+                "<w:r><w:footnoteReference w:id=\"1\"/></w:r>",
+                "<w:r><w:endnoteReference w:id=\"1\"/></w:r></w:p>",
+                "<w:sectPr/></w:body></w:document>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let note = |root: &str, item: &str| {
+            format!(
+                concat!(
+                    "{}<w:{} {}><w:{} w:id=\"1\"><w:p w14:paraId=\"3A2B3C4D\" ",
+                    "w14:textId=\"77777777\"><w:r><w:t>Note margin</w:t></w:r></w:p>",
+                    "</w:{}></w:{}>",
+                ),
+                DECLARATION, root, WORD_ROOT, item, item, root
+            )
+        };
+        let source = package_with(
+            Some(&document),
+            &[
+                (
+                    "rIdFootnote",
+                    "/word/footnotes.xml",
+                    (
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
+                        oxml_opc::relationship::rel_types::FOOTNOTES,
+                    ),
+                    &note("footnotes", "footnote"),
+                ),
+                (
+                    "rIdEndnote",
+                    "/word/endnotes.xml",
+                    (
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml",
+                        oxml_opc::relationship::rel_types::ENDNOTES,
+                    ),
+                    &note("endnotes", "endnote"),
+                ),
+            ],
+        );
+        let edited = edited_save(&source, "margin", "MARGIN", 2);
+        for name in ["/word/footnotes.xml", "/word/endnotes.xml"] {
+            let xml = part(&edited, name);
+            assert!(xml.contains("MARGIN"), "{name}: {xml}");
+            assert_ignorable_declared(root_tag(&xml), "w14 w15");
+            assert!(xml.contains(r#"w14:paraId="3A2B3C4D""#), "{name}: {xml}");
+        }
+    }
 }
 
 mod f265_run_property_regressions {
@@ -41259,4 +41312,72 @@ mod run_text_around_a_complex_field {
         let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
         assert_eq!(reopened.paragraphs()[0].text(), "Page 1 of 1");
     }
+}
+
+#[test]
+fn issue_157_add_picture_keeps_default_root_and_block_control() {
+    let mut document = issue_157_document(ISSUE_157_UNUSED_ROOT_DEFAULT, true, "");
+    document.add_picture(
+        b"issue 157 image payload",
+        "issue_157.png",
+        Length::pt(12.0),
+        Length::pt(8.0),
+    );
+    let saved = document
+        .to_bytes()
+        .expect("picture saves with producer scopes");
+    let reopened = Document::from_bytes(&saved).unwrap();
+    assert!(
+        issue_157_body_summary(&reopened).contains(&"picture".to_owned()),
+        "picture must remain reachable beside the block control"
+    );
+}
+
+#[test]
+fn issue_160_inline_control_text_is_replaced_through_the_document_walker() {
+    let xml = wrap_word_body(
+        r#"<w:p><w:sdt><w:sdtPr><w:tag w:val="goog_rdk_0"/></w:sdtPr><w:sdtContent><w:r><w:t>alpha</w:t></w:r></w:sdtContent></w:sdt></w:p>"#,
+    );
+    let mut document = document_with_content_controls(&xml);
+    assert_eq!(document.try_replace_text("alpha", "ALPHA").unwrap(), 1);
+    assert!(document_xml(&mut document).contains("ALPHA"));
+}
+
+#[test]
+fn issue_160_edited_styles_part_keeps_ignorable_root_binding() {
+    let mut source = Document::new();
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(source.to_bytes().unwrap()))
+            .unwrap();
+    let styles = String::from_utf8(package.get_part("/word/styles.xml").unwrap().to_vec()).unwrap();
+    let styles = styles.replacen(
+        "<w:styles ",
+        r#"<w:styles xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:x="urn:producer" mc:Ignorable="w14" x:root="A &amp; B" "#,
+        1,
+    );
+    package.set_part("/word/styles.xml", styles.into_bytes());
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut bytes).unwrap();
+    let mut document = Document::from_bytes(bytes.get_ref()).unwrap();
+    document
+        .add_style(StyleBuilder::paragraph("MatrixStyle", "Matrix Style"))
+        .unwrap();
+    let output =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+            .unwrap();
+    let styles = String::from_utf8(output.get_part("/word/styles.xml").unwrap().to_vec()).unwrap();
+    let start = styles.find("<w:styles").unwrap();
+    let root = &styles[start..=start + styles[start..].find('>').unwrap()];
+    assert!(root.contains(r#"mc:Ignorable="w14""#), "{root}");
+    assert!(root.contains("xmlns:w14="), "{root}");
+    assert!(root.contains(r#"xmlns:x="urn:producer""#), "{root}");
+    assert!(root.contains(r#"x:root="A &amp; B""#), "{root}");
+    let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    let again =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(reopened.to_bytes().unwrap()))
+            .unwrap();
+    assert_eq!(
+        again.get_part("/word/styles.xml"),
+        output.get_part("/word/styles.xml")
+    );
 }

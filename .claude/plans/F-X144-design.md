@@ -1,6 +1,6 @@
 # F-X144, Identity and producer matrices across operations
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S78
 **Size**: L
 **Depends on**: F-X143, F-X151
@@ -52,10 +52,10 @@ Expected unchanged because these cases use new source-built inputs and do not in
 
 ## Implementation checklist
 
-- [ ] Reproduce every issue matrix row and operation on the F-X151 prefix.
-- [ ] Fix each failing owner, parser, comparator, or serializer path.
-- [ ] Check `mc:Ignorable` and comments bytes in all edited parts.
-- [ ] Run scoped verification and a zero-finding microscope.
+- [x] Reproduce every issue matrix row and operation on the F-X151 prefix.
+- [x] Fix each failing owner, parser, comparator, or serializer path.
+- [x] Check `mc:Ignorable` and comments bytes in all edited parts.
+- [x] Run scoped verification and a zero-finding microscope.
 
 ## Open questions
 
