@@ -1223,7 +1223,11 @@ new parent. A numbered heading remains a heading inside its list item and owns
 the navigation anchor. Custom marker text, marker styling, marker alignment,
 and list semantics inside a table cell are diagnosed when EPUB list semantics
 cannot preserve them. Supported image descriptions become XHTML alternative
-text. Heading and navigation labels use only bounded direct projected runs.
+text. Heading and navigation labels use only bounded projected runs, those of
+content controls and tracked insertions included. A content control, a tracked
+insertion or move in, a smart tag and inline custom XML are flattened: what
+they hold is exported in place and the wrapper is diagnosed. Deleted and
+moved-away text is left out and diagnosed.
 Only structurally validated byte-sniffed PNG, JPEG, and GIF media referenced by
 surviving body drawings is packaged. Extension fallback is forbidden, and SVG
 is diagnosed and omitted. Drawing names, extents, preserved drawing XML,
@@ -1659,8 +1663,10 @@ story that revision resolution reaches: the main document, headers, footers,
 comments, normal footnotes, endnotes, and the text boxes inside them. Each
 snapshot adds the `StoryId` of its Word story, with table cells folded into the
 story that holds the table. It scans the parts as resolution stages them, so
-the list has one entry per revision element that `accept_all` and
-`reject_all` resolve and its length equals their count.
+the list has one entry per resolved revision. A compared comment package
+change uses one private package revision, reported under the main story,
+because its added or removed comment may have no surviving comment owner.
+The list length equals the count from `accept_all` and `reject_all`.
 `rdocx-cli revision list` and Python `Document.revisions` expose this all-story
 listing. WASM load and save paths preserve the revision XML without a revision
 inspection method.
@@ -1763,13 +1769,14 @@ the incubating 0.4.0 family and the stable 0.8.0 family.
 
 Native callers resolve tracked changes through `accept_all`, `reject_all`, the
 exact-author pair, the inclusive RFC 3339 date-range pair, and the id pair.
-Each method returns the number of modeled revision elements resolved. Shared
+Each method returns the number of revisions resolved, including a compared
+comment package change. Shared
 ids select every matching placement, author matching is case-sensitive, and
 missing dates do not match a date range. Invalid bounds and malformed selected
 changes return an error before mutation. Resolution covers the main document,
 headers, footers, comments, normal footnotes, endnotes, and nested text boxes.
 `Document::revisions` remains main-story-only, while
-`Document::story_revisions` lists exactly the elements these methods resolve.
+`Document::story_revisions` lists exactly the revisions these methods resolve.
 These eight methods are additive on `rdocx::Document`.
 `rdocx-cli revision accept|reject` exposes the all-story resolution boundary
 with mutually exclusive id, exact-author, or paired date selectors. An omitted
@@ -1807,11 +1814,27 @@ The native facade stages the main story from package-authoritative XML and
 preserves exact unchanged drawing wrappers even when sibling text in the same
 paragraph, table, cell, or control changes. Accepting and rejecting the result
 retain the drawing payload, relationship graph, and media bytes.
+When a matched paragraph changes a comment range, hyperlink, inline control,
+or preserved child boundary, comparison tracks a complete paragraph deletion
+and insertion if its bookmarks remain in place. The rebuilt TOC entry
+transition to a hyperlink and PAGEREF field uses this path. Granular matching
+cuts at bookmark and comment range boundaries so inserted text stays on its
+edited side of a marker.
+When comment owners or metadata change, comparison carries the edited comments
+and their related package graph in the redline. A related private custom XML
+part retains the original comment graph for rejection. Acceptance keeps the
+edited graph, rejection restores the original graph, and either resolution
+removes the private part. The package change appears as one selectable revision
+in `story_revisions` and in Python and CLI revision listings. Compatible
+comment text edits continue as ordinary comment-story revisions. This changes
+no public Rust, Python, or CLI signature and adds no semver break.
 Detached inline and anchor wrappers retain only the inherited namespace
 bindings they use and that are not already carried by the story root. Dirty
 typed inputs recover matching package drawing payloads before serialization.
 Complex fields map every physical source run to one modeled comparison owner,
-and sibling fields from one physical run share that owner.
+and sibling fields from one physical run share that owner. Text read out of a
+field's physical run is compared as its own runs, and the comparison source
+writes that span as one physical run per modeled run.
 It emits same-story moves and supported run, paragraph, table, and section
 property revisions. Diagnostic locations retain the actual story identity and
 stable owner path. `rdocx-cli compare` takes an explicit author, RFC 3339

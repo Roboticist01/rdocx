@@ -16634,3 +16634,63 @@ and dependency direction checks passed.
 **Notes for future sessions.** Issues 160 and 165 remain open for their full
 acceptance matrices in later sprints. PR heads need rebase and CI reruns before
 closure. The 18-page Word SSIM trend is advisory and below its target.
+
+### F-X151, Word preservation and comparison PR intake
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the incremental behavior and focused tests from PRs 214, 228, 229, 232, 233 and 239 on the completed S77 prefix. Word comparison, revision handling, exporters, namespace and border retention, XML character validation, and shared-run field text now retain their reviewed behavior across native and Python paths.
+
+**Non-obvious choices.** Each PR behavior was recorded in a separate labelled worker commit because the full PR branches predated S77. Microscope review found two additional cases: authored UTF-16 XML with a forbidden character and an ignored hyperlink whose relationship id appeared only as a bookmark name. Both were fixed in separate commits. The existing caller font fallback required the Python test to expect a successful PDF for an empty font directory.
+
+**Deviations from the design plan.** None. The plan was extended before implementation to list DrawingML's HLD section for PR 233.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md`, `docs/hld/05-drawingml-model.md`, `docs/hld/08-rendering-spec.md`, `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The combined changed-crate suite, 121 Word Python binding tests, UTF-16 package writer case, and comparison hyperlink carry regressions passed. The bookmark-name regression failed before the fix and passed after it. Scoped format, Clippy, no-default font, WASM, documentation, repository-policy and 22-crate packaging gates passed. Microscope pass 2 found zero defects and zero smells. Final integrated workspace verification remains due at sprint closure.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker prefix.
+
+**Notes for future sessions.** F-X144 and F-X145 consume this prefix. The imported PR heads still require rebase and hosted CI before their upstream closure.
+
+### F-X144, Identity and producer matrices across operations
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reproduced all 17 Issue 159 identity rows and 11 Issue 160 producer rows as source-built Python binding regressions. Every producer row exercises picture insertion. Added native coverage for the default-root and block-control picture path, inline-control replacement, rewritten note compatibility roots, and edited styles root metadata. Repaired story picture insertion to retain the current main-part XML through canonical identifier allocation and preserved root attributes when an edited styles part is serialized.
+
+**Non-obvious choices.** The attached identity and producer scripts passed on the completed F-X151 prefix, so F-X144 did not duplicate the earlier comparison and walker repairs. The stronger picture column exposed loss of producer details after save. Microscope pass 1 caught the test gap, and the repaired story picture path leaves ordinary authored output unchanged. The edited styles-root regression failed before its fix and passed after it.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The full native suite and 149 Word Python binding tests passed. Scoped format, Clippy, no-default font, WASM, rustdoc, README, prose, generated-skill and workflow checks passed. Microscope pass 2 found zero defects and zero smells. Final integrated workspace verification and sprint review remain due after F-X145.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed F-X151 and F-X144 prefix.
+
+**Notes for future sessions.** F-X145 consumes this completed prefix. Issue 161 comparison options and redline cases remain for the final sprint wave.
+
+### F-X145, Comparison options and redline completion
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Completed Issue 161 comparison and redline cases for edited comments, rebuilt TOCs and marker placement. The redline carries edited comment parts and their related assets through a selectable revision, and accept or reject reconstructs the respective input. Structural paragraph changes can be tracked as a whole paragraph while bookmark and comment boundaries stay aligned with changed text.
+
+**Non-obvious choices.** Native, Python and CLI comparison retain `run` as their default granularity. A related custom XML part stores the original comment graph for rejection. New comment assets receive distinct package paths when their names collide with assets used elsewhere in the document. This changes behavior without adding a public API symbol or breaking the existing option defaults.
+
+**Deviations from the design plan.** The Python and CLI option surfaces were already present on the completed dependency prefix. F-X145 verified their parity and implemented the remaining redline cases.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The Issue 161 Python and CLI option matrix, edited comment cases, rebuilt TOC and PR 205 marker regressions passed. The comment and marker gates failed on the pre-fix behavior. Microscope pass 3 reported zero defects and zero smells. The integrated full workspace suite, 161 Word Python tests, no-default font, WASM, rustdoc, README, 22-crate publish dry run and supply chain checks passed. Every generated archive was below 10 MiB.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S78 result.
+
+**Notes for future sessions.** The comment revision sidecar must be resolved before comparing the redline again. The README archive measurement for `rdocx` is 1,216,800 compressed bytes, 7,084,054 member bytes and 36 members.

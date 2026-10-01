@@ -92,6 +92,7 @@ defended.
 | S75 | M24, X | 11 | 3 | 8 | 47 | 8 | Restored the hosted Python story gate, integrated PRs 146 through 151, reconciled overlapping PRs 152 through 154, fixed the uncovered issues, and corrected table row breaks. F-X133 and F-271 through F-277 carry to S76 at the approved mid-milestone cutoff, preserving their dependency order. The full close gate passed with 49 matching hashes after PR 148's separately reviewed 15-entry layout delta, seven matching golden buffers, all archives below 10 MiB, and sprint review pass 1 clean. M24 remains open |
 | S76 | X | 3 | 3 | 0 | 15 | 2 | Integrated 19 reviewed contributor PRs in three dependency waves covering package and CLI safety, Word story traversal, producer identity, and comparison. The full close gate passed with 49 unchanged hashes, 77 Python tests, all archives below 10 MiB, and a clean final sprint review. The broader issue acceptance matrix remains planned for S78 and S79 |
 | S77 | X | 4 | 4 | 0 | 18 | 2 | Integrated 21 reviewed contributor PRs across rendering, layout, Python bindings, Presentation and CLI stories. Two separately reviewed baseline updates ended with all 49 hashes matching. The full close gate, 121 Word and 63 Presentation Python tests, pinned fidelity completeness, 22-crate dry run and clean sprint review passed. Broader issue matrices remain scheduled through S88 |
+| S78 | X | 3 | 3 | 0 | 15 | 1 | Integrated six reviewed Word PR behaviors, completed the Issue 157 and 159 identity and picture gates and the Issue 161 redline gate, and retained Issue 160 follow-up scope in F-X161. The full workspace gate, 161 Word Python tests, 49 unchanged hashes, 22-crate dry run and sprint review pass 1 passed. No stories carried |
 
 ## Completed features
 
@@ -509,6 +510,10 @@ defended.
 | F-X142 | S77 | L | 5 | 1 | 2026-10-01 | Integrated six Presentation Python PRs and completed the Issue 169 API, comment anchor and built-in table style checklist |
 | F-X143 | S77 | M | 3 | 1 | 2026-10-01 | Integrated two revision and CLI PRs with all-story listing, related-part warnings and strict validation |
 
+| F-X151 | S78 | L | 5 | 1 | 2026-10-01 | Integrated six Word PR behaviors with scoped review fixes, unchanged hash output and 121 passing Python tests |
+| F-X144 | S78 | L | 5 | 1 | 2026-10-01 | Completed 17 identity rows and 11 producer rows across operations, repaired picture and styles preservation, and kept 49 hash entries unchanged |
+| F-X145 | S78 | L | 5 | 1 | 2026-10-01 | Completed Issue 161 comment, TOC and marker redline cases, preserved run defaults, and kept 49 hash entries unchanged |
+
 ## Velocity
 
 Recalculated at each sprint close. The backlog assumes about 2 stories per week
@@ -600,6 +605,7 @@ five working days.
 | S75 | 3 | 8 | 1.88 |
 | S76 | 3 | 2 | 7.50 |
 | S77 | 4 | 2 | 10.00 |
+| S78 | 3 | 1 | 15.00 |
 
 ## Escalation record
 
@@ -680,3 +686,4 @@ was done about it. Empty is the expected state.
 | 2026-09-26 | Sprint estimate variance exceeded 30 percent | S75 | Record 8 actual days against 47 originally estimated, with 36 estimated days moved to S76 in the approved eight-story carry. The three delivered stories were estimated at 11 days and took 8. This is a deliberate mid-milestone scope cutoff, not evidence that the remaining related-story work became cheaper. The resulting 1.88 stories per week is close to the long-run assumption, so retain the dependency-defined S76 boundary and split it before implementation if capacity requires |
 | 2026-09-30 | Sprint estimate variance exceeded 30 percent | S76 | Record 2 elapsed workdays against 15 estimated for three completed contribution waves. Stacked PRs reused established implementation and oracle paths, while dependency-prefix review and full verification remained explicit. The resulting 7.50 stories per week is a short contribution-intake result rather than a sustainable forecast, so retain the dependency-defined S77 boundary |
 | 2026-10-01 | Sprint estimate variance exceeded 30 percent | S77 | Record 2 elapsed workdays against 18 estimated for four completed contribution waves. Reviewed stacked changes and established binding, corpus and package gates compressed implementation time while the full integrated gate and sprint review remained explicit. The resulting 10.00 stories per week is a short contribution-intake result rather than a sustainable forecast, so retain the dependency-defined S78 through S88 repair boundaries |
+| 2026-10-01 | Sprint estimate variance exceeded 30 percent | S78 | Record 1 elapsed workday against 15 estimated for three completed dependency waves. Reviewed contributor changes, source-built acceptance matrices and the established full gate compressed elapsed time. The resulting 15.00 stories per week is not a sustainable forecast, so retain the dependency-defined S79 through S88 repair boundaries |

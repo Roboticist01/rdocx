@@ -13628,7 +13628,8 @@ fn namespace_classification_metadata_exists_only_for_raw_children() {
     ));
 }
 
-/// The body read walkers see through content controls (GitHub issue #160).
+/// The body read walkers and the exporters see through content controls
+/// (GitHub issue #160).
 mod content_control_read_walker_regressions {
     use super::*;
 
@@ -13867,6 +13868,550 @@ mod content_control_read_walker_regressions {
             assert_eq!(seen.headings, headings, "{location}: headings");
             assert_eq!(seen.links, links, "{location}: links");
         }
+    }
+
+    /// A structurally valid one-pixel PNG, which EPUB export requires.
+    const PNG: &[u8] = &[
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 29, 99, 96, 96, 96, 248, 15, 0,
+        1, 4, 1, 0, 30, 115, 156, 64, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ];
+
+    /// A run showing the picture of `relationship_id` at `cx` by `cy` EMU.
+    fn picture_run(relationship_id: &str, id: usize, cx: i64, cy: i64) -> String {
+        format!(
+            r#"<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><wp:extent cx="{cx}" cy="{cy}"/><wp:docPr id="{id}" name="Picture {id}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="{relationship_id}"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#
+        )
+    }
+
+    /// A document with a content control wherever one can wrap exported
+    /// content: around a body heading, a run, a cell paragraph, a run in a
+    /// cell, a cell, a row, another control, and two of four pictures. The
+    /// header paragraph is wrapped too. It also holds a tracked insertion,
+    /// deletion and move, a picture in an insertion, a simple field whose
+    /// result is an insertion, an empty insertion, a smart tag and inline
+    /// custom XML. With `wrap` false, the document the text readers read: no
+    /// control or wrapper, the inserted and moved-in runs as plain runs, and
+    /// no deleted or moved-away run.
+    fn exporter_fixture(wrap: bool) -> Document {
+        let wrap_in = |tag: &str, content: &str| {
+            if wrap {
+                control(tag, content)
+            } else {
+                content.to_owned()
+            }
+        };
+        let tracked = |kind: &str, id: usize, content: &str| {
+            if wrap {
+                format!(
+                    r#"<w:{kind} w:id="{id}" w:author="Ada" w:date="2026-09-30T00:00:00Z">{content}</w:{kind}>"#
+                )
+            } else if matches!(kind, "ins" | "moveTo") {
+                content.to_owned()
+            } else {
+                String::new()
+            }
+        };
+        let wrapper = |element: &str, attributes: &str, content: &str| {
+            if wrap {
+                format!("<w:{element} {attributes}>{content}</w:{element}>")
+            } else {
+                content.to_owned()
+            }
+        };
+        let run = |text: &str| format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#);
+        let mut seed = Document::new();
+        seed.set_header("Header text");
+        let mut package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap()))
+                .unwrap();
+        package.set_part("/word/media/pixel.png", PNG.to_vec());
+        package.content_types.add_default("png", "image/png");
+        let image = package
+            .get_or_create_part_rels("/word/document.xml")
+            .add(oxml_opc::relationship::rel_types::IMAGE, "media/pixel.png");
+
+        let body = [
+            paragraph("Plain before."),
+            wrap_in(
+                "heading",
+                r#"<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Wrapped heading</w:t></w:r></w:p>"#,
+            ),
+            format!(
+                "<w:p>{}{}{}</w:p>",
+                run("Inline "),
+                wrap_in(
+                    "inline",
+                    r#"<w:r><w:rPr><w:b/></w:rPr><w:t>wrapped run</w:t></w:r>"#
+                ),
+                run(" after.")
+            ),
+            table(&format!(
+                "{}{}",
+                row(&format!(
+                    "{}{}{}",
+                    cell(&wrap_in("cell block", &paragraph("Cell block"))),
+                    cell(&format!(
+                        "<w:p>{}{}</w:p>",
+                        run("Cell "),
+                        wrap_in("cell inline", &run("inline"))
+                    )),
+                    wrap_in("cells", &cell(&paragraph("Wrapped cell"))),
+                )),
+                wrap_in(
+                    "rows",
+                    &row(&format!(
+                        "{}{}{}",
+                        cell(&paragraph("Wrapped row")),
+                        cell(&format!(
+                            "<w:p>{}</w:p>",
+                            wrap_in("cell picture", &picture_run(&image, 1, 9_525, 19_050))
+                        )),
+                        cell("<w:p/>"),
+                    ))
+                ),
+            )),
+            wrap_in("outer", &wrap_in("inner", &paragraph("Nested text"))),
+            wrap_in(
+                "picture",
+                &format!("<w:p>{}</w:p>", picture_run(&image, 2, 19_050, 28_575)),
+            ),
+            format!("<w:p>{}</w:p>", picture_run(&image, 3, 28_575, 38_100)),
+            format!(
+                "<w:p>{}{}{}{}</w:p>",
+                run("Tracked "),
+                tracked(
+                    "ins",
+                    101,
+                    r#"<w:r><w:rPr><w:b/></w:rPr><w:t>inserted</w:t></w:r>"#
+                ),
+                tracked("del", 102, r#"<w:r><w:delText>removed</w:delText></w:r>"#),
+                run(" text.")
+            ),
+            format!(
+                "<w:p>{}{}</w:p>",
+                tracked("moveFrom", 103, &run("moved away")),
+                tracked("moveTo", 104, &run("Moved here"))
+            ),
+            format!(
+                "<w:p>{}{}{}{}</w:p>",
+                run("Tagged "),
+                wrapper("smartTag", r#"w:uri="urn:x" w:element="place""#, &run("smart")),
+                run(" and "),
+                wrapper("customXml", r#"w:element="field""#, &run("custom"))
+            ),
+            format!(
+                "<w:p>{}</w:p>",
+                tracked("ins", 105, &picture_run(&image, 4, 38_100, 47_625))
+            ),
+            format!(
+                r#"<w:p>{}<w:fldSimple w:instr=" AUTHOR ">{}</w:fldSimple>{}</w:p>"#,
+                run("Author "),
+                tracked("ins", 106, &run("Ada")),
+                tracked("ins", 107, "")
+            ),
+            paragraph("Plain after."),
+        ]
+        .concat();
+        let xml =
+            String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+        let start = xml.find("<w:body>").unwrap() + "<w:body>".len();
+        let end = xml.find("<w:sectPr").unwrap();
+        package.set_part(
+            "/word/document.xml",
+            format!("{}{body}{}", &xml[..start], &xml[end..]).into_bytes(),
+        );
+
+        let header =
+            String::from_utf8(package.get_part("/word/header1.xml").unwrap().to_vec()).unwrap();
+        let start = header.find("<w:p>").unwrap();
+        let end = header.rfind("</w:p>").unwrap() + "</w:p>".len();
+        package.set_part(
+            "/word/header1.xml",
+            format!(
+                "{}{}{}",
+                &header[..start],
+                wrap_in("header", &header[start..end]),
+                &header[end..]
+            )
+            .into_bytes(),
+        );
+
+        let mut output = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut output).unwrap();
+        Document::from_bytes(output.get_ref()).unwrap()
+    }
+
+    fn archive_text(bytes: &[u8], name: &str) -> String {
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut archive.by_name(name).unwrap(), &mut text).unwrap();
+        text
+    }
+
+    #[test]
+    fn every_exporter_writes_what_the_text_readers_read() {
+        let wrapped = exporter_fixture(true);
+        let plain = exporter_fixture(false);
+        assert_eq!(
+            wrapped
+                .body_items()
+                .filter(|item| matches!(item, BodyItemRef::ContentControl(_)))
+                .count(),
+            3
+        );
+        assert_eq!(wrapped.text(), plain.text());
+        assert!(
+            wrapped
+                .text()
+                .contains("Tracked inserted text.\nMoved here\nTagged smart and custom\n")
+        );
+
+        // Controls, tracked changes and wrappers are transparent: each exporter
+        // writes the wrapped document exactly as the document the text readers
+        // read. The main story is the only one these exporters write, so the
+        // header control must leave the output unchanged.
+        let markdown = wrapped.to_markdown();
+        assert_eq!(markdown, plain.to_markdown());
+        assert_eq!(
+            markdown,
+            "Plain before.\n\n# Wrapped heading\n\nInline **wrapped run** after.\n\n\
+             | Cell block | Cell inline | Wrapped cell |\n| --- | --- | --- |\n\
+             | Wrapped row |  |  |\n\nNested text\n\n\n\nTracked **inserted** text.\n\n\
+             Moved here\n\nTagged smart and custom\n\n\nAuthor Ada\n\nPlain after.\n\n"
+        );
+
+        let html = wrapped.to_html();
+        assert_eq!(html, plain.to_html());
+        for text in [
+            "<p>Plain before.</p>",
+            "<h1>Wrapped heading</h1>",
+            "<p>Inline <strong>wrapped run</strong> after.</p>",
+            "<td><p>Cell block</p>",
+            "<td><p>Cell inline</p>",
+            "<td><p>Wrapped cell</p>",
+            "<td><p>Wrapped row</p>",
+            "<p>Nested text</p>",
+            "<p>Tracked <strong>inserted</strong> text.</p>",
+            "<p>Moved here</p>",
+            "<p>Tagged smart and custom</p>",
+            "<p>Author Ada</p>",
+            "<p>Plain after.</p>",
+        ] {
+            assert!(html.contains(text), "{text}: {html}");
+        }
+        assert_eq!(html.matches("<img ").count(), 4, "{html}");
+
+        // MHTML pairs each picture with its size in document order: the one in
+        // the row control, the one in the block control, the plain one, then
+        // the inserted one.
+        let mhtml = wrapped.to_mhtml_bytes().unwrap();
+        let plain_mhtml = plain.to_mhtml_bytes().unwrap();
+        assert_eq!(mhtml.bytes, plain_mhtml.bytes);
+        let reopened = Document::from_mhtml_bytes(&mhtml.bytes).unwrap();
+        assert_eq!(
+            reopened
+                .document
+                .images()
+                .iter()
+                .map(|image| (image.width_emu, image.height_emu))
+                .collect::<Vec<_>>(),
+            [
+                (9_525, 19_050),
+                (19_050, 28_575),
+                (28_575, 38_100),
+                (38_100, 47_625)
+            ]
+        );
+
+        let epub = wrapped.to_epub_bytes().unwrap();
+        let plain_epub = plain.to_epub_bytes().unwrap();
+        assert_eq!(epub.bytes, plain_epub.bytes);
+        let navigation = archive_text(&epub.bytes, "EPUB/nav.xhtml");
+        assert!(navigation.contains(">Wrapped heading</a>"), "{navigation}");
+        let chapter = archive_text(&epub.bytes, "EPUB/chapter-001.xhtml");
+        for text in [
+            ">Wrapped heading</h1>",
+            "Inline <strong>wrapped run</strong> after.",
+            "<p>Cell block</p>",
+            "<p>Cell inline</p>",
+            "<p>Wrapped cell</p>",
+            "<p>Wrapped row</p>",
+            "<p>Nested text</p>",
+            "Tracked <strong>inserted</strong> text.",
+            "<p>Moved here</p>",
+            "<p>Tagged smart and custom</p>",
+            "<p>Author Ada</p>",
+            "<p>Plain after.</p>",
+        ] {
+            assert!(chapter.contains(text), "{text}: {chapter}");
+        }
+        assert_eq!(chapter.matches("<img ").count(), 4, "{chapter}");
+
+        let odt = wrapped.to_odt_bytes().unwrap();
+        let plain_odt = plain.to_odt_bytes().unwrap();
+        assert_eq!(odt.bytes, plain_odt.bytes);
+        let content = archive_text(&odt.bytes, "content.xml");
+        for text in [
+            "Wrapped heading",
+            "wrapped run",
+            "Cell block",
+            "inline",
+            "Wrapped cell",
+            "Wrapped row",
+            "Nested text",
+            "inserted",
+            "Moved here",
+            "smart",
+            "custom",
+            "Ada",
+        ] {
+            // ODF spells a space between words as `<text:s/>`.
+            let text = text.replace(' ', "<text:s/>");
+            assert!(content.contains(&text), "{text}: {content}");
+        }
+        assert_eq!(content.matches("<draw:image ").count(), 4, "{content}");
+
+        let rtf = wrapped.to_rtf_bytes().unwrap();
+        let plain_rtf = plain.to_rtf_bytes().unwrap();
+        assert_eq!(rtf.bytes, plain_rtf.bytes);
+        let rtf_text = String::from_utf8_lossy(&rtf.bytes).into_owned();
+        for text in [
+            "Wrapped heading",
+            "wrapped run",
+            "Cell block",
+            "Wrapped cell",
+            "Wrapped row",
+            "Nested text",
+            "inserted",
+            "Moved here",
+            "smart",
+            "custom",
+            "Ada",
+        ] {
+            assert!(rtf_text.contains(text), "{text}: {rtf_text}");
+        }
+
+        for output in [&markdown, &html, &chapter, &content, &rtf_text] {
+            for absent in ["removed", "moved", "Header"] {
+                assert!(!output.contains(absent), "{absent}: {output}");
+            }
+        }
+
+        // Each exporter reports what it loses of the wrapped content as it does
+        // outside a wrapper, in document order, and notes each control,
+        // revision and wrapper it flattens or leaves out.
+        let split = |diagnostics: Vec<(String, String)>| {
+            let (notes, losses): (Vec<_>, Vec<_>) =
+                diagnostics.into_iter().partition(|(_, message)| {
+                    ["content control", "revision", "smart tag"]
+                        .iter()
+                        .any(|kind| message.contains(kind))
+                });
+            let losses = losses
+                .into_iter()
+                .map(|(_, message)| message)
+                .collect::<Vec<_>>();
+            (notes, losses)
+        };
+        let pairs = |diagnostics: Vec<(&str, &str)>| {
+            diagnostics
+                .into_iter()
+                .map(|(path, message)| (path.to_owned(), message.to_owned()))
+                .collect::<Vec<_>>()
+        };
+        let mhtml_diagnostics = |result: &rdocx::MhtmlWriteResult| {
+            pairs(
+                result
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.location.as_str(), d.message.as_str()))
+                    .collect(),
+            )
+        };
+        let epub_diagnostics = |result: &rdocx::EpubWriteResult| {
+            pairs(
+                result
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.path.as_str(), d.message.as_str()))
+                    .collect(),
+            )
+        };
+        let odt_diagnostics = |result: &rdocx::OdtWriteResult| {
+            pairs(
+                result
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.path.as_str(), d.message.as_str()))
+                    .collect(),
+            )
+        };
+        let rtf_diagnostics = |result: &rdocx::RtfWriteResult| {
+            pairs(
+                result
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.destination.as_deref().unwrap_or(""), d.message.as_str()))
+                    .collect(),
+            )
+        };
+        let mut notes = Vec::new();
+        for (name, wrapped, plain) in [
+            (
+                "mhtml",
+                mhtml_diagnostics(&mhtml),
+                mhtml_diagnostics(&plain_mhtml),
+            ),
+            (
+                "epub",
+                epub_diagnostics(&epub),
+                epub_diagnostics(&plain_epub),
+            ),
+            ("odt", odt_diagnostics(&odt), odt_diagnostics(&plain_odt)),
+            ("rtf", rtf_diagnostics(&rtf), rtf_diagnostics(&plain_rtf)),
+        ] {
+            let (wrapped_notes, losses) = split(wrapped);
+            let (plain_notes, plain_losses) = split(plain);
+            assert_eq!(losses, plain_losses, "{name}");
+            assert!(plain_notes.is_empty(), "{name}: {plain_notes:?}");
+            // Only deleted and moved-away content is left out.
+            assert!(
+                wrapped_notes
+                    .iter()
+                    .all(|(_, message)| message.contains("flattened")
+                        || message.starts_with("deleted or moved-away")
+                        || message == "dropped Word revision"),
+                "{name}: {wrapped_notes:?}"
+            );
+            notes.push(wrapped_notes);
+        }
+        assert_eq!(
+            notes[0],
+            pairs(vec![
+                ("body[1]", "flattened Word body content control"),
+                (
+                    "body[2]/paragraph/item[1]",
+                    "flattened Word paragraph content control"
+                ),
+                (
+                    "body[3]/table/row[0]/cell[0]/item[0]",
+                    "flattened Word table cell content control"
+                ),
+                (
+                    "body[3]/table/row[0]/cell[1]/paragraph[0]/item[1]",
+                    "flattened Word paragraph content control"
+                ),
+                (
+                    "body[3]/table/row[0]/content-control[0]",
+                    "flattened Word table cell content control"
+                ),
+                (
+                    "body[3]/table/content-control[0]",
+                    "flattened Word table row content control"
+                ),
+                (
+                    "body[3]/table/content-control[0]/item[0]/row/cell[1]/paragraph[0]/item[0]",
+                    "flattened Word paragraph content control"
+                ),
+                ("body[4]", "flattened Word body content control"),
+                ("body[4]/item[0]", "flattened nested Word content control"),
+                ("body[5]", "flattened Word body content control"),
+                ("body[7]/paragraph/item[1]", "flattened Word revision"),
+                ("body[7]/paragraph/item[2]", "dropped Word revision"),
+                ("body[8]/paragraph/item[0]", "dropped Word revision"),
+                ("body[8]/paragraph/item[1]", "flattened Word revision"),
+                (
+                    "body[9]/paragraph/item[1]",
+                    "flattened Word smart tag or custom XML element"
+                ),
+                (
+                    "body[9]/paragraph/item[3]",
+                    "flattened Word smart tag or custom XML element"
+                ),
+                ("body[10]/paragraph/item[0]", "flattened Word revision"),
+                ("body[11]/paragraph/item[2]", "flattened Word revision"),
+            ])
+        );
+        assert_eq!(
+            notes[1],
+            pairs(vec![
+                (
+                    "body[1]",
+                    "body content control was flattened during EPUB export"
+                ),
+                (
+                    "body[2]/content-control[0]",
+                    "run content control was flattened during EPUB export"
+                ),
+                (
+                    "body[3]/row[0]/cell[0]/content[0]",
+                    "table-cell content control was flattened during EPUB export"
+                ),
+                (
+                    "body[3]/row[0]/cell[1]/content[0]/content-control[0]",
+                    "run content control was flattened during EPUB export"
+                ),
+                (
+                    "body[3]/row[0]/content-control[0]",
+                    "table-cell content control was flattened during EPUB export"
+                ),
+                (
+                    "body[3]/content-control[0]",
+                    "table row content control was flattened during EPUB export"
+                ),
+                (
+                    "body[3]/content-control[0]/content[0]/cell[1]/content[0]/content-control[0]",
+                    "run content control was flattened during EPUB export"
+                ),
+                (
+                    "body[4]",
+                    "body content control was flattened during EPUB export"
+                ),
+                (
+                    "body[4]/content[0]",
+                    "nested content control was flattened during EPUB export"
+                ),
+                (
+                    "body[5]",
+                    "body content control was flattened during EPUB export"
+                ),
+                (
+                    "body[7]/revision[0]",
+                    "paragraph revision wrapper was flattened during EPUB export"
+                ),
+                (
+                    "body[7]/revision[1]",
+                    "deleted or moved-away revision content was dropped during EPUB export"
+                ),
+                (
+                    "body[8]/revision[0]",
+                    "deleted or moved-away revision content was dropped during EPUB export"
+                ),
+                (
+                    "body[8]/revision[1]",
+                    "paragraph revision wrapper was flattened during EPUB export"
+                ),
+                (
+                    "body[9]/xml[0]",
+                    "smart tag or custom XML wrapper was flattened during EPUB export"
+                ),
+                (
+                    "body[9]/xml[1]",
+                    "smart tag or custom XML wrapper was flattened during EPUB export"
+                ),
+                (
+                    "body[10]/revision[0]",
+                    "paragraph revision wrapper was flattened during EPUB export"
+                ),
+                (
+                    "body[11]/revision[0]",
+                    "paragraph revision wrapper was flattened during EPUB export"
+                ),
+            ])
+        );
+        assert_eq!(notes[2].len(), 16, "{:?}", notes[2]);
+        assert_eq!(notes[3].len(), 16, "{:?}", notes[3]);
     }
 }
 
@@ -17316,6 +17861,32 @@ fn resolving_a_modeled_hyperlink_keeps_unreported_raw_children() {
         document_xml.find("<w:t>after</w:t>").unwrap(),
     ];
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[test]
+fn rejecting_a_deleted_field_code_restores_its_instruction_text() {
+    // Word writes a deleted field code as `w:delInstrText`, and rejecting
+    // the deletion must give `w:instrText` back, as `w:delText` gives `w:t`.
+    let xml = wrap_word_body(concat!(
+        r#"<w:p><w:del w:id="1" w:author="Ada"><w:r><w:fldChar w:fldCharType="begin"/>"#,
+        r#"<w:delInstrText xml:space="preserve"> PAGE </w:delInstrText>"#,
+        r#"<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:delText>7</w:delText></w:r>"#,
+        r#"<w:r><w:fldChar w:fldCharType="end"/></w:r></w:del><w:r><w:t>kept</w:t></w:r></w:p>"#,
+    ));
+    let mut rejected = document_with_content_controls(&xml);
+    assert_eq!(rejected.reject_all().unwrap(), 1);
+    let rejected = document_xml(&mut rejected);
+    assert!(
+        rejected.contains(r#"<w:instrText xml:space="preserve"> PAGE </w:instrText>"#),
+        "{rejected}"
+    );
+    assert!(!rejected.contains("delInstrText"), "{rejected}");
+
+    let mut accepted = document_with_content_controls(&xml);
+    assert_eq!(accepted.accept_all().unwrap(), 1);
+    let accepted = document_xml(&mut accepted);
+    assert!(!accepted.contains("instrText"), "{accepted}");
+    assert!(accepted.contains("<w:t>kept</w:t>"), "{accepted}");
 }
 
 #[test]
@@ -21260,6 +21831,423 @@ fn comparison_appends_multiple_terminal_paragraphs_without_residue() {
         assert!(xml.contains("AUTHOR"), "{xml}");
         assert!(xml.contains("<w:drawing"), "{xml}");
     }
+}
+
+/// Compare, then check that accepting every revision gives the edited
+/// document and rejecting every one gives the original. Returns the tracked
+/// main story.
+fn compare_and_resolve(
+    original_bytes: &[u8],
+    edited_bytes: &[u8],
+    options: &rdocx::ComparisonOptions,
+) -> String {
+    let original = Document::from_bytes(original_bytes).unwrap();
+    let edited = Document::from_bytes(edited_bytes).unwrap();
+    let mut compared = Document::from_bytes(original_bytes).unwrap();
+    let diagnostics = compared
+        .compare_with_options(&edited, "Ada", "2026-09-30T09:30:00Z", options)
+        .unwrap_or_else(|error| panic!("{options:?}: {error}"));
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(!compared.revisions().is_empty());
+    let tracked = compared.to_bytes().unwrap();
+
+    let mut accepted = Document::from_bytes(&tracked).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(accepted.text(), edited.text());
+    assert!(
+        accepted
+            .compare(&edited, "postcondition", "2026-09-30T09:31:00Z")
+            .unwrap()
+            .is_empty()
+    );
+    let mut rejected = Document::from_bytes(&tracked).unwrap();
+    rejected.reject_all().unwrap();
+    assert_eq!(rejected.text(), original.text());
+    assert!(
+        rejected
+            .compare(&original, "postcondition", "2026-09-30T09:31:00Z")
+            .unwrap()
+            .is_empty()
+    );
+    document_xml(&mut compared)
+}
+
+#[test]
+fn comparison_tracks_a_rebuilt_table_of_contents() {
+    // The rebuild moves the field begin into a paragraph of its own, writes
+    // each entry with a PAGEREF field, as a hyperlink under `\h`, and
+    // bookmarks each heading. Each of those paragraphs refused the pair as a
+    // paragraph boundary or modeled field change. Word writes the field end
+    // in a paragraph of its own, which the rebuild keeps unchanged.
+    let titles = [
+        ("Heading1", "Chapter 1"),
+        ("Heading2", "Section 1.1"),
+        ("Heading1", "Chapter 2"),
+    ];
+    for (switches, own_end_paragraph) in [
+        (r#""1-3" \h \z \u"#, false),
+        (r#""1-3" \z \u"#, false),
+        (r#""1-3" \h \z \u"#, true),
+    ] {
+        let mut entries = String::new();
+        for (index, (_, title)) in titles.iter().enumerate() {
+            entries.push_str(r#"<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>"#);
+            if index == 0 {
+                entries.push_str(&format!(
+                    r#"<w:r><w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve"> TOC \o {switches} </w:instrText><w:fldChar w:fldCharType="separate"/></w:r>"#
+                ));
+            }
+            entries.push_str(&format!(
+                "<w:r><w:t>{title}</w:t><w:tab/><w:t>9</w:t></w:r>"
+            ));
+            if index + 1 == titles.len() && !own_end_paragraph {
+                entries.push_str(r#"<w:r><w:fldChar w:fldCharType="end"/></w:r>"#);
+            }
+            entries.push_str("</w:p>");
+        }
+        if own_end_paragraph {
+            entries.push_str(
+                r#"<w:p><w:r><w:rPr><w:b/><w:noProof/></w:rPr><w:fldChar w:fldCharType="end"/></w:r></w:p>"#,
+            );
+        }
+        let mut body = format!(
+            r#"<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent><w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>Contents</w:t></w:r></w:p>{entries}</w:sdtContent></w:sdt>"#
+        );
+        for (style, title) in titles {
+            body.push_str(&format!(
+                r#"<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr><w:r><w:t>{title}</w:t></w:r></w:p><w:p><w:r><w:t>Body text.</w:t></w:r></w:p>"#
+            ));
+        }
+        let label = format!("{switches}, end in its own paragraph: {own_end_paragraph}");
+        let original_bytes = document_with_field_parts(&wrap_word_body(&body), None, None)
+            .to_bytes()
+            .unwrap();
+        let mut edited = Document::from_bytes(&original_bytes).unwrap();
+        assert_eq!(edited.rebuild_toc().unwrap().entry_count, 3, "{label}");
+        let edited_bytes = edited.to_bytes().unwrap();
+
+        for granularity in [
+            rdocx::ComparisonGranularity::Run,
+            rdocx::ComparisonGranularity::Word,
+        ] {
+            let options = rdocx::ComparisonOptions {
+                granularity,
+                ..Default::default()
+            };
+            let xml = compare_and_resolve(&original_bytes, &edited_bytes, &options);
+            // Every cached entry, and the field end, is deleted before any
+            // rebuilt entry is inserted, so each side keeps one whole TOC
+            // field, and the deleted field code is Word's `w:delInstrText`.
+            let control =
+                &xml[xml.find("<w:sdtContent>").unwrap()..xml.find("</w:sdtContent>").unwrap()];
+            assert!(
+                control.rfind("<w:delText").unwrap() < control.find("PAGEREF").unwrap(),
+                "{label}: {control}"
+            );
+            assert_eq!(
+                control.matches("<w:delInstrText").count(),
+                1,
+                "{label}: {control}"
+            );
+            assert_eq!(
+                control.matches("<w:instrText").count(),
+                1,
+                "{label}: {control}"
+            );
+            for character in ["begin", "separate", "end"] {
+                let character = format!(r#"w:fldCharType="{character}""#);
+                assert_eq!(control.matches(&character).count(), 2, "{label}: {control}");
+            }
+            // A paragraph mark both deleted and inserted lists `w:ins`
+            // first, as the schema orders them.
+            for properties in xml.split("<w:rPr>").skip(1) {
+                let properties = &properties[..properties.find("</w:rPr>").unwrap_or(0)];
+                if let (Some(inserted), Some(deleted)) =
+                    (properties.find("<w:ins "), properties.find("<w:del "))
+                {
+                    assert!(inserted < deleted, "{label}: {properties}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn comparison_carries_bookmarks_and_whole_fields_in_whole_paragraph_changes() {
+    // A whole inserted, deleted or moved paragraph kept only its runs, so a
+    // bookmark in it failed the acceptance or rejection check, and so did a
+    // field that spans whole inserted or deleted paragraphs.
+    let plain = r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#;
+    let last = r#"<w:p><w:r><w:t>Omega</w:t></w:r></w:p>"#;
+    let bookmarked = r#"<w:p><w:bookmarkStart w:id="5" w:name="target"/><w:r><w:t>Marked</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>text</w:t></w:r><w:bookmarkEnd w:id="5"/></w:p>"#;
+    let moved = r#"<w:p><w:r><w:t>Moved text</w:t></w:r></w:p>"#;
+    let begin = r#"<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve"> TOC \o "1-3" \h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r>"#;
+    let end = r#"<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>"#;
+    // A field inserted whole, with a hyperlink and a simple field inside.
+    let field = format!(
+        r#"{begin}<w:hyperlink w:anchor="target"><w:r><w:t>Entry</w:t></w:r></w:hyperlink><w:r><w:tab/></w:r><w:fldSimple w:instr=" PAGEREF target \h "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p><w:p>{end}"#
+    );
+    // A cached field whose first entry becomes a hyperlink, with its end in
+    // a paragraph the edit leaves unchanged.
+    let cached =
+        |first: &str| format!(r#"{begin}{first}</w:p><w:p><w:r><w:t>Entry two</w:t></w:r>{end}"#);
+    let control = |content: &str| {
+        format!(
+            r#"<w:sdt><w:sdtPr><w:tag w:val="kept"/></w:sdtPr><w:sdtContent>{content}</w:sdtContent></w:sdt>{last}"#
+        )
+    };
+    let cases = [
+        (
+            "inserted",
+            format!("{plain}{last}"),
+            format!("{plain}{bookmarked}{last}"),
+        ),
+        (
+            "appended",
+            format!("{plain}{last}"),
+            format!("{plain}{last}{bookmarked}"),
+        ),
+        (
+            "deleted",
+            format!("{plain}{bookmarked}{last}"),
+            format!("{plain}{last}"),
+        ),
+        (
+            "moved",
+            format!("{moved}{plain}{last}"),
+            format!("{plain}{last}{moved}"),
+        ),
+        (
+            "whole field inserted",
+            format!("{plain}{last}"),
+            format!("{plain}{field}{last}"),
+        ),
+        (
+            "whole field deleted",
+            format!("{plain}{field}{last}"),
+            format!("{plain}{last}"),
+        ),
+        (
+            "field entry becomes a hyperlink",
+            format!(
+                r#"{plain}{}{last}"#,
+                cached("<w:r><w:t>Entry one</w:t></w:r>")
+            ),
+            format!(
+                r#"{plain}{}{last}"#,
+                cached(
+                    r#"<w:hyperlink w:anchor="a"><w:r><w:t>Entry one</w:t></w:r></w:hyperlink>"#
+                )
+            ),
+        ),
+        (
+            "two paragraphs appended to a control",
+            control(plain),
+            control(&format!("{plain}{bookmarked}{moved}")),
+        ),
+    ];
+    for (name, original_body, edited_body) in cases {
+        let original_bytes = document_with_content_controls(&wrap_word_body(&original_body))
+            .to_bytes()
+            .unwrap();
+        let edited_bytes = document_with_content_controls(&wrap_word_body(&edited_body))
+            .to_bytes()
+            .unwrap();
+        for granularity in [
+            rdocx::ComparisonGranularity::Run,
+            rdocx::ComparisonGranularity::Word,
+        ] {
+            let options = rdocx::ComparisonOptions {
+                granularity,
+                ..Default::default()
+            };
+            let xml = compare_and_resolve(&original_bytes, &edited_bytes, &options);
+            assert!(
+                xml.contains("<w:bookmarkStart")
+                    || xml.contains("fldCharType")
+                    || xml.contains("<w:moveTo "),
+                "{name}: {xml}"
+            );
+            // Each side keeps its complex fields whole, so a field ended in
+            // an unchanged paragraph is deleted and inserted with it.
+            assert_eq!(
+                xml.matches(r#"w:fldCharType="begin""#).count(),
+                xml.matches(r#"w:fldCharType="end""#).count(),
+                "{name}: {xml}"
+            );
+        }
+    }
+}
+
+#[test]
+fn comparison_refuses_whole_paragraph_structures_word_cannot_resolve() {
+    // A hyperlink or simple field may not sit in a revision wrapper. Word
+    // reads either as a field whose codes stay untracked, so accepting a
+    // deleted one or rejecting an inserted one leaves an empty field, unless
+    // a field deleted or inserted whole around it goes with it. A moved
+    // paragraph's bookmark would be held by both ends of the move.
+    let plain = r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#;
+    let last = r#"<w:p><w:r><w:t>Omega</w:t></w:r></w:p>"#;
+    let linked = r#"<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r><w:hyperlink w:anchor="elsewhere"><w:r><w:t>there</w:t></w:r></w:hyperlink></w:p>"#;
+    let paged = r#"<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>"#;
+    let bookmarked = r#"<w:p><w:bookmarkStart w:id="5" w:name="target"/><w:r><w:t>Moved text</w:t></w:r><w:bookmarkEnd w:id="5"/></w:p>"#;
+    let cases = [
+        (
+            "hyperlink inserted",
+            format!("{plain}{last}"),
+            format!("{plain}{linked}{last}"),
+            "hyperlink or simple field outside a field",
+        ),
+        (
+            "simple field deleted",
+            format!("{plain}{paged}{last}"),
+            format!("{plain}{last}"),
+            "hyperlink or simple field outside a field",
+        ),
+        (
+            "bookmarked paragraph moved",
+            format!("{bookmarked}{plain}{last}"),
+            format!("{plain}{last}{bookmarked}"),
+            "cannot move a paragraph that holds a bookmark",
+        ),
+    ];
+    for (name, original_body, edited_body, message) in cases {
+        let edited = document_with_content_controls(&wrap_word_body(&edited_body));
+        let mut compared = document_with_content_controls(&wrap_word_body(&original_body));
+        let before = compared.to_bytes().unwrap();
+        let error = compared
+            .compare(&edited, "Ada", "2026-09-30T09:30:00Z")
+            .expect_err(name);
+        assert!(error.to_string().contains(message), "{name}: {error}");
+        assert_eq!(compared.to_bytes().unwrap(), before, "{name}");
+    }
+}
+
+#[test]
+fn comparison_replaces_a_paragraph_that_gains_a_hyperlink() {
+    let original = document_with_content_controls(&wrap_word_body(
+        "<w:p><w:r><w:t>Alpha</w:t></w:r></w:p><w:p><w:r><w:t>Omega</w:t></w:r></w:p>",
+    ))
+    .to_bytes()
+    .unwrap();
+    let edited = document_with_content_controls(&wrap_word_body(
+        "<w:p><w:r><w:t xml:space=\"preserve\">See </w:t></w:r><w:hyperlink w:anchor=\"elsewhere\"><w:r><w:t>there</w:t></w:r></w:hyperlink></w:p><w:p><w:r><w:t>Omega</w:t></w:r></w:p>",
+    )).to_bytes().unwrap();
+    let tracked = compare_and_resolve(&original, &edited, &rdocx::ComparisonOptions::default());
+    assert!(tracked.contains("w:hyperlink"));
+}
+
+#[test]
+fn ignored_story_does_not_carry_a_hyperlink_named_only_in_bookmark() {
+    let url = "https://example.com/ignored";
+    let mut original = Document::new();
+    original.add_paragraph("literal");
+    let mut probe = Document::from_bytes(&original.to_bytes().unwrap()).unwrap();
+    let id = probe.add_hyperlink_relationship(url);
+    let mut source =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(original.to_bytes().unwrap()))
+            .unwrap();
+    let xml = String::from_utf8(source.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+    let paragraph = xml.find("<w:p").unwrap();
+    let opening_end = paragraph + xml[paragraph..].find('>').unwrap() + 1;
+    let closing = xml[opening_end..].find("</w:p>").unwrap() + opening_end;
+    let xml = format!(
+        "{}<w:bookmarkStart w:id=\"1\" w:name=\"{id}\"/>{}<w:bookmarkEnd w:id=\"1\"/>{}",
+        &xml[..opening_end],
+        &xml[opening_end..closing],
+        &xml[closing..]
+    );
+    source.set_part("/word/document.xml", xml.into_bytes());
+    let mut original_bytes = std::io::Cursor::new(Vec::new());
+    source.write_to(&mut original_bytes).unwrap();
+    let original_bytes = original_bytes.into_inner();
+    let mut edited = Document::from_bytes(&original_bytes).unwrap();
+    edited.append_hyperlink("ignored edit", url);
+    let edited_package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(edited.to_bytes().unwrap()))
+            .unwrap();
+    assert_eq!(
+        edited_package
+            .get_part_rels("/word/document.xml")
+            .unwrap()
+            .items
+            .iter()
+            .find(|rel| rel.target == url)
+            .unwrap()
+            .id,
+        id
+    );
+
+    let options = rdocx::ComparisonOptions {
+        ignored_stories: vec![rdocx::ComparisonStoryKind::Main],
+        ..Default::default()
+    };
+    let mut compared = Document::from_bytes(&original_bytes).unwrap();
+    compared
+        .compare_with_options(&edited, "Ada", "2026-10-01T09:30:00Z", &options)
+        .unwrap();
+    let tracked =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(compared.to_bytes().unwrap()))
+            .unwrap();
+    assert!(
+        tracked
+            .get_part_rels("/word/document.xml")
+            .is_none_or(|rels| rels.items.iter().all(|rel| rel.target != url)),
+        "ignored hyperlink must not survive through bookmark name"
+    );
+}
+
+#[test]
+fn comparison_carries_the_relationship_of_an_inserted_external_hyperlink() {
+    // The redline is staged on the original package, so an inserted table
+    // kept the edited hyperlink's r:id without its relationship, and Word
+    // refused to open the result.
+    let mut original = Document::new();
+    original.add_paragraph("Alpha");
+    original.add_paragraph("Omega");
+    let original_bytes = original.to_bytes().unwrap();
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(original_bytes.clone())).unwrap();
+    let id = package
+        .get_or_create_part_rels("/word/document.xml")
+        .add_external(
+            oxml_opc::relationship::rel_types::HYPERLINK,
+            "https://example.com/new",
+        );
+    let xml = String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+    let table = format!(
+        r#"<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p><w:hyperlink xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="{id}"><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p></w:tc></w:tr></w:tbl>"#
+    );
+    let at = xml.find("<w:p").unwrap();
+    let at = at + xml[at..].find("</w:p>").unwrap() + "</w:p>".len();
+    package.set_part(
+        "/word/document.xml",
+        format!("{}{table}{}", &xml[..at], &xml[at..]).into_bytes(),
+    );
+    let mut edited_bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut edited_bytes).unwrap();
+    let edited_bytes = edited_bytes.into_inner();
+
+    compare_and_resolve(&original_bytes, &edited_bytes, &Default::default());
+    let edited = Document::from_bytes(&edited_bytes).unwrap();
+    let mut compared = Document::from_bytes(&original_bytes).unwrap();
+    compared
+        .compare(&edited, "Ada", "2026-09-30T09:30:00Z")
+        .unwrap();
+    let tracked =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(compared.to_bytes().unwrap()))
+            .unwrap();
+    let xml = std::str::from_utf8(tracked.get_part("/word/document.xml").unwrap()).unwrap();
+    let linked = &xml[xml.find("<w:hyperlink").unwrap()..];
+    let linked = &linked[linked.find("r:id=\"").unwrap() + 6..];
+    let linked = &linked[..linked.find('"').unwrap()];
+    let relationship = tracked
+        .get_part_rels("/word/document.xml")
+        .unwrap()
+        .get_by_id(linked)
+        .unwrap_or_else(|| panic!("{linked} has no relationship"));
+    assert_eq!(relationship.target, "https://example.com/new");
+    assert_eq!(relationship.target_mode.as_deref(), Some("External"));
 }
 
 #[test]
@@ -25744,13 +26732,16 @@ fn fixed_break_runs_match_pdf_and_raster_backends() {
     let direct_pdf = oxml_pdf::render_to_pdf(&layout.layout);
     let direct_png = oxml_pdf::render_page_to_png(&layout.layout, 0, 96.0)
         .expect("raster backend renders first page");
+    assert!(!direct_pdf.is_empty());
+    assert!(!direct_png.is_empty());
+    // The PDF facade adds caller fonts to the fonts `to_pdf` resolves from,
+    // and this caller face is the bundled Carlito, so it renders `to_pdf`.
     assert_eq!(
         document
             .to_pdf_with_fonts(&[(family, bytes)])
             .expect("PDF facade"),
-        direct_pdf
+        document.to_pdf().expect("PDF")
     );
-    assert!(!direct_png.is_empty());
 }
 
 #[test]
@@ -28177,26 +29168,6 @@ fn granular_comparison_refuses_marker_moves_it_cannot_express() {
     };
     let cases = [
         (
-            "insertion at a run end before a bookmark",
-            format!("{}{go_back}{}", run("one"), run(" three")),
-            format!("{}{go_back}{}", run("one two"), run(" three")),
-            word.clone(),
-        ),
-        (
-            "insertion at a run end before a comment range",
-            format!(
-                r#"{}<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>{}"#,
-                run("one"),
-                run(" three")
-            ),
-            format!(
-                r#"{}<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>{}"#,
-                run("one two"),
-                run(" three")
-            ),
-            word.clone(),
-        ),
-        (
             "smart tag and control swapped across an empty run",
             format!("{}{smart_tag}<w:r></w:r>{control}", run("one")),
             format!("{}<w:r></w:r>{control}{smart_tag}", run("one")),
@@ -28241,6 +29212,55 @@ fn granular_comparison_refuses_marker_moves_it_cannot_express() {
             "{name}: {error}"
         );
         assert_eq!(tracked.to_bytes().unwrap(), before, "{name}");
+    }
+}
+
+#[test]
+fn issue_161_insertion_before_marker_keeps_marker_after_changed_text() {
+    let run = |text: &str| format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#);
+    let markers = [
+        r#"<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/>"#,
+        r#"<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>"#,
+    ];
+    for marker in markers {
+        let original_xml = wrap_word_body(&format!(
+            "<w:p>{}{marker}{}</w:p>",
+            run("one"),
+            run(" three")
+        ));
+        let edited_xml = wrap_word_body(&format!(
+            "<w:p>{}{marker}{}</w:p>",
+            run("one two"),
+            run(" three")
+        ));
+        let edited = document_with_content_controls(&edited_xml);
+        let mut redline = document_with_content_controls(&original_xml);
+        redline
+            .compare_with_options(
+                &edited,
+                "Ada",
+                "2026-09-04T09:00:00Z",
+                &rdocx::ComparisonOptions {
+                    granularity: rdocx::ComparisonGranularity::Word,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let bytes = redline.to_bytes().unwrap();
+        let mut accepted = Document::from_bytes(&bytes).unwrap();
+        accepted.accept_all().unwrap();
+        assert_eq!(
+            marked_paragraphs(&document_xml(&mut accepted)),
+            marked_paragraphs(&edited_xml),
+            "{marker}"
+        );
+        let mut rejected = Document::from_bytes(&bytes).unwrap();
+        rejected.reject_all().unwrap();
+        assert_eq!(
+            marked_paragraphs(&document_xml(&mut rejected)),
+            marked_paragraphs(&original_xml),
+            "{marker}"
+        );
     }
 }
 
@@ -33413,7 +34433,8 @@ fn word_embedded_forbidden_literal_xml_characters_fail_closed_atomically() {
             package
         }),
     ] {
-        let mut document = Document::from_bytes(&f236_package_bytes(package)).unwrap();
+        let mut document =
+            Document::from_bytes(&f236_package_bytes_with_producer_literals(package)).unwrap();
         let before = document.to_bytes().unwrap();
         assert!(document.embedded_content().is_err(), "{label}");
         assert!(
@@ -33642,6 +34663,40 @@ fn f236_package_bytes(package: oxml_opc::OpcPackage) -> Vec<u8> {
     let mut output = std::io::Cursor::new(Vec::new());
     package.write_to(&mut output).unwrap();
     output.into_inner()
+}
+
+/// The package writer refuses a character XML 1.0 cannot carry, so a fixture
+/// holding one on purpose, as a producer might, writes those parts into the
+/// ZIP itself.
+fn f236_package_bytes_with_producer_literals(mut package: oxml_opc::OpcPackage) -> Vec<u8> {
+    use std::io::Write;
+
+    let literal = package
+        .parts
+        .iter()
+        .filter(|(_, data)| {
+            std::str::from_utf8(data).is_ok_and(|text| {
+                text.chars()
+                    .any(|character| matches!(character, '\u{1}' | '\u{FFFE}'))
+            })
+        })
+        .map(|(name, data)| (name.trim_start_matches('/').to_owned(), data.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for name in literal.keys() {
+        package
+            .parts
+            .insert(format!("/{name}"), b"<placeholder/>".to_vec());
+    }
+    let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, data) in zip_entries(&f236_package_bytes(package)) {
+        archive
+            .start_file(name.as_str(), zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive
+            .write_all(literal.get(&name).unwrap_or(&data))
+            .unwrap();
+    }
+    archive.finish().unwrap().into_inner()
 }
 
 fn f236_open_package(bytes: &[u8]) -> oxml_opc::OpcPackage {
@@ -35876,8 +36931,7 @@ mod compare_producer_noise {
         }
     }
 
-    /// A shell that differs in content still refuses the pair. A re-dated
-    /// comment waits for the redline to carry the edited comment threads.
+    /// An unrelated root extension remains outside comment-thread revision.
     #[test]
     fn a_changed_story_shell_still_refuses() {
         let comments = |root_child: &str, date: &str| {
@@ -35885,28 +36939,22 @@ mod compare_producer_noise {
                 r#"<w:comments xmlns:w="{W_NS}">{root_child}<w:comment w:id="0" w:author="Ada" w:initials="AL" w:date="{date}"><w:p><w:r><w:t>same comment</w:t></w:r></w:p></w:comment></w:comments>"#
             )
         };
-        for (edited, expected) in [
-            (
-                comments("", "2026-09-05T09:00:00Z"),
-                "comments owner shell changed at /word/comments.xml[0]",
+        let edited = with_part(
+            document_with_comparison_stories("same"),
+            "/word/comments.xml",
+            &comments(
+                r#"<x:extension xmlns:x="urn:producer"/>"#,
+                "2026-09-04T09:00:00Z",
             ),
-            (
-                comments(
-                    r#"<x:extension xmlns:x="urn:producer"/>"#,
-                    "2026-09-04T09:00:00Z",
-                ),
-                "comments story root shell changed in /word/comments.xml",
-            ),
-        ] {
-            let edited = with_part(
-                document_with_comparison_stories("same"),
-                "/word/comments.xml",
-                &edited,
-            );
-            let mut compared = document_with_comparison_stories("same");
-            let error = compared.compare(&edited, "R", TIMESTAMP).unwrap_err();
-            assert!(error.to_string().contains(expected), "{error}");
-        }
+        );
+        let mut compared = document_with_comparison_stories("same");
+        let error = compared.compare(&edited, "R", TIMESTAMP).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("comments story root shell changed in /word/comments.xml"),
+            "{error}"
+        );
     }
 }
 
@@ -36391,6 +37439,59 @@ mod producer_part_roots_survive_save {
             assert!(xml.contains("MARGIN"), "{xml}");
             assert_ignorable_declared(root_tag(&xml), "w14 w15");
             assert!(xml.contains(r#"w14:paraId="3A2B3C4D""#), "{xml}");
+        }
+    }
+
+    #[test]
+    fn rewritten_note_parts_keep_mc_ignorable_and_its_declarations() {
+        let document = format!(
+            concat!(
+                "{}<w:document {}><w:body><w:p><w:r><w:t>Body</w:t></w:r>",
+                "<w:r><w:footnoteReference w:id=\"1\"/></w:r>",
+                "<w:r><w:endnoteReference w:id=\"1\"/></w:r></w:p>",
+                "<w:sectPr/></w:body></w:document>",
+            ),
+            DECLARATION, WORD_ROOT
+        );
+        let note = |root: &str, item: &str| {
+            format!(
+                concat!(
+                    "{}<w:{} {}><w:{} w:id=\"1\"><w:p w14:paraId=\"3A2B3C4D\" ",
+                    "w14:textId=\"77777777\"><w:r><w:t>Note margin</w:t></w:r></w:p>",
+                    "</w:{}></w:{}>",
+                ),
+                DECLARATION, root, WORD_ROOT, item, item, root
+            )
+        };
+        let source = package_with(
+            Some(&document),
+            &[
+                (
+                    "rIdFootnote",
+                    "/word/footnotes.xml",
+                    (
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
+                        oxml_opc::relationship::rel_types::FOOTNOTES,
+                    ),
+                    &note("footnotes", "footnote"),
+                ),
+                (
+                    "rIdEndnote",
+                    "/word/endnotes.xml",
+                    (
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml",
+                        oxml_opc::relationship::rel_types::ENDNOTES,
+                    ),
+                    &note("endnotes", "endnote"),
+                ),
+            ],
+        );
+        let edited = edited_save(&source, "margin", "MARGIN", 2);
+        for name in ["/word/footnotes.xml", "/word/endnotes.xml"] {
+            let xml = part(&edited, name);
+            assert!(xml.contains("MARGIN"), "{name}: {xml}");
+            assert_ignorable_declared(root_tag(&xml), "w14 w15");
+            assert!(xml.contains(r#"w14:paraId="3A2B3C4D""#), "{name}: {xml}");
         }
     }
 }
@@ -39818,4 +40919,495 @@ mod row_minimum_height_split_regressions {
         assert_eq!(row_pages(&probe(Some(44.0))), vec![2]);
         assert_eq!(row_pages(&probe(Some(100.0))), vec![2]);
     }
+}
+
+/// A border style the model did not list read as `none` and was written back
+/// as `none` by the next edit, which removed the border in Word. Every
+/// `ST_Border` token now survives an edit and a save, the picture borders of
+/// a page frame included.
+#[test]
+fn every_border_style_token_survives_an_edit_and_save() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pBdr><w:top w:val="dashSmallGap" w:sz="12" w:space="1" w:color="FF0000"/><w:left w:val="dashDotStroked" w:sz="8" w:space="4"/><w:bottom w:val="thinThickThinSmallGap" w:sz="12" w:space="1"/><w:right w:val="thinThickThinLargeGap" w:sz="12" w:space="4"/></w:pBdr></w:pPr><w:r><w:t>Bordered</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/><w:pgBorders w:offsetFrom="page"><w:top w:val="apples" w:sz="20" w:space="24"/><w:left w:val="thinThickThinMediumGap" w:sz="12" w:space="24"/><w:bottom w:val="zigZagStitch" w:sz="10" w:space="24"/><w:right w:val="custom" w:sz="10" w:space="24"/></w:pgBorders></w:sectPr></w:body></w:document>"#;
+    let mut document = document_with_content_controls(xml);
+    document.add_paragraph("Edited");
+    let saved = document_xml(&mut document);
+    for edge in [
+        r#"<w:top w:val="dashSmallGap" w:sz="12" w:space="1" w:color="FF0000"/>"#,
+        r#"<w:left w:val="dashDotStroked" w:sz="8" w:space="4"/>"#,
+        r#"<w:bottom w:val="thinThickThinSmallGap" w:sz="12" w:space="1"/>"#,
+        r#"<w:right w:val="thinThickThinLargeGap" w:sz="12" w:space="4"/>"#,
+        r#"<w:top w:val="apples" w:sz="20" w:space="24"/>"#,
+        r#"<w:left w:val="thinThickThinMediumGap" w:sz="12" w:space="24"/>"#,
+        r#"<w:bottom w:val="zigZagStitch" w:sz="10" w:space="24"/>"#,
+        r#"<w:right w:val="custom" w:sz="10" w:space="24"/>"#,
+    ] {
+        assert!(saved.contains(edge), "{edge} is missing from {saved}");
+    }
+    assert!(!saved.contains(r#"w:val="none""#), "{saved}");
+}
+
+/// Text holding a character XML 1.0 cannot carry reached `w:t`, `w:instrText`
+/// and every other Word part raw, so the saved part was not well-formed and
+/// Word could not open it. python-docx refuses such text, so the fallible
+/// entry points refuse it naming the character and its position, and no save
+/// writes it into any part, whichever setter stored it.
+#[test]
+fn text_xml_cannot_carry_is_refused_at_entry_and_never_saved() {
+    let mut document = Document::new();
+    document.add_paragraph("Dear {{NAME}}");
+    let error = document
+        .try_replace_text("{{NAME}}", "Ada\u{1}")
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("replacement text holds U+0001 at character 4"),
+        "{error}"
+    );
+    assert!(
+        document
+            .replace_all_regex(&[("NAME".to_owned(), "\u{b}".to_owned())])
+            .is_err()
+    );
+    let range = RunRange {
+        start: RunPosition {
+            body_index: 0,
+            run_index: 0,
+        },
+        end: RunPosition {
+            body_index: 0,
+            run_index: 1,
+        },
+    };
+    let error = document
+        .add_comment(range, "Ada", None, "see \u{c}")
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("comment text holds U+000C at character 5"),
+        "{error}"
+    );
+    let error = document
+        .paragraph_mut(0)
+        .unwrap()
+        .run_mut(0)
+        .unwrap()
+        .add_field("PAGE\u{1f}", "1")
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("field instruction holds U+001F at character 5"),
+        "{error}"
+    );
+    document.to_bytes().expect("refused text changed nothing");
+
+    // An infallible setter stores the text, and the save refuses it.
+    document.add_paragraph("tab\tand\u{1}");
+    let error = document.to_bytes().unwrap_err().to_string();
+    assert!(
+        error.contains("/word/document.xml holds U+0001 at line"),
+        "{error}"
+    );
+
+    let mut document = Document::new();
+    document.set_header("Header \u{ffff}");
+    let error = document.to_bytes().unwrap_err().to_string();
+    assert!(error.contains("holds U+FFFF at line"), "{error}");
+    assert!(error.contains("/word/header"), "{error}");
+
+    let mut document = Document::new();
+    document.add_footnote("note \u{2}");
+    let error = document.to_bytes().unwrap_err().to_string();
+    assert!(
+        error.contains("/word/footnotes.xml holds U+0002 at line"),
+        "{error}"
+    );
+}
+
+mod run_text_around_a_complex_field {
+    use rdocx::Document;
+
+    use super::{document_with_content_controls, document_xml, f252_page_text, wrap_word_body};
+
+    fn text(value: &str) -> String {
+        format!(r#"<w:t xml:space="preserve">{value}</w:t>"#)
+    }
+
+    fn field(instruction: &str, result: Option<&str>) -> String {
+        let mut xml = format!(
+            r#"<w:fldChar w:fldCharType="begin"/><w:instrText xml:space="preserve"> {instruction} </w:instrText>"#
+        );
+        if let Some(result) = result {
+            xml.push_str(r#"<w:fldChar w:fldCharType="separate"/>"#);
+            xml.push_str(&format!("<w:t>{result}</w:t>"));
+        }
+        xml.push_str(r#"<w:fldChar w:fldCharType="end"/>"#);
+        xml
+    }
+
+    /// `Page {PAGE} of the report` in one run, as some producers write it.
+    fn page_of_the_report() -> String {
+        format!(
+            "<w:r>{}{}{}</w:r>",
+            text("Page "),
+            field("PAGE", Some("1")),
+            text(" of the report")
+        )
+    }
+
+    fn document(paragraph: &str) -> Document {
+        document_with_content_controls(&wrap_word_body(&format!("<w:p>{paragraph}</w:p>")))
+    }
+
+    #[test]
+    fn text_in_the_run_of_a_complex_field_is_read_in_order() {
+        let cases = [
+            (page_of_the_report(), "Page 1 of the report"),
+            (
+                format!("<w:r>{}{}</w:r>", text("Page "), field("PAGE", Some("1"))),
+                "Page 1",
+            ),
+            (
+                format!(
+                    "<w:r>{}{}</w:r>",
+                    field("PAGE", Some("1")),
+                    text(" of the report")
+                ),
+                "1 of the report",
+            ),
+            (
+                format!(
+                    "<w:r>{}{}{}{}{}</w:r>",
+                    text("Page "),
+                    field("PAGE", Some("1")),
+                    text(" of "),
+                    field("NUMPAGES", Some("3")),
+                    text(" pages")
+                ),
+                "Page 1 of 3 pages",
+            ),
+            (
+                format!(
+                    "<w:r>{}{}{}</w:r>",
+                    text("Page "),
+                    field("PAGE", None),
+                    text(" of the report")
+                ),
+                "Page  of the report",
+            ),
+            (
+                format!(
+                    "<w:r>{}<w:tab/>{}<w:br/>{}</w:r>",
+                    text("A"),
+                    field("PAGE", Some("1")),
+                    text("B")
+                ),
+                "A\t1\nB",
+            ),
+            (
+                format!(
+                    r#"<w:r>{}<w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/>{}</w:r>"#,
+                    text("Page "),
+                    text(" of the report")
+                ),
+                "Page 1 of the report",
+            ),
+        ];
+        for (paragraph, expected) in cases {
+            let mut document = document(&paragraph);
+            assert_eq!(document.paragraphs()[0].text(), expected, "{paragraph}");
+            assert_eq!(document.text(), format!("{expected}\n"), "{paragraph}");
+            let saved = document_xml(&mut document);
+            assert!(
+                saved.contains(&format!("<w:p>{paragraph}</w:p>")),
+                "an unedited save keeps the run bytes: {saved}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_around_a_field_is_read_in_cells_controls_and_insertions() {
+        let run = page_of_the_report();
+        let bodies = [
+            format!(r#"<w:tbl><w:tr><w:tc><w:p>{run}</w:p></w:tc></w:tr></w:tbl>"#),
+            format!(r#"<w:p><w:sdt><w:sdtPr/><w:sdtContent>{run}</w:sdtContent></w:sdt></w:p>"#),
+            format!(
+                r#"<w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">{run}</w:ins></w:p>"#
+            ),
+        ];
+        for body in bodies {
+            let mut document = document_with_content_controls(&wrap_word_body(&body));
+            assert!(
+                document.text().contains("Page 1 of the report"),
+                "{body}: {:?}",
+                document.text()
+            );
+            assert!(document_xml(&mut document).contains(&body), "{body}");
+        }
+    }
+
+    /// A document whose body holds `pages` pages and whose footer holds
+    /// `footer_paragraph`, with the footer part name and its exact XML.
+    fn footer_document(footer_paragraph: &str, pages: usize) -> (Document, String, String) {
+        let mut seed = Document::new();
+        for page in 0..pages {
+            seed.add_paragraph("Body text")
+                .set_page_break_before(page > 0);
+        }
+        seed.set_footer("placeholder");
+        let mut package =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap()))
+                .unwrap();
+        let footer = (1..=3)
+            .map(|index| format!("/word/footer{index}.xml"))
+            .find(|name| package.contains_part(name))
+            .expect("a footer part");
+        let footer_xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p>{footer_paragraph}</w:p></w:ftr>"#
+        );
+        package.set_part(&footer, footer_xml.clone().into_bytes());
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut bytes).unwrap();
+        (
+            Document::from_bytes(&bytes.into_inner()).unwrap(),
+            footer,
+            footer_xml,
+        )
+    }
+
+    #[test]
+    fn the_renderer_paints_text_around_a_footer_page_field() {
+        let (mut document, footer, footer_xml) = footer_document(&page_of_the_report(), 1);
+
+        assert_eq!(
+            document.footer_text().as_deref(),
+            Some("Page 1 of the report")
+        );
+        let layout = document.layout_deterministic().unwrap();
+        let page = f252_page_text(&layout.layout.pages[0]);
+        assert!(page.contains("Page 1 of the report"), "{page:?}");
+
+        let saved =
+            oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+                .unwrap();
+        assert_eq!(saved.get_part(&footer).unwrap(), footer_xml.as_bytes());
+    }
+
+    #[test]
+    fn replacing_text_around_a_field_keeps_the_field() {
+        let mut document = document(&page_of_the_report());
+        assert_eq!(document.replace_text("Page", "Folio"), 1);
+        assert_eq!(document.replace_text("report", "summary"), 1);
+        let saved = document.to_bytes().unwrap();
+        let xml = {
+            let mut reopened = Document::from_bytes(&saved).unwrap();
+            document_xml(&mut reopened)
+        };
+        assert_eq!(xml.matches(r#"w:fldCharType="begin""#).count(), 1, "{xml}");
+        assert_eq!(xml.matches("Folio").count(), 1, "{xml}");
+        assert!(!xml.contains("report"), "{xml}");
+        let reopened = Document::from_bytes(&saved).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Folio 1 of the summary");
+
+        // Two fields in one run, with the text between them edited.
+        let mut document = self::document(&format!(
+            "<w:r>{}{}{}{}</w:r>",
+            text("Page "),
+            field("PAGE", Some("1")),
+            text(" of "),
+            field("NUMPAGES", Some("3"))
+        ));
+        assert_eq!(document.replace_text(" of ", " out of "), 1);
+        let xml = document_xml(&mut document);
+        assert_eq!(xml.matches(r#"w:fldCharType="begin""#).count(), 2, "{xml}");
+        assert_eq!(xml.matches("Page ").count(), 1, "{xml}");
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Page 1 out of 3");
+    }
+
+    #[test]
+    fn a_comment_can_anchor_on_text_around_a_field() {
+        let mut document = document(&page_of_the_report());
+        document
+            .add_comment_on_text("the report", 0, "Ada", None, "Here", None)
+            .unwrap();
+        let xml = document_xml(&mut document);
+        let start = xml.find("<w:commentRangeStart").expect("a comment range");
+        let end = xml.find("<w:commentRangeEnd").expect("a comment range");
+        assert!(xml[start..end].contains("the report"), "{xml}");
+        assert_eq!(xml.matches(r#"w:fldCharType="begin""#).count(), 1, "{xml}");
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Page 1 of the report");
+    }
+
+    #[test]
+    fn comparison_sees_text_around_a_field() {
+        let mut original = document(&page_of_the_report());
+        let edited = document(&page_of_the_report().replace("the report", "the summary"));
+        original
+            .compare(&edited, "R", "2026-09-30T00:00:00Z")
+            .unwrap();
+        assert!(!original.revisions().is_empty(), "the edit is a revision");
+        let xml = document_xml(&mut original);
+        assert_eq!(xml.matches(r#"w:fldCharType="begin""#).count(), 1, "{xml}");
+        assert!(xml.contains(" of the report</w:delText>"), "{xml}");
+        let reopened = Document::from_bytes(&original.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Page 1 of the summary");
+    }
+
+    #[test]
+    fn updating_a_field_keeps_the_text_of_its_run() {
+        let mut document = document(&page_of_the_report());
+        let body = document.stories().unwrap().remove(0);
+        let field = document
+            .story_items(&body)
+            .unwrap()
+            .into_iter()
+            .find(|item| item.kind() == rdocx::StoryItemKind::Field)
+            .expect("the PAGE field is a story item")
+            .location()
+            .clone();
+        document.set_story_text(&field, "7").unwrap();
+        let xml = document_xml(&mut document);
+        assert_eq!(xml.matches("Page ").count(), 1, "{xml}");
+        assert_eq!(xml.matches(" of the report").count(), 1, "{xml}");
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Page 7 of the report");
+    }
+
+    /// Field A begins in the first run and ends in the second, where field B
+    /// begins, and B ends in the third.
+    fn overlapping_fields() -> String {
+        concat!(
+            r#"<w:r><w:t xml:space="preserve">A </w:t><w:fldChar w:fldCharType="begin"/><w:instrText> PAGE </w:instrText><w:fldChar w:fldCharType="separate"/><w:t>1</w:t></w:r>"#,
+            r#"<w:r><w:fldChar w:fldCharType="end"/><w:t xml:space="preserve"> mid </w:t><w:fldChar w:fldCharType="begin"/><w:instrText> NUMPAGES </w:instrText><w:fldChar w:fldCharType="separate"/></w:r>"#,
+            r#"<w:r><w:t>9</w:t><w:fldChar w:fldCharType="end"/><w:t xml:space="preserve"> Z</w:t></w:r>"#,
+        )
+        .to_owned()
+    }
+
+    #[test]
+    fn fields_that_share_a_run_keep_every_run_through_a_save() {
+        let paragraphs = format!(
+            "<w:p>{}</w:p><w:p><w:r><w:t>Hello world</w:t></w:r></w:p>",
+            overlapping_fields()
+        );
+        let source = document_with_content_controls(&wrap_word_body(&paragraphs));
+        assert_eq!(source.paragraphs()[0].text(), "A 1 mid 9 Z");
+
+        let mut edited = document_with_content_controls(&wrap_word_body(&paragraphs));
+        assert_eq!(edited.replace_text("Hello", "Bye"), 1);
+        let xml = document_xml(&mut edited);
+        assert!(xml.contains(&overlapping_fields()), "{xml}");
+        assert_eq!(xml.matches("NUMPAGES").count(), 1, "{xml}");
+        let reopened = Document::from_bytes(&edited.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "A 1 mid 9 Z");
+
+        let mut compared = document_with_content_controls(&wrap_word_body(&paragraphs));
+        compared
+            .compare(&reopened, "R", "2026-09-30T00:00:00Z")
+            .unwrap();
+        let xml = document_xml(&mut compared);
+        assert!(xml.contains(&overlapping_fields()), "{xml}");
+    }
+
+    #[test]
+    fn layout_backed_updates_reach_two_fields_in_one_footer_run() {
+        let run = format!(
+            "<w:r>{}{}{}{}</w:r>",
+            text("Page "),
+            field("PAGE", Some("9")),
+            text(" of "),
+            field("NUMPAGES", Some("9"))
+        );
+        let (mut document, footer, _) = footer_document(&run, 2);
+        let report = document.update_layout_backed_fields().unwrap();
+        assert_eq!(report.updated_count(), 2);
+        assert_eq!(document.footer_text().as_deref(), Some("Page 1 of 2"));
+
+        let saved = document.to_bytes().unwrap();
+        let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&saved)).unwrap();
+        let xml = std::str::from_utf8(package.get_part(&footer).unwrap()).unwrap();
+        assert_eq!(xml.matches(r#"w:fldCharType="begin""#).count(), 2, "{xml}");
+        assert_eq!(xml.matches("Page ").count(), 1, "{xml}");
+        let reopened = Document::from_bytes(&saved).unwrap();
+        assert_eq!(reopened.footer_text().as_deref(), Some("Page 1 of 2"));
+
+        // The same run in the body.
+        let mut document = self::document(&run);
+        document.update_layout_backed_fields().unwrap();
+        assert_eq!(document.paragraphs()[0].text(), "Page 1 of 1");
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_eq!(reopened.paragraphs()[0].text(), "Page 1 of 1");
+    }
+}
+
+#[test]
+fn issue_157_add_picture_keeps_default_root_and_block_control() {
+    let mut document = issue_157_document(ISSUE_157_UNUSED_ROOT_DEFAULT, true, "");
+    document.add_picture(
+        b"issue 157 image payload",
+        "issue_157.png",
+        Length::pt(12.0),
+        Length::pt(8.0),
+    );
+    let saved = document
+        .to_bytes()
+        .expect("picture saves with producer scopes");
+    let reopened = Document::from_bytes(&saved).unwrap();
+    assert!(
+        issue_157_body_summary(&reopened).contains(&"picture".to_owned()),
+        "picture must remain reachable beside the block control"
+    );
+}
+
+#[test]
+fn issue_160_inline_control_text_is_replaced_through_the_document_walker() {
+    let xml = wrap_word_body(
+        r#"<w:p><w:sdt><w:sdtPr><w:tag w:val="goog_rdk_0"/></w:sdtPr><w:sdtContent><w:r><w:t>alpha</w:t></w:r></w:sdtContent></w:sdt></w:p>"#,
+    );
+    let mut document = document_with_content_controls(&xml);
+    assert_eq!(document.try_replace_text("alpha", "ALPHA").unwrap(), 1);
+    assert!(document_xml(&mut document).contains("ALPHA"));
+}
+
+#[test]
+fn issue_160_edited_styles_part_keeps_ignorable_root_binding() {
+    let mut source = Document::new();
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(source.to_bytes().unwrap()))
+            .unwrap();
+    let styles = String::from_utf8(package.get_part("/word/styles.xml").unwrap().to_vec()).unwrap();
+    let styles = styles.replacen(
+        "<w:styles ",
+        r#"<w:styles xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:x="urn:producer" mc:Ignorable="w14" x:root="A &amp; B" "#,
+        1,
+    );
+    package.set_part("/word/styles.xml", styles.into_bytes());
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut bytes).unwrap();
+    let mut document = Document::from_bytes(bytes.get_ref()).unwrap();
+    document
+        .add_style(StyleBuilder::paragraph("MatrixStyle", "Matrix Style"))
+        .unwrap();
+    let output =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+            .unwrap();
+    let styles = String::from_utf8(output.get_part("/word/styles.xml").unwrap().to_vec()).unwrap();
+    let start = styles.find("<w:styles").unwrap();
+    let root = &styles[start..=start + styles[start..].find('>').unwrap()];
+    assert!(root.contains(r#"mc:Ignorable="w14""#), "{root}");
+    assert!(root.contains("xmlns:w14="), "{root}");
+    assert!(root.contains(r#"xmlns:x="urn:producer""#), "{root}");
+    assert!(root.contains(r#"x:root="A &amp; B""#), "{root}");
+    let mut reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    let again =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(reopened.to_bytes().unwrap()))
+            .unwrap();
+    assert_eq!(
+        again.get_part("/word/styles.xml"),
+        output.get_part("/word/styles.xml")
+    );
 }

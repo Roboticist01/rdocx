@@ -106,6 +106,21 @@ a reintroduction is obvious from the test name alone rather than from a diff.
 The existing file is the model: `zero_column_tables_do_not_panic`,
 `saving_is_reproducible`.
 
+The Word comparison regression gate covers the Issue 161 option matrix through
+native, installed Python, and CLI entry points with `run` as each default.
+Source-built comment add, remove, reply, resolve, and date cases compare,
+save, accept, and reject against both inputs. A comment-owned external link
+and internal asset must survive redline save and acceptance, then disappear on
+rejection when the original has no comment. A colliding producer path must
+retain the body's asset while carrying the edited comment asset at a new path.
+An ignored comment story skips damaged comment-owned targets. A comment-only
+date edit must list one selectable revision and report one resolved revision.
+The rebuilt TOC
+smoke case and a TOC-entry hyperlink transition check paragraph replacement,
+while a word-level insertion before bookmark and comment markers checks exact
+marker order after both resolutions. Compatible comment text remains covered
+by the existing full-story Word records.
+
 The legacy form and glossary round-trip gate constructs every package in
 source. It covers typed text, checkbox, and drop-down values, deterministic
 part-scoped ordinal identity across supported internal Word stories, AutoText
@@ -852,6 +867,30 @@ relationships remain byte-exact and appear once in tracked, accepted,
 rejected, saved, and reopened views. The legacy/default compatibility test
 keeps `Document::compare` byte-identical to default options. No sample invokes
 comparison, so the 49-entry hash harness remains unchanged.
+
+The Word contribution regression gate checks caller-font PDF fallback, whole
+paragraph comparison with hyperlinks, bookmarks, and rebuilt TOCs, exporter
+visibility through block and inline controls, namespace and border retention,
+XML-character rejection before package publication, and complex fields whose
+text or sibling fields share one physical run. Changed package, facade,
+DrawingML, and Presentation sources also run their native suites, the rdocx
+Python binding suite, and the unchanged 49-entry hash harness. The binding
+suite includes empty caller-font directories and retains the ordinary PDF
+fallback. Every published archive row is remeasured against the exact source.
+
+The identity acceptance matrix builds one cached-TOC report with headings,
+a table, a block control, and footer page fields. Seventeen paragraph, run,
+field-run, footer-run, control, and row identity variants each exercise save,
+replacement, six-entry TOC rebuild, field refresh, PDF render, identity-only
+comparison, and one-word comparison. The producer matrix applies eleven XML
+traits to the same report and checks byte-identical no-op save, replacement,
+TOC rebuild, field refresh, render, refreshed-field comparison, one-word
+comparison, self-comparison after an rdocx edit, and picture insertion after
+save and reopen. The source-built binding cases use python-docx 1.2.0 only
+for input construction. Native regressions cover content-control read and
+write walkers across body, cell, nested, header, footer, and text-box owners,
+and check `mc:Ignorable` declarations in every rewritten Word story part and
+the styles root after a style edit.
 
 Story revision regressions list body, cell, header, footer, note, comment, and
 text-box owners, then compare their identities and counts with accept and
