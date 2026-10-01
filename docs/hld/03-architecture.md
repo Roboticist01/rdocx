@@ -934,6 +934,11 @@ redline would hold it twice. Deleted content writes a field code as
 `w:instrText`. A carried hyperlink whose target only the edited side has gets
 its relationship in the redline, and a paragraph mark lists its revision
 markers in schema order before its formatting.
+When a matched paragraph changes its comment range, hyperlink, inline control,
+or preserved child boundary without moving a bookmark, comparison writes a
+paired paragraph deletion and insertion. This also covers a TOC entry whose
+cached text becomes a hyperlink and PAGEREF field. Unmatched paragraphs with a
+hyperlink outside a carried complex field still refuse the pair.
 Changed field results remain inside their field owner, while instruction or
 form changes replace that complete owner. Supported run, paragraph, table, and
 section properties emit property revisions that retain the original property
@@ -943,7 +948,17 @@ with existing modeled revisions or differing story shells are rejected unless
 their story category is ignored. The root and owner start tags of a comment
 or note story compare as namespace-resolved trees, so a part written again
 with other declarations, attribute order, or empty-element forms keeps its
-shell. A content control's shell is its type and data binding, and a
+shell. Edited comment additions, removals, replies, resolved state, and dates
+use a related custom XML part when a normal comment story revision cannot
+express the changed owner shell. The redline holds the edited comment parts
+and their relationship targets. The custom part holds the original comment
+package state and one selectable revision identity. Accepting keeps the edited
+comments. Rejecting restores the original comments and removes edited-only
+related assets. A comment asset whose producer path already holds a different
+asset gets a distinct package path without changing the unrelated owner.
+Unrelated comment root extensions still refuse a changed
+shell. Compatible comment text edits continue through WordprocessingML
+revisions. A content control's shell is its type and data binding, and a
 difference there is rejected too. Its `w:id` is producer
 identity and ignored. Its tag, alias, lock, placeholder, and document-part
 gallery are metadata, so controls that differ only by those align, compare,
@@ -951,7 +966,8 @@ keep the original `w:sdtPr`, and report one `content-control <name> differs`
 diagnostic per property. Attributed text alignment retains owner,
 formatting, content position, and raw-child boundaries, then coalesces
 adjacent equal-owner edits into minimal revision wrappers. That alignment
-runs separately between consecutive hyperlink and inline-control boundaries,
+runs separately between consecutive hyperlink, inline-control, bookmark, and
+comment-range boundaries,
 so no text matches across a shell and words inserted or deleted beside a
 shell move it. Text inserted between two boundaries with no original run
 between them, such as before a hyperlink that opens its paragraph, has no

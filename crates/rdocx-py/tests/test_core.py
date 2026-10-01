@@ -1434,6 +1434,218 @@ def test_compare_rejects_unknown_options_before_mutation():
     assert live.text == "before"
 
 
+def test_issue_161_compare_carries_edited_side_comment_thread():
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("Review this heading")
+    edited = rdocx.Document.from_bytes(original.to_bytes())
+    edited.add_comment(
+        rdocx.RunRange(
+            start=rdocx.RunPosition(body_index=0, run_index=0),
+            end=rdocx.RunPosition(body_index=0, run_index=1),
+        ),
+        author="Bo",
+        text="Edited side note",
+    )
+    redline = rdocx.Document.from_bytes(original.to_bytes())
+    assert redline.compare(edited, "Ada", _COMPARE_TIMESTAMP) == ()
+    assert [comment.text for comment in redline.comments] == ["Edited side note"]
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    accepted.accept_all()
+    assert [comment.text for comment in accepted.comments] == ["Edited side note"]
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    rejected.reject_all()
+    assert rejected.comments == ()
+
+
+@pytest.mark.parametrize("edit", ["add", "remove", "reply", "resolve", "redate"])
+def test_issue_161_comment_edits_resolve_to_each_input(edit):
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("Review this heading")
+    if edit != "add":
+        original.add_comment(
+            rdocx.RunRange(
+                start=rdocx.RunPosition(body_index=0, run_index=0),
+                end=rdocx.RunPosition(body_index=0, run_index=1),
+            ),
+            author="Bo",
+            text="Original note",
+            date="2026-09-16T10:15:30Z",
+        )
+    edited = rdocx.Document.from_bytes(original.to_bytes())
+    if edit == "add":
+        edited.add_comment(
+            rdocx.RunRange(
+                start=rdocx.RunPosition(body_index=0, run_index=0),
+                end=rdocx.RunPosition(body_index=0, run_index=1),
+            ),
+            author="Bo",
+            text="Added note",
+        )
+    elif edit == "remove":
+        assert edited.remove_comment(edited.comments[0].id)
+    elif edit == "reply":
+        edited.reply_to(edited.comments[0].id, author="Ada", text="Agreed")
+    elif edit == "resolve":
+        assert edited.resolve_comment(edited.comments[0].id, resolved=True)
+    else:
+        source = io.BytesIO(edited.to_bytes())
+        result = io.BytesIO()
+        with zipfile.ZipFile(source) as source_zip, zipfile.ZipFile(result, "w") as result_zip:
+            for info in source_zip.infolist():
+                data = source_zip.read(info.filename)
+                if info.filename == "word/comments.xml":
+                    data = data.replace(b"2026-09-16T10:15:30Z", b"2026-09-17T10:15:30Z")
+                result_zip.writestr(info, data)
+        edited = rdocx.Document.from_bytes(result.getvalue())
+
+    redline = rdocx.Document.from_bytes(original.to_bytes())
+    assert redline.compare(edited, "Ada", _COMPARE_TIMESTAMP) == ()
+    assert redline.comments == edited.comments
+    if edit == "redate":
+        assert len(redline.revisions) == 1
+        selected = rdocx.Document.from_bytes(redline.to_bytes())
+        assert selected.accept_revision_id(redline.revisions[0].id) == 1
+        assert selected.comments == edited.comments
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    assert accepted.accept_all() > 0
+    assert accepted.comments == edited.comments
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    assert rejected.reject_all() > 0
+    assert rejected.comments == original.comments
+
+
+def test_issue_161_edited_comment_relationship_survives_redline():
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("Review this")
+    edited = rdocx.Document.from_bytes(original.to_bytes())
+    edited.add_comment(
+        rdocx.RunRange(
+            start=rdocx.RunPosition(body_index=0, run_index=0),
+            end=rdocx.RunPosition(body_index=0, run_index=1),
+        ),
+        author="Bo",
+        text="See link",
+    )
+    result = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(edited.to_bytes())) as source_zip:
+        with zipfile.ZipFile(result, "w") as result_zip:
+            for info in source_zip.infolist():
+                data = source_zip.read(info.filename)
+                if info.filename == "word/comments.xml":
+                    data = data.replace(
+                        b"</w:p>",
+                        b'<w:hyperlink xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId42"><w:r><w:t>linked</w:t></w:r></w:hyperlink></w:p>',
+                        1,
+                    )
+                if info.filename == "[Content_Types].xml":
+                    data = data.replace(
+                        b"</Types>",
+                        b'<Override PartName="/word/media/review.bin" ContentType="application/octet-stream"/></Types>',
+                    )
+                result_zip.writestr(info, data)
+            result_zip.writestr(
+                "word/_rels/comments.xml.rels",
+                b'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId42" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/review" TargetMode="External"/><Relationship Id="rId43" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/review.bin"/></Relationships>',
+            )
+            result_zip.writestr("word/media/review.bin", b"edited comment asset")
+    edited = rdocx.Document.from_bytes(result.getvalue())
+    redline = rdocx.Document.from_bytes(original.to_bytes())
+    assert redline.compare(edited, "Ada", _COMPARE_TIMESTAMP) == ()
+    with zipfile.ZipFile(io.BytesIO(redline.to_bytes())) as archive:
+        assert b"https://example.com/review" in archive.read("word/_rels/comments.xml.rels")
+        assert archive.read("word/media/review.bin") == b"edited comment asset"
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    accepted.accept_all()
+    with zipfile.ZipFile(io.BytesIO(accepted.to_bytes())) as archive:
+        assert b"https://example.com/review" in archive.read("word/_rels/comments.xml.rels")
+        assert archive.read("word/media/review.bin") == b"edited comment asset"
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    rejected.reject_all()
+    with zipfile.ZipFile(io.BytesIO(rejected.to_bytes())) as archive:
+        assert "word/_rels/comments.xml.rels" not in archive.namelist()
+        assert "word/media/review.bin" not in archive.namelist()
+
+
+@pytest.mark.parametrize("options", [{"ignore_comments": True}, {"ignored_stories": ["comment"]}])
+def test_issue_161_ignored_comments_skip_missing_related_target(options):
+    import rdocx
+
+    document = rdocx.Document()
+    document.add_paragraph("Unchanged body")
+    document.add_comment(
+        rdocx.RunRange(
+            start=rdocx.RunPosition(body_index=0, run_index=0),
+            end=rdocx.RunPosition(body_index=0, run_index=1),
+        ),
+        author="Bo",
+        text="Ignored note",
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(document.to_bytes())) as source_zip:
+        with zipfile.ZipFile(output, "w") as result_zip:
+            for info in source_zip.infolist():
+                result_zip.writestr(info, source_zip.read(info.filename))
+            result_zip.writestr(
+                "word/_rels/comments.xml.rels",
+                b'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId42" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/missing.png"/></Relationships>',
+            )
+    damaged = rdocx.Document.from_bytes(output.getvalue())
+    original = rdocx.Document.from_bytes(damaged.to_bytes())
+    assert original.compare(damaged, "Ada", _COMPARE_TIMESTAMP, **options) == ()
+
+
+def test_issue_161_comment_asset_collision_preserves_body_image():
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("Review this")
+    original.add_picture(_one_pixel_png(), "body.png")
+    edited = rdocx.Document.from_bytes(original.to_bytes())
+    edited.add_comment(
+        rdocx.RunRange(
+            start=rdocx.RunPosition(body_index=0, run_index=0),
+            end=rdocx.RunPosition(body_index=0, run_index=1),
+        ),
+        author="Bo",
+        text="New comment",
+    )
+    output = io.BytesIO()
+    body_asset = None
+    with zipfile.ZipFile(io.BytesIO(edited.to_bytes())) as source_zip:
+        body_asset = source_zip.read("word/media/image1.png")
+        with zipfile.ZipFile(output, "w") as result_zip:
+            for info in source_zip.infolist():
+                data = source_zip.read(info.filename)
+                if info.filename == "word/_rels/document.xml.rels":
+                    data = data.replace(b'media/image1.png', b'media/image2.png')
+                if info.filename == "word/media/image1.png":
+                    data = b"comment asset with a colliding producer name"
+                result_zip.writestr(info, data)
+            result_zip.writestr("word/media/image2.png", body_asset)
+            result_zip.writestr(
+                "word/_rels/comments.xml.rels",
+                b'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId88" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>',
+            )
+    edited = rdocx.Document.from_bytes(output.getvalue())
+    redline = rdocx.Document.from_bytes(original.to_bytes())
+    assert redline.compare(edited, "Ada", _COMPARE_TIMESTAMP) == ()
+    with zipfile.ZipFile(io.BytesIO(redline.to_bytes())) as archive:
+        assert archive.read("word/media/image1.png") == body_asset
+        assert archive.read("word/media/image1-rdocx-comment-1.png") == b"comment asset with a colliding producer name"
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    accepted.accept_all()
+    assert accepted.compare(edited, "Ada", _COMPARE_TIMESTAMP) == ()
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    rejected.reject_all()
+    assert rejected.compare(original, "Ada", _COMPARE_TIMESTAMP) == ()
+
+
 def test_word_default_toc_switch_rebuilds_and_reports_ordered_diagnostics():
     import rdocx
 

@@ -106,6 +106,21 @@ a reintroduction is obvious from the test name alone rather than from a diff.
 The existing file is the model: `zero_column_tables_do_not_panic`,
 `saving_is_reproducible`.
 
+The Word comparison regression gate covers the Issue 161 option matrix through
+native, installed Python, and CLI entry points with `run` as each default.
+Source-built comment add, remove, reply, resolve, and date cases compare,
+save, accept, and reject against both inputs. A comment-owned external link
+and internal asset must survive redline save and acceptance, then disappear on
+rejection when the original has no comment. A colliding producer path must
+retain the body's asset while carrying the edited comment asset at a new path.
+An ignored comment story skips damaged comment-owned targets. A comment-only
+date edit must list one selectable revision and report one resolved revision.
+The rebuilt TOC
+smoke case and a TOC-entry hyperlink transition check paragraph replacement,
+while a word-level insertion before bookmark and comment markers checks exact
+marker order after both resolutions. Compatible comment text remains covered
+by the existing full-story Word records.
+
 The legacy form and glossary round-trip gate constructs every package in
 source. It covers typed text, checkbox, and drop-down values, deterministic
 part-scoped ordinal identity across supported internal Word stories, AutoText

@@ -1,6 +1,6 @@
 # F-X145, Comparison options and redline completion
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S78
 **Size**: L
 **Depends on**: F-X143, F-X144
@@ -52,10 +52,10 @@ Expected unchanged. Comparison is opt-in and existing samples do not invoke it.
 
 ## Implementation checklist
 
-- [ ] Add matching Python and CLI option surfaces and parity tests.
-- [ ] Carry edited-side comments into redline and verify both revision outcomes.
-- [ ] Repair rebuilt TOC and changed-text marker cases.
-- [ ] Run scoped verification and a zero-finding microscope.
+- [x] Add matching Python and CLI option surfaces and parity tests.
+- [x] Carry edited-side comments into redline and verify both revision outcomes.
+- [x] Repair rebuilt TOC and changed-text marker cases.
+- [x] Run scoped verification and a zero-finding microscope.
 
 ## Open questions
 

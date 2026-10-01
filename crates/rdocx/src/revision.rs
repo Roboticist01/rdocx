@@ -99,6 +99,64 @@ pub struct StoryRevision {
     kind: RevisionKind,
 }
 
+fn comment_comparison_record(
+    document: &Document,
+) -> Result<Option<(serde_json::Value, RevisionMetadata)>> {
+    let Some(raw) = document
+        .package
+        .get_part(crate::comparison::COMMENT_COMPARISON_PART)
+    else {
+        return Ok(None);
+    };
+    use base64::Engine;
+    let encoded = std::str::from_utf8(raw)
+        .map_err(|error| Error::Other(error.to_string()))?
+        .strip_prefix(crate::comparison::COMMENT_COMPARISON_OPEN)
+        .and_then(|xml| xml.strip_suffix(crate::comparison::COMMENT_COMPARISON_CLOSE))
+        .ok_or_else(|| Error::Other("invalid comment comparison XML".to_owned()))?;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|error| Error::Other(error.to_string()))?;
+    let record: serde_json::Value =
+        serde_json::from_slice(&data).map_err(|error| Error::Other(error.to_string()))?;
+    let metadata = RevisionMetadata {
+        kind: RevisionKind::Insertion,
+        id: record
+            .get("id")
+            .and_then(serde_json::Value::as_i64)
+            .and_then(|id| i32::try_from(id).ok())
+            .ok_or_else(|| Error::Other("invalid comment revision id".to_owned()))?,
+        author: record
+            .get("author")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| Error::Other("invalid comment revision author".to_owned()))?
+            .to_owned(),
+        timestamp: Some(
+            record
+                .get("timestamp")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| Error::Other("invalid comment revision date".to_owned()))?
+                .to_owned(),
+        ),
+    };
+    Ok(Some((record, metadata)))
+}
+
+pub(crate) fn comment_comparison_revision(
+    document: &Document,
+    story: StoryId,
+) -> Result<Option<StoryRevision>> {
+    Ok(
+        comment_comparison_record(document)?.map(|(_, metadata)| StoryRevision {
+            story,
+            id: metadata.id,
+            author: metadata.author,
+            timestamp: metadata.timestamp,
+            kind: metadata.kind,
+        }),
+    )
+}
+
 impl StoryRevision {
     /// Return the story that holds this revision.
     ///
@@ -268,6 +326,40 @@ impl Document {
                     .checked_add(count)
                     .ok_or_else(|| Error::Other("resolved revision count overflowed".to_owned()))?;
             }
+        }
+        if let Some((record, metadata)) = comment_comparison_record(&candidate)?
+            && scope.matches(&metadata)
+        {
+            if matches!(resolution, Resolution::Reject) {
+                crate::comparison::apply_comment_snapshot(
+                    &mut candidate,
+                    record.get("original").ok_or_else(|| {
+                        Error::Other("missing original comment snapshot".to_owned())
+                    })?,
+                )?;
+            }
+            candidate
+                .package
+                .remove_part(crate::comparison::COMMENT_COMPARISON_PART);
+            candidate
+                .package
+                .content_types
+                .remove_override(crate::comparison::COMMENT_COMPARISON_PART);
+            if let Some(relationships) = candidate
+                .package
+                .get_part_rels_mut(&candidate.doc_part_name)
+            {
+                relationships.items.retain(|relationship| {
+                    relationship.rel_type != crate::comparison::COMMENT_COMPARISON_REL
+                        || oxml_opc::OpcPackage::resolve_rel_target(
+                            &candidate.doc_part_name,
+                            &relationship.target,
+                        ) != crate::comparison::COMMENT_COMPARISON_PART
+                });
+            }
+            resolved = resolved
+                .checked_add(1)
+                .ok_or_else(|| Error::Other("resolved revision count overflowed".to_owned()))?;
         }
         if resolved == 0 {
             return Ok(0);

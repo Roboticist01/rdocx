@@ -22105,12 +22105,6 @@ fn comparison_refuses_whole_paragraph_structures_word_cannot_resolve() {
             "hyperlink or simple field outside a field",
         ),
         (
-            "paragraph gains a hyperlink",
-            format!("{plain}{last}"),
-            format!("{linked}{last}"),
-            "paragraph boundary structures",
-        ),
-        (
             "bookmarked paragraph moved",
             format!("{bookmarked}{plain}{last}"),
             format!("{plain}{last}{bookmarked}"),
@@ -22127,6 +22121,20 @@ fn comparison_refuses_whole_paragraph_structures_word_cannot_resolve() {
         assert!(error.to_string().contains(message), "{name}: {error}");
         assert_eq!(compared.to_bytes().unwrap(), before, "{name}");
     }
+}
+
+#[test]
+fn comparison_replaces_a_paragraph_that_gains_a_hyperlink() {
+    let original = document_with_content_controls(&wrap_word_body(
+        "<w:p><w:r><w:t>Alpha</w:t></w:r></w:p><w:p><w:r><w:t>Omega</w:t></w:r></w:p>",
+    ))
+    .to_bytes()
+    .unwrap();
+    let edited = document_with_content_controls(&wrap_word_body(
+        "<w:p><w:r><w:t xml:space=\"preserve\">See </w:t></w:r><w:hyperlink w:anchor=\"elsewhere\"><w:r><w:t>there</w:t></w:r></w:hyperlink></w:p><w:p><w:r><w:t>Omega</w:t></w:r></w:p>",
+    )).to_bytes().unwrap();
+    let tracked = compare_and_resolve(&original, &edited, &rdocx::ComparisonOptions::default());
+    assert!(tracked.contains("w:hyperlink"));
 }
 
 #[test]
@@ -29160,26 +29168,6 @@ fn granular_comparison_refuses_marker_moves_it_cannot_express() {
     };
     let cases = [
         (
-            "insertion at a run end before a bookmark",
-            format!("{}{go_back}{}", run("one"), run(" three")),
-            format!("{}{go_back}{}", run("one two"), run(" three")),
-            word.clone(),
-        ),
-        (
-            "insertion at a run end before a comment range",
-            format!(
-                r#"{}<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>{}"#,
-                run("one"),
-                run(" three")
-            ),
-            format!(
-                r#"{}<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>{}"#,
-                run("one two"),
-                run(" three")
-            ),
-            word.clone(),
-        ),
-        (
             "smart tag and control swapped across an empty run",
             format!("{}{smart_tag}<w:r></w:r>{control}", run("one")),
             format!("{}<w:r></w:r>{control}{smart_tag}", run("one")),
@@ -29224,6 +29212,55 @@ fn granular_comparison_refuses_marker_moves_it_cannot_express() {
             "{name}: {error}"
         );
         assert_eq!(tracked.to_bytes().unwrap(), before, "{name}");
+    }
+}
+
+#[test]
+fn issue_161_insertion_before_marker_keeps_marker_after_changed_text() {
+    let run = |text: &str| format!(r#"<w:r><w:t xml:space="preserve">{text}</w:t></w:r>"#);
+    let markers = [
+        r#"<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/>"#,
+        r#"<w:commentRangeStart w:id="7"/><w:commentRangeEnd w:id="7"/>"#,
+    ];
+    for marker in markers {
+        let original_xml = wrap_word_body(&format!(
+            "<w:p>{}{marker}{}</w:p>",
+            run("one"),
+            run(" three")
+        ));
+        let edited_xml = wrap_word_body(&format!(
+            "<w:p>{}{marker}{}</w:p>",
+            run("one two"),
+            run(" three")
+        ));
+        let edited = document_with_content_controls(&edited_xml);
+        let mut redline = document_with_content_controls(&original_xml);
+        redline
+            .compare_with_options(
+                &edited,
+                "Ada",
+                "2026-09-04T09:00:00Z",
+                &rdocx::ComparisonOptions {
+                    granularity: rdocx::ComparisonGranularity::Word,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let bytes = redline.to_bytes().unwrap();
+        let mut accepted = Document::from_bytes(&bytes).unwrap();
+        accepted.accept_all().unwrap();
+        assert_eq!(
+            marked_paragraphs(&document_xml(&mut accepted)),
+            marked_paragraphs(&edited_xml),
+            "{marker}"
+        );
+        let mut rejected = Document::from_bytes(&bytes).unwrap();
+        rejected.reject_all().unwrap();
+        assert_eq!(
+            marked_paragraphs(&document_xml(&mut rejected)),
+            marked_paragraphs(&original_xml),
+            "{marker}"
+        );
     }
 }
 
@@ -36894,8 +36931,7 @@ mod compare_producer_noise {
         }
     }
 
-    /// A shell that differs in content still refuses the pair. A re-dated
-    /// comment waits for the redline to carry the edited comment threads.
+    /// An unrelated root extension remains outside comment-thread revision.
     #[test]
     fn a_changed_story_shell_still_refuses() {
         let comments = |root_child: &str, date: &str| {
@@ -36903,28 +36939,22 @@ mod compare_producer_noise {
                 r#"<w:comments xmlns:w="{W_NS}">{root_child}<w:comment w:id="0" w:author="Ada" w:initials="AL" w:date="{date}"><w:p><w:r><w:t>same comment</w:t></w:r></w:p></w:comment></w:comments>"#
             )
         };
-        for (edited, expected) in [
-            (
-                comments("", "2026-09-05T09:00:00Z"),
-                "comments owner shell changed at /word/comments.xml[0]",
+        let edited = with_part(
+            document_with_comparison_stories("same"),
+            "/word/comments.xml",
+            &comments(
+                r#"<x:extension xmlns:x="urn:producer"/>"#,
+                "2026-09-04T09:00:00Z",
             ),
-            (
-                comments(
-                    r#"<x:extension xmlns:x="urn:producer"/>"#,
-                    "2026-09-04T09:00:00Z",
-                ),
-                "comments story root shell changed in /word/comments.xml",
-            ),
-        ] {
-            let edited = with_part(
-                document_with_comparison_stories("same"),
-                "/word/comments.xml",
-                &edited,
-            );
-            let mut compared = document_with_comparison_stories("same");
-            let error = compared.compare(&edited, "R", TIMESTAMP).unwrap_err();
-            assert!(error.to_string().contains(expected), "{error}");
-        }
+        );
+        let mut compared = document_with_comparison_stories("same");
+        let error = compared.compare(&edited, "R", TIMESTAMP).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("comments story root shell changed in /word/comments.xml"),
+            "{error}"
+        );
     }
 }
 

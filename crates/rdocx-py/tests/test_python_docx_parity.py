@@ -949,3 +949,74 @@ def test_issue_160_producer_matrix_across_operations_and_picture(tmp_path, trait
     _matrix_assert_trait(pictured_path, trait)
     assert reopened.try_replace_text("alpha", "ALPHA") == 1
     assert reopened.to_pdf().startswith(b"%PDF")
+
+
+def test_issue_161_rebuilt_toc_compares_and_resolves_both_sides(tmp_path):
+    _assert_oracle_version()
+    import rdocx
+    from docx import Document as OracleDocument
+    from docx.oxml import OxmlElement
+
+    source = _matrix_fixture(tmp_path / "source.docx")
+    oracle = OracleDocument(source)
+    body = oracle.element.body
+    control = OxmlElement("w:sdt")
+    control.append(OxmlElement("w:sdtPr"))
+    content = OxmlElement("w:sdtContent")
+    for paragraph in list(body)[:6]:
+        body.remove(paragraph)
+        content.append(paragraph)
+    control.append(content)
+    body.insert(0, control)
+    oracle.save(source)
+    edited = rdocx.Document(source)
+    assert edited.rebuild_toc().entry_count == 6
+    edited_path = tmp_path / "edited.docx"
+    edited.save(edited_path)
+    redline = rdocx.Document(source)
+    assert redline.compare(
+        rdocx.Document(edited_path), "Ada", _MATRIX_TIMESTAMP, granularity="word"
+    ) == ()
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    accepted.accept_all()
+    assert accepted.compare(rdocx.Document(edited_path), "Ada", _MATRIX_TIMESTAMP) == ()
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    rejected.reject_all()
+    assert rejected.compare(rdocx.Document(source), "Ada", _MATRIX_TIMESTAMP) == ()
+
+
+def test_issue_161_toc_entry_hyperlink_transition_tracks_boundary(tmp_path):
+    _assert_oracle_version()
+    import rdocx
+    from docx import Document as OracleDocument
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    original = OracleDocument()
+    original.add_paragraph("Chapter 1")
+    original.add_paragraph("Following body paragraph")
+    original_path = tmp_path / "toc_entry_original.docx"
+    original.save(original_path)
+    edited = OracleDocument(original_path)
+    paragraph = edited.paragraphs[0]._p
+    for child in list(paragraph):
+        paragraph.remove(child)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), "_Toc1")
+    run = OxmlElement("w:r")
+    text = OxmlElement("w:t")
+    text.text = "Chapter 1"
+    run.append(text)
+    hyperlink.append(run)
+    paragraph.append(hyperlink)
+    edited_path = tmp_path / "toc_entry_edited.docx"
+    edited.save(edited_path)
+
+    redline = rdocx.Document(original_path)
+    assert redline.compare(rdocx.Document(edited_path), "Ada", _MATRIX_TIMESTAMP) == ()
+    accepted = rdocx.Document.from_bytes(redline.to_bytes())
+    accepted.accept_all()
+    assert accepted.compare(rdocx.Document(edited_path), "Ada", _MATRIX_TIMESTAMP) == ()
+    rejected = rdocx.Document.from_bytes(redline.to_bytes())
+    rejected.reject_all()
+    assert rejected.compare(rdocx.Document(original_path), "Ada", _MATRIX_TIMESTAMP) == ()

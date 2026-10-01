@@ -15962,6 +15962,19 @@ impl Document {
                 &part_name, scanned, &owners,
             )?);
         }
+        if staged
+            .package
+            .contains_part(crate::comparison::COMMENT_COMPARISON_PART)
+        {
+            let body = staged
+                .stories()?
+                .into_iter()
+                .find(|story| story.kind() == StoryKind::Body)
+                .ok_or_else(|| Error::Other("comment comparison has no body story".to_owned()))?;
+            if let Some(revision) = crate::revision::comment_comparison_revision(&staged, body)? {
+                revisions.push(revision);
+            }
+        }
         Ok(revisions)
     }
 
