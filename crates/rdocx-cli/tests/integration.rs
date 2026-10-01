@@ -353,13 +353,22 @@ fn printing_commands_end_cleanly_when_the_reader_closes_stdout() {
         &lines.iter().map(String::as_str).collect::<Vec<_>>(),
     );
 
+    let empty = temp.path.join("empty.docx");
+    write_document(&empty, &[]);
+
     for args in [
         vec!["text", path_text(&input)],
         vec!["text", path_text(&input), "--json"],
+        vec!["diff", path_text(&empty), path_text(&input)],
     ] {
         let output = cli_with_closed_stdout(&args);
         assert_success(&output, &args.join(" "));
     }
+    // The verdict of `diff --exit-code` survives the closed pipe.
+    let output =
+        cli_with_closed_stdout(&["diff", "--exit-code", path_text(&empty), path_text(&input)]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
 }
 
 #[test]
@@ -979,14 +988,355 @@ fn diff_reports_changed_paragraphs_without_using_exit_status_as_a_verdict() {
 
     let output = cli(&["diff", path_text(&before), path_text(&after)]);
     assert_success(&output, "diff");
+    // One replaced paragraph is one changed paragraph, not two.
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         format!(
-            "--- {} (2 paragraphs, 0 tables)\n+++ {} (2 paragraphs, 0 tables)\n\n- [2] Old text\n+ [2] New text\n\n2 paragraph(s) differ.\n",
+            "--- {} (2 paragraphs, 0 tables)\n+++ {} (2 paragraphs, 0 tables)\n\n- [2] Old text\n+ [2] New text\n\n1 paragraph(s) changed, 0 added, 0 removed.\n",
             before.display(),
             after.display()
         )
     );
+}
+
+/// Runs `rdocx diff` on two files and returns its standard output after the
+/// two header lines and the blank line that follows them.
+fn diff_body(before: &Path, after: &Path) -> String {
+    let output = cli(&["diff", path_text(before), path_text(after)]);
+    assert_success(&output, "diff");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    stdout.splitn(4, '\n').nth(3).unwrap().to_owned()
+}
+
+#[test]
+fn diff_counts_added_and_removed_paragraphs_and_reports_identical_files() {
+    let temp = TempWorkspace::new("diff-added-removed");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    let copy = temp.path.join("copy.docx");
+    write_document(&before, &["Same", "Gone", "Kept"]);
+    write_document(&after, &["Same", "Kept", "New"]);
+    write_document(&copy, &["Same", "Gone", "Kept"]);
+
+    assert_eq!(
+        diff_body(&before, &after),
+        "- [2] Gone\n+ [3] New\n\n0 paragraph(s) changed, 1 added, 1 removed.\n"
+    );
+    assert_eq!(
+        diff_body(&before, &copy),
+        "(no differences in paragraph text)\n"
+    );
+}
+
+/// Two edits far apart in a long story, as in a document with a changed
+/// first and last paragraph, stay cheap and are both reported.
+#[test]
+fn diff_reports_two_far_apart_edits_in_a_long_story() {
+    let temp = TempWorkspace::new("diff-long");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    let paragraphs = (0..5_001)
+        .map(|index| format!("Paragraph {index}"))
+        .collect::<Vec<_>>();
+    let mut edited = paragraphs.clone();
+    edited[0] = "First edited".to_owned();
+    edited[5_000] = "Last edited".to_owned();
+    for (path, texts) in [(&before, &paragraphs), (&after, &edited)] {
+        write_document(path, &texts.iter().map(String::as_str).collect::<Vec<_>>());
+    }
+
+    assert_eq!(
+        diff_body(&before, &after),
+        "- [1] Paragraph 0\n+ [1] First edited\n- [5001] Paragraph 5000\n+ [5001] Last edited\n\n2 paragraph(s) changed, 0 added, 0 removed.\n"
+    );
+}
+
+#[test]
+fn diff_locates_changed_table_cells_like_text_json() {
+    let temp = TempWorkspace::new("diff-table");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    for (path, word) in [(&before, "alpha"), (&after, "beta")] {
+        let mut document = fixture_document(&["Body"]);
+        {
+            let mut table = document.add_table(1, 2);
+            table.cell(0, 0).unwrap().set_text("Row label");
+            table
+                .cell(0, 1)
+                .unwrap()
+                .set_text(&format!("The cell says {word}."));
+            let mut outer = table.cell(0, 0).unwrap();
+            let mut nested = outer.add_table(1, 1);
+            nested
+                .cell(0, 0)
+                .unwrap()
+                .set_text(&format!("Nested {word}"));
+        }
+        document.save(path).unwrap();
+    }
+
+    let json = cli(&["text", path_text(&before), "--json"]);
+    assert_success(&json, "text --json");
+    let json: Value = serde_json::from_slice(&json.stdout).unwrap();
+    let nested_path = json["paragraphs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|paragraph| paragraph["text"] == "Nested alpha")
+        .map(|paragraph| paragraph["path"].clone())
+        .unwrap();
+    assert_eq!(
+        nested_path,
+        json!([
+            {"kind": "row", "index": 0},
+            {"kind": "cell", "index": 0},
+            {"kind": "table", "index": 1},
+            {"kind": "row", "index": 0},
+            {"kind": "cell", "index": 0},
+            {"kind": "paragraph", "index": 0},
+        ])
+    );
+    assert_eq!(
+        diff_body(&before, &after),
+        "- [table 1, row 1, cell 1, table 2, row 1, cell 1, paragraph 1] Nested alpha\n\
+         + [table 1, row 1, cell 1, table 2, row 1, cell 1, paragraph 1] Nested beta\n\
+         - [table 1, row 1, cell 2, paragraph 1] The cell says alpha.\n\
+         + [table 1, row 1, cell 2, paragraph 1] The cell says beta.\n\
+         \n2 paragraph(s) changed, 0 added, 0 removed.\n"
+    );
+}
+
+#[test]
+fn diff_compares_headers_footers_notes_and_comments() {
+    let temp = TempWorkspace::new("diff-stories");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    for (path, word) in [(&before, "alpha"), (&after, "beta")] {
+        let mut document = fixture_document(&["Body text."]);
+        document.set_header(&format!("Header {word}"));
+        document.set_footer("Footer unchanged");
+        document.add_footnote(&format!("Footnote {word}"));
+        document
+            .add_comment(
+                rdocx::RunRange {
+                    start: rdocx::RunPosition {
+                        body_index: 0,
+                        run_index: 0,
+                    },
+                    end: rdocx::RunPosition {
+                        body_index: 0,
+                        run_index: 1,
+                    },
+                },
+                "Reviewer",
+                None,
+                &format!("Comment {word}"),
+            )
+            .unwrap();
+        document.save(path).unwrap();
+    }
+
+    assert_eq!(
+        diff_body(&before, &after),
+        "- [header default, section 1, paragraph 1] Header alpha\n\
+         + [header default, section 1, paragraph 1] Header beta\n\
+         - [footnote 1, paragraph 1] Footnote alpha\n\
+         + [footnote 1, paragraph 1] Footnote beta\n\
+         - [comment 1, paragraph 1] Comment alpha\n\
+         + [comment 1, paragraph 1] Comment beta\n\
+         \n3 paragraph(s) changed, 0 added, 0 removed.\n"
+    );
+
+    let output = cli(&["diff", path_text(&before), path_text(&after), "--json"]);
+    assert_success(&output, "diff --json");
+    let record: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(record["schema"], 1);
+    assert_eq!(record["scope"], "all-supported-stories");
+    assert_eq!(
+        (&record["changed"], &record["added"], &record["removed"]),
+        (&json!(3), &json!(0), &json!(0))
+    );
+    assert_eq!(record["not_compared"], json!([]));
+    assert_eq!(
+        record["differences"][0],
+        json!({
+            "change": "changed",
+            "story": "header",
+            "location_a": "header default, section 1, paragraph 1",
+            "text_a": "Header alpha",
+            "location_b": "header default, section 1, paragraph 1",
+            "text_b": "Header beta",
+        })
+    );
+}
+
+/// A text box is read once, not again from its `mc:Fallback` copy, and the
+/// text of an inline content control is read once, with its paragraph.
+#[test]
+fn diff_compares_text_boxes_and_content_controls_once() {
+    let temp = TempWorkspace::new("diff-text-box");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    let word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    for (path, text) in [(&before, "alpha"), (&after, "beta")] {
+        let mut document = fixture_document(&["seed"]);
+        document.set_header("seed");
+        document.save(path).unwrap();
+        let header = header_part_name(path);
+        let copy = format!(
+            r#"<w:txbxContent><w:p><w:r><w:t>Box {text}</w:t></w:r></w:p></w:txbxContent>"#
+        );
+        let text_box = format!(
+            r#"<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor><a:graphic><a:graphicData><wps:wsp><wps:txbx>{copy}</wps:txbx></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape><v:textbox>{copy}</v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r>"#
+        );
+        let mut package =
+            OpcPackage::from_reader(std::io::Cursor::new(fs::read(path).unwrap())).unwrap();
+        // Keep the section properties, which reference the header.
+        let original = package_part_text(path, "/word/document.xml");
+        let section = &original[original.find("<w:sectPr").unwrap()
+            ..original.find("</w:sectPr>").unwrap() + "</w:sectPr>".len()];
+        let document_xml = format!(
+            r#"<w:document xmlns:w="{word}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:v="urn:schemas-microsoft-com:vml"><w:body><w:p><w:r><w:t>Anchor</w:t></w:r>{text_box}</w:p>{section}</w:body></w:document>"#
+        );
+        package.set_part("/word/document.xml", document_xml.into_bytes());
+        package.set_part(
+            &header,
+            format!(
+                r#"<w:hdr xmlns:w="{word}"><w:sdt><w:sdtContent><w:p><w:r><w:t>Block {text}</w:t></w:r></w:p></w:sdtContent></w:sdt><w:p><w:r><w:t xml:space="preserve">Inline </w:t></w:r><w:sdt><w:sdtContent><w:r><w:t>{text}</w:t></w:r></w:sdtContent></w:sdt></w:p></w:hdr>"#
+            )
+            .into_bytes(),
+        );
+        package
+            .write_to(&mut fs::File::create(path).unwrap())
+            .unwrap();
+    }
+
+    assert_eq!(
+        diff_body(&before, &after),
+        "- [text box 1, paragraph 1] Box alpha\n\
+         + [text box 1, paragraph 1] Box beta\n\
+         - [header default, section 1, content control 1] Block alpha\n\
+         + [header default, section 1, content control 1] Block beta\n\
+         - [header default, section 1, paragraph 1] Inline alpha\n\
+         + [header default, section 1, paragraph 1] Inline beta\n\
+         \n3 paragraph(s) changed, 0 added, 0 removed.\n"
+    );
+}
+
+#[test]
+fn diff_exit_code_reports_a_difference_and_an_error_apart() {
+    let temp = TempWorkspace::new("diff-exit-code");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    write_document(&before, &["Same", "Old text"]);
+    write_document(&after, &["Same", "New text"]);
+    let missing = temp.path.join("missing.docx");
+
+    let differ = cli(&["diff", "--exit-code", path_text(&before), path_text(&after)]);
+    assert_eq!(differ.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&differ.stdout).contains("+ [2] New text"));
+    assert!(differ.stderr.is_empty());
+
+    let same = cli(&[
+        "diff",
+        "--exit-code",
+        path_text(&before),
+        path_text(&before),
+    ]);
+    assert_success(&same, "diff --exit-code");
+
+    let json = cli(&[
+        "diff",
+        "--exit-code",
+        "--json",
+        path_text(&before),
+        path_text(&after),
+    ]);
+    assert_eq!(json.status.code(), Some(1));
+    let record: Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(record["changed"], 1);
+
+    let error = cli(&[
+        "diff",
+        "--exit-code",
+        path_text(&before),
+        path_text(&missing),
+    ]);
+    assert_eq!(error.status.code(), Some(2));
+    assert!(error.stdout.is_empty());
+    let error = cli(&["diff", path_text(&before), path_text(&missing)]);
+    assert_eq!(error.status.code(), Some(1));
+}
+
+#[test]
+fn diff_issue_227_locates_changed_body_cell_once() {
+    let temp = TempWorkspace::new("diff-issue-227");
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    for (path, text) in [(&before, "Old cell"), (&after, "New cell")] {
+        let mut document = fixture_document(&["Body unchanged"]);
+        document.add_table(1, 1).cell(0, 0).unwrap().set_text(text);
+        document.save(path).unwrap();
+    }
+    let output = cli(&["diff", path_text(&before), path_text(&after)]);
+    assert_success(&output, "diff");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("[table 1, row 1, cell 1, paragraph 1] Old cell"));
+    assert!(stdout.contains("[table 1, row 1, cell 1, paragraph 1] New cell"));
+    assert!(stdout.contains("1 paragraph(s) changed, 0 added, 0 removed."));
+}
+
+#[test]
+fn diff_reports_both_unreadable_stories_as_incomplete() {
+    let temp = TempWorkspace::new("diff-unreadable-stories");
+    let valid = temp.path.join("valid.docx");
+    let mut document = fixture_document(&["Body unchanged"]);
+    document.set_header("Header text");
+    document.save(&valid).unwrap();
+    let header = header_part_name(&valid);
+    let mut package = OpcPackage::open(&valid).unwrap();
+    let xml = package.get_part(&header).unwrap().to_vec();
+    package.set_part(&header, xml[..xml.len() / 2].to_vec());
+    let before = temp.path.join("before.docx");
+    let after = temp.path.join("after.docx");
+    package.save(&before).unwrap();
+    package.save(&after).unwrap();
+
+    let output = cli(&[
+        "diff",
+        "--exit-code",
+        "--json",
+        path_text(&before),
+        path_text(&after),
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    let record: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(record["differences"], json!([]));
+    let not_compared = record["not_compared"].as_array().unwrap();
+    assert_eq!(not_compared.len(), 2);
+    assert!(
+        not_compared[0]
+            .as_str()
+            .unwrap()
+            .contains(&before.display().to_string())
+    );
+    assert!(
+        not_compared[1]
+            .as_str()
+            .unwrap()
+            .contains(&after.display().to_string())
+    );
+    assert!(
+        not_compared
+            .iter()
+            .all(|entry| entry.as_str().unwrap().contains("story XML scan failed"))
+    );
+    assert!(output.stderr.is_empty());
+
+    let text = cli(&["diff", path_text(&before), path_text(&after)]);
+    let stdout = String::from_utf8(text.stdout).unwrap();
+    assert_eq!(stdout.matches("(not compared:").count(), 2);
+    assert!(!stdout.contains("(no differences in paragraph text)"));
 }
 
 #[test]
@@ -2331,6 +2681,32 @@ fn comment_add_counts_the_runs_that_text_json_lists() {
 }
 
 #[test]
+fn comment_anchor_selects_second_occurrence_and_reopens() {
+    let temp = TempWorkspace::new("fx153-comment-anchor");
+    let input = temp.path.join("input.docx");
+    let output = temp.path.join("anchored.docx");
+    write_document(&input, &["First target", "Second target"]);
+    let result = cli(&[
+        "comment",
+        "add",
+        path_text(&input),
+        "--anchor",
+        "target",
+        "--occurrence",
+        "1",
+        "--author",
+        "Reviewer",
+        "--text",
+        "note",
+        "--output",
+        path_text(&output),
+    ]);
+    assert_success(&result, "comment add --anchor");
+    let reopened = Document::open(&output).unwrap();
+    assert_eq!(reopened.comments()[0].text(), "note");
+}
+
+#[test]
 fn comment_add_and_reply_write_the_given_rfc3339_date() {
     const ADDED: &str = "2026-09-29T08:30:00Z";
     const REPLIED: &str = "2026-09-29T10:45:00+02:00";
@@ -2425,6 +2801,149 @@ fn comment_add_and_reply_write_the_given_rfc3339_date() {
             .contains("invalid RFC 3339 comment timestamp: 2026-09-29T25:00:00Z")
     );
     assert!(!rejected_reply_path.exists());
+}
+
+/// GitHub issue #163: `comment add --anchor TEXT [--occurrence N]` comments
+/// on a piece of text without run index bookkeeping.
+#[test]
+fn comment_add_anchors_the_requested_occurrence_of_a_text() {
+    const DATE: &str = "2026-09-30T09:15:00Z";
+    let temp = TempWorkspace::new("comment-anchor");
+    let input = temp.path.join("input.docx");
+    write_document(
+        &input,
+        &["Alpha has target words.", "Beta repeats the target words."],
+    );
+    let add = |options: &[&str], output: &Path| {
+        let mut args = vec!["comment", "add", path_text(&input)];
+        args.extend_from_slice(options);
+        args.extend_from_slice(&[
+            "--author",
+            "Alice",
+            "--text",
+            "Here",
+            "--output",
+            path_text(output),
+        ]);
+        cli(&args)
+    };
+
+    let added_path = temp.path.join("added.docx");
+    let added = add(
+        &[
+            "--anchor",
+            "target words",
+            "--occurrence",
+            "1",
+            "--initials",
+            "AL",
+            "--date",
+            DATE,
+            "--json",
+        ],
+        &added_path,
+    );
+    assert_success(&added, "comment add --anchor");
+    let value: Value = serde_json::from_slice(&added.stdout).unwrap();
+    assert_eq!(
+        value,
+        json!({
+            "schema": 1,
+            "scope": "main",
+            "action": "add",
+            "comment_id": 0,
+            "output": path_text(&added_path),
+        })
+    );
+    let xml = package_part_text(&added_path, "/word/document.xml");
+    let start = xml.find("<w:commentRangeStart").unwrap();
+    let end = xml.find("<w:commentRangeEnd").unwrap();
+    assert!(xml[..start].contains("Beta repeats the "), "{xml}");
+    let anchored = xml[start..end]
+        .split("<w:t")
+        .skip(1)
+        .map(|text| &text[text.find('>').unwrap() + 1..text.find("</w:t>").unwrap()])
+        .collect::<String>();
+    assert_eq!(anchored, "target words");
+    let document = Document::open(&added_path).unwrap();
+    let comment = &document.comments()[0];
+    assert_eq!(
+        (comment.text(), comment.initials(), comment.date()),
+        ("Here".to_owned(), Some("AL"), Some(DATE))
+    );
+    assert_eq!(
+        document.paragraph(1).unwrap().text(),
+        "Beta repeats the target words."
+    );
+
+    // The first occurrence is the default.
+    let first_path = temp.path.join("first.docx");
+    assert_success(
+        &add(&["--anchor", "target words"], &first_path),
+        "comment add --anchor without --occurrence",
+    );
+    let xml = package_part_text(&first_path, "/word/document.xml");
+    assert!(
+        xml[..xml.find("<w:commentRangeStart").unwrap()].contains("Alpha has "),
+        "{xml}"
+    );
+
+    for (options, message) in [
+        (
+            &["--anchor", "absent"][..],
+            r#"Error: comment anchor text "absent" has no occurrence 0: it occurs 0 times in the main story"#,
+        ),
+        (
+            &["--anchor", "target words", "--occurrence", "2"][..],
+            r#"Error: comment anchor text "target words" has no occurrence 2: it occurs 2 times in the main story"#,
+        ),
+    ] {
+        let refused_path = temp.path.join("refused.docx");
+        let refused = add(options, &refused_path);
+        assert_eq!(refused.status.code(), Some(1), "{options:?}");
+        assert!(refused.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(refused.stderr).unwrap(),
+            format!("{message}\n")
+        );
+        assert!(!refused_path.exists());
+    }
+
+    // The text and a run range are exclusive, and one of them is required.
+    let range = [
+        "--start-paragraph",
+        "0",
+        "--start-run",
+        "0",
+        "--end-paragraph",
+        "0",
+        "--end-run",
+        "1",
+    ];
+    let with_range = |extra: &[&'static str]| {
+        let mut options = range.to_vec();
+        options.extend_from_slice(extra);
+        options
+    };
+    for (options, message) in [
+        (
+            vec!["--anchor", "Alpha", "--start-paragraph", "0"],
+            "cannot be used with",
+        ),
+        (with_range(&["--occurrence", "1"]), "cannot be used with"),
+        (
+            vec!["--occurrence", "1"],
+            "required arguments were not provided",
+        ),
+        (vec![], "required arguments were not provided"),
+    ] {
+        let usage_path = temp.path.join("usage.docx");
+        let usage = add(&options, &usage_path);
+        assert_eq!(usage.status.code(), Some(2), "{options:?}");
+        let stderr = String::from_utf8(usage.stderr).unwrap();
+        assert!(stderr.contains(message), "{options:?}: {stderr}");
+        assert!(!usage_path.exists());
+    }
 }
 
 #[test]

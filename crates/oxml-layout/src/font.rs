@@ -474,9 +474,62 @@ struct LoadedFont {
     ascender: i16,
     descender: i16,
     line_gap: i16,
+    /// The line metrics Word measures this face on, in design units, or
+    /// `None` for a face without Windows metrics. See
+    /// [`FontManager::word_line_metrics`].
+    word_line: Option<WordLineUnits>,
     /// HarfRust's per-face shaping caches. Building these is the expensive
     /// part of shaping, so it happens once per face instead of once per run.
     shaper_data: harfrust::ShaperData,
+}
+
+/// A face's line metrics as Windows reports them to Word, in design units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WordLineUnits {
+    /// Above the baseline.
+    ascent: i32,
+    /// Below the baseline, positive.
+    descent: i32,
+    /// External leading, never negative.
+    leading: i32,
+}
+
+impl WordLineUnits {
+    /// Read from the face's OS/2 table, or `None` when it has no Windows
+    /// metrics.
+    fn of(face: &ttf_parser::Face<'_>) -> Option<Self> {
+        let os2 = face.tables().os2?;
+        if os2.use_typographic_metrics() {
+            return Some(Self {
+                ascent: i32::from(os2.typographic_ascender()),
+                descent: -i32::from(os2.typographic_descender()),
+                leading: i32::from(os2.typographic_line_gap()).max(0),
+            });
+        }
+        // `usWinAscent` and `usWinDescent` are unsigned. ttf-parser reads
+        // them as signed and negates the descent, which overflows at 32768,
+        // so the two fields are read here directly.
+        let table = face
+            .raw_face()
+            .table(ttf_parser::Tag::from_bytes(b"OS/2"))?;
+        let unsigned = |offset: usize| {
+            table
+                .get(offset..offset + 2)
+                .map(|bytes| i32::from(u16::from_be_bytes([bytes[0], bytes[1]])))
+        };
+        let ascent = unsigned(74)?;
+        let descent = unsigned(76)?;
+        if ascent + descent == 0 {
+            return None;
+        }
+        let hhea = face.tables().hhea;
+        let hhea_extent = i32::from(hhea.ascender) - i32::from(hhea.descender);
+        Some(Self {
+            ascent,
+            descent,
+            leading: (i32::from(hhea.line_gap) - (ascent + descent - hhea_extent)).max(0),
+        })
+    }
 }
 
 struct ParagraphFontTrace {
@@ -1217,7 +1270,7 @@ impl FontManager {
         let (data, face_index) = font_data_for_face(&self.db, db_id, &mut self.memory_face_data)
             .ok_or_else(|| LayoutError::FontParse("Failed to load font data".into()))?;
 
-        let (units_per_em, ascender, descender, line_gap) = {
+        let (units_per_em, ascender, descender, line_gap, word_line) = {
             let face = ttf_parser::Face::parse(&data, face_index)
                 .map_err(|e| LayoutError::FontParse(format!("ttf-parser error: {e}")))?;
             (
@@ -1225,6 +1278,7 @@ impl FontManager {
                 face.ascender(),
                 face.descender(),
                 face.line_gap(),
+                WordLineUnits::of(&face),
             )
         };
 
@@ -1266,6 +1320,7 @@ impl FontManager {
             ascender,
             descender,
             line_gap,
+            word_line,
             shaper_data,
         });
         self.remember_font_key(key, idx);
@@ -1285,6 +1340,34 @@ impl FontManager {
             ascent: font.ascender as f64 * scale,
             descent: -(font.descender as f64) * scale, // make positive
             line_gap: font.line_gap as f64 * scale,
+            units_per_em: font.units_per_em,
+        })
+    }
+
+    /// The metrics Word measures one line of a font on, at a given size.
+    ///
+    /// Word reads a face the way Windows reports it (`TEXTMETRIC`): `ascent`
+    /// and `descent` are the OS/2 `usWinAscent` and `usWinDescent`, and
+    /// `line_gap` is the external leading, the part of the `hhea` line gap
+    /// that the Windows extent does not already cover. A single line is the
+    /// sum of the three, so Calibri and Carlito are 2500/2048 em and Arial and
+    /// Liberation Sans 2355/2048 em. A face that sets the OS/2
+    /// `USE_TYPO_METRICS` flag is measured on its typographic values instead,
+    /// which is what Word does with Aptos, and a face without Windows metrics
+    /// on the values [`FontManager::metrics`] reports.
+    pub fn word_line_metrics(&self, font_id: FontId, size_pt: f64) -> Result<FontMetrics> {
+        let font = self.get_font(font_id)?;
+        let scale = size_pt / font.units_per_em as f64;
+        let units = font.word_line.unwrap_or(WordLineUnits {
+            ascent: i32::from(font.ascender),
+            descent: -i32::from(font.descender),
+            leading: i32::from(font.line_gap).max(0),
+        });
+
+        Ok(FontMetrics {
+            ascent: units.ascent as f64 * scale,
+            descent: units.descent as f64 * scale,
+            line_gap: units.leading as f64 * scale,
             units_per_em: font.units_per_em,
         })
     }
@@ -1398,7 +1481,12 @@ impl FontManager {
         };
         let bidi = unicode_bidi::BidiInfo::new(&segment.text, paragraph_level);
         let levels = bidi.levels.clone();
-        self.shape_multilingual_with_levels(segment, language, no_wrap, &levels, 0)
+        let break_offsets = if no_wrap {
+            HashSet::new()
+        } else {
+            multilingual_break_opportunities(&segment.text)
+        };
+        self.shape_multilingual_with_levels(segment, language, &break_offsets, &levels, 0)
     }
 
     /// Shape styled spans with one paragraph-wide bidi resolution.
@@ -1435,6 +1523,13 @@ impl FontManager {
             .first()
             .map(|paragraph| paragraph.level)
             .unwrap_or_else(unicode_bidi::Level::ltr);
+        // Opportunities come from the whole paragraph, so a word that changes
+        // formatting partway through does not break where its runs meet.
+        let paragraph_breaks = if no_wrap {
+            HashSet::new()
+        } else {
+            multilingual_break_opportunities(&paragraph_text)
+        };
         let mut logical_index = 0usize;
         let mut shaped = Vec::new();
         for ((segment, language), byte_offset) in segments.into_iter().zip(segment_starts) {
@@ -1448,10 +1543,15 @@ impl FontManager {
                 let levels = forced_levels
                     .as_deref()
                     .unwrap_or(&bidi.levels[byte_offset..byte_end]);
+                let break_offsets = paragraph_breaks
+                    .iter()
+                    .filter(|offset| (byte_offset + 1..=byte_end).contains(*offset))
+                    .map(|offset| offset - byte_offset)
+                    .collect();
                 let spans = self.shape_multilingual_with_levels(
                     segment,
                     language.as_deref(),
-                    no_wrap,
+                    &break_offsets,
                     levels,
                     logical_index,
                 )?;
@@ -1462,22 +1562,25 @@ impl FontManager {
         Ok(shaped)
     }
 
+    /// `break_offsets` are the line break opportunities within the segment,
+    /// as byte offsets. An offset at its end lets a line end after it.
     fn shape_multilingual_with_levels(
         &mut self,
         segment: TextSegment,
         language: Option<&str>,
-        no_wrap: bool,
+        break_offsets: &HashSet<usize>,
         levels: &[unicode_bidi::Level],
         logical_index_base: usize,
     ) -> Result<Vec<MultilingualTextSegment>> {
         let grapheme_boundaries = icu_segmenter::GraphemeClusterSegmenter::new()
             .segment_str(&segment.text)
             .collect::<Vec<_>>();
-        let break_offsets = if no_wrap {
-            HashSet::new()
-        } else {
-            multilingual_break_opportunities(&segment.text)
-        };
+        // Spaces before a break opportunity get a span of their own, so a
+        // line can let them hang past its end.
+        let hanging_starts = break_offsets
+            .iter()
+            .map(|offset| segment.text[..*offset].trim_end_matches(' ').len())
+            .collect::<HashSet<_>>();
 
         let mut logical_ranges = Vec::<(usize, usize, TextScript, unicode_bidi::Level)>::new();
         let mut start = 0usize;
@@ -1499,7 +1602,9 @@ impl FontManager {
             }
             current_script = script;
             current_level = level;
-            if break_offsets.contains(&grapheme_end) && grapheme_end < segment.text.len() {
+            if (break_offsets.contains(&grapheme_end) || hanging_starts.contains(&grapheme_end))
+                && grapheme_end < segment.text.len()
+            {
                 logical_ranges.push((start, grapheme_end, current_script, current_level));
                 start = grapheme_end;
             }
@@ -1809,10 +1914,26 @@ fn harfrust_script(script: TextScript) -> harfrust::Script {
     }
 }
 
+/// UAX 14 line break opportunities, plus dictionary word boundaries inside
+/// Thai, Lao, Khmer and Myanmar text, which UAX 14 leaves to a dictionary.
+///
+/// A word boundary elsewhere is not a line break opportunity: it falls before
+/// a comma, a space or the hyphen of a compound.
 fn multilingual_break_opportunities(text: &str) -> HashSet<usize> {
+    let complex_context = |character: Option<char>| {
+        character.is_some_and(|character| {
+            unicode_linebreak::break_property(character as u32)
+                == unicode_linebreak::BreakClass::ComplexContext
+        })
+    };
     let mut opportunities = icu_segmenter::WordSegmenter::new_auto(Default::default())
         .segment_str(text)
-        .filter(|offset| *offset > 0 && *offset <= text.len())
+        .filter(|offset| {
+            *offset > 0
+                && *offset < text.len()
+                && complex_context(text[..*offset].chars().next_back())
+                && complex_context(text[*offset..].chars().next())
+        })
         .collect::<HashSet<_>>();
     for (offset, _) in unicode_linebreak::linebreaks(text) {
         if offset > 0 {
@@ -2060,6 +2181,41 @@ mod tests {
             field_kind: None,
             field_source: None,
             note: None,
+        }
+    }
+
+    /// Word's single line is the Windows extent of a face plus its external
+    /// leading. Each row is a bundled face's OS/2 and `hhea` values, whose
+    /// sum is the pitch Word gives the Microsoft face it stands in for:
+    /// Calibri 2500/2048 em, Arial and Times New Roman 2355/2048, Cambria
+    /// 1.172 and Courier New 2320/2048.
+    #[test]
+    fn word_line_metrics_are_the_windows_extent_and_its_external_leading() {
+        let mut manager = FontManager::new_deterministic().expect("bundled fonts load");
+        for (family, units_per_em, ascent, descent, leading) in [
+            ("Carlito", 2048.0, 1950.0, 550.0, 0.0),
+            ("Liberation Sans", 2048.0, 1854.0, 434.0, 67.0),
+            ("Liberation Serif", 2048.0, 1825.0, 443.0, 87.0),
+            ("Caladea", 1000.0, 950.0, 222.0, 0.0),
+            ("Liberation Mono", 2048.0, 1705.0, 615.0, 0.0),
+            // Sets `USE_TYPO_METRICS`, so its typographic 896 and 408 win
+            // over its Windows 1348 and 558.
+            ("Noto Sans Devanagari", 1000.0, 896.0, 408.0, 0.0),
+        ] {
+            let font_id = manager
+                .resolve_font(Some(family), false, false)
+                .expect("bundled face resolves");
+            let metrics = manager
+                .word_line_metrics(font_id, 12.0)
+                .expect("loaded face has metrics");
+            let scale = 12.0 / units_per_em;
+            assert_eq!(metrics.units_per_em as f64, units_per_em, "{family}");
+            assert!((metrics.ascent - ascent * scale).abs() < 1e-9, "{family}");
+            assert!((metrics.descent - descent * scale).abs() < 1e-9, "{family}");
+            assert!(
+                (metrics.line_gap - leading * scale).abs() < 1e-9,
+                "{family}"
+            );
         }
     }
 
@@ -2716,6 +2872,62 @@ mod tests {
         assert_eq!(
             shaped.iter().map(|span| span.text()).collect::<String>(),
             text
+        );
+    }
+
+    #[test]
+    fn latin_spans_end_at_line_break_opportunities_with_their_spaces_apart() {
+        let mut fm = FontManager::new_deterministic().expect("bundled fonts should load");
+        let segment = multilingual_test_segment(&mut fm, "in service, or re-coated", 18.0, None);
+        let shaped = fm
+            .shape_multilingual_text(segment, None, TextDirection::LeftToRight, false)
+            .unwrap();
+
+        // No opportunity before the comma, the space or the hyphen, and each
+        // space before an opportunity is a span of its own.
+        assert_eq!(
+            shaped
+                .iter()
+                .map(|span| (span.text(), span.break_after()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("in", false),
+                (" ", true),
+                ("service,", false),
+                (" ", true),
+                ("or", false),
+                (" ", true),
+                ("re-", true),
+                ("coated", true),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_word_split_across_styled_segments_has_no_break_where_they_meet() {
+        let mut fm = FontManager::new_deterministic().expect("bundled fonts should load");
+        let first = multilingual_test_segment(&mut fm, "Well-kno", 18.0, None);
+        let second = multilingual_test_segment(&mut fm, "wn state", 18.0, None);
+        let shaped = fm
+            .shape_multilingual_paragraph(
+                vec![(first, None), (second, None)],
+                TextDirection::LeftToRight,
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(
+            shaped
+                .iter()
+                .map(|span| (span.text(), span.break_after()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("Well-", true),
+                ("kno", false),
+                ("wn", false),
+                (" ", true),
+                ("state", true),
+            ]
         );
     }
 

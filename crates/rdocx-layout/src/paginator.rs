@@ -15,7 +15,8 @@ use oxml_layout::TextDirection;
 use oxml_layout::{
     Align, Color, FontManager, ForcedBreakKind, GlyphRun, GroupElement, LayoutLine, LineItem,
     MediaId, MultilingualGlyphRun, NoteRef, NoteStream, OutlineEntry, PageFrame, Path, Point,
-    PositionedElement, Rect, Transform, Underline, break_into_lines, break_multilingual_into_lines,
+    PositionedElement, Rect, TabAlign, TabAlignedField, Transform, Underline, break_into_lines,
+    break_multilingual_into_lines,
 };
 
 use rdocx_oxml::borders::{CT_BorderEdge, CT_PBdr};
@@ -1942,6 +1943,7 @@ impl<'a> Pager<'a> {
                 field_kind: None,
                 field_source: None,
                 note: None,
+                tab_aligned: None,
             }));
         }
         if !children.is_empty() {
@@ -2572,6 +2574,7 @@ fn draw_note(
             field_kind: None,
             field_source: None,
             note: None,
+            tab_aligned: None,
         }));
     }
 
@@ -3074,24 +3077,23 @@ fn reflow_around_wraps(
         } else {
             break_into_lines(reflow_items, &params, fm)
         };
-        let Ok(reflowed) = reflowed else {
+        let Ok(mut reflowed) = reflowed else {
             return None;
         };
-        lines = reflowed;
         // The re-break went through the generic line breaker, which knows
-        // nothing about the section grid, so the snap is applied again over
-        // its result. It runs inside the loop, so the second pass reserves
-        // against the heights the first will actually paint. Snapping an
-        // already-snapped height leaves it where it is. A paragraph off the
-        // grid carries no pitch and is untouched.
-        if let Some(pitch) = reflow.grid_line_pitch_pt.filter(|pitch| *pitch > 0.0) {
-            for line in &mut lines {
-                let rows = (line.height / pitch - crate::convert::GRID_ROW_TOLERANCE)
-                    .ceil()
-                    .max(1.0);
-                line.height = pitch * rows;
-            }
-        }
+        // nothing about Word's line measure or the section grid, so both are
+        // applied again over its result, as they were to the first break. It
+        // runs inside the loop, so the second pass reserves against the
+        // heights the first will actually paint. A paragraph off the grid
+        // carries no pitch.
+        crate::convert::restore_word_line_heights(
+            &mut reflowed,
+            reflow.params.line_spacing,
+            reflow.grid_line_pitch_pt,
+            fm,
+            reflow.paragraph_mark,
+        );
+        lines = reflowed;
         offset_top = next_offset_top;
     }
 
@@ -3564,6 +3566,65 @@ struct ReflowTabProvenance {
     visual_item: usize,
 }
 
+/// For each item of a line, where a field placeholder sits in the text after
+/// a right, centre or decimal tab, measured from the start of the line.
+fn tab_aligned_fields(items: &[LineItem]) -> Vec<Option<TabAlignedField>> {
+    let mut fields = vec![None; items.len()];
+    let mut x = 0.0;
+    let mut index = 0;
+    while index < items.len() {
+        x += items[index].width();
+        let LineItem::Tab { align, gap, .. } = items[index] else {
+            index += 1;
+            continue;
+        };
+        index += 1;
+        if !matches!(
+            align,
+            TabAlign::Right | TabAlign::Center | TabAlign::Decimal
+        ) {
+            continue;
+        }
+        let end_index = items[index..]
+            .iter()
+            .position(|item| matches!(item, LineItem::Tab { .. }))
+            .map_or(items.len(), |offset| index + offset);
+        let segment = &items[index..end_index];
+        let start = x;
+        let end = start + segment.iter().map(LineItem::width).sum::<f64>();
+        // A decimal stop aligns the first full stop, or else the end of the
+        // first number. A page field is a number.
+        let mut past_point = false;
+        let mut in_number = false;
+        for (offset, item) in segment.iter().enumerate() {
+            let LineItem::Text(text) = item else {
+                continue;
+            };
+            if text.field_kind.is_some() {
+                fields[index + offset] = Some(TabAlignedField {
+                    start,
+                    end,
+                    shift: match align {
+                        TabAlign::Center => 0.5,
+                        TabAlign::Decimal if past_point => 0.0,
+                        _ => 1.0,
+                    },
+                    gap,
+                });
+                in_number = true;
+                continue;
+            }
+            for ch in text.text.chars() {
+                if ch == '.' || (in_number && !ch.is_ascii_digit() && ch != ',') {
+                    past_point = true;
+                }
+                in_number |= ch.is_ascii_digit();
+            }
+        }
+    }
+    fields
+}
+
 fn render_paragraph_lines(
     lines: &[LayoutLine],
     para: ParagraphView<'_>,
@@ -3588,15 +3649,25 @@ fn render_paragraph_lines(
             .unwrap_or_default();
         let baseline_y = geometry.margin_top + y + line.ascent;
 
-        // Compute x offset based on justification
-        let text_width: f64 = line.items.iter().map(|item| item.width()).sum();
+        // Compute x offset based on justification. Rich text spaces that end
+        // the line hang off its visual side, outside the aligned width.
+        let (hang_start, hang_end) = line.hanging_space_counts();
+        let ink = hang_start..line.items.len() - hang_end;
+        let hanging_left: f64 = line.items[..ink.start]
+            .iter()
+            .map(|item| item.width())
+            .sum();
+        let text_width: f64 = line.items[ink.clone()]
+            .iter()
+            .map(|item| item.width())
+            .sum();
         let remaining_width = line.available_width - text_width;
 
         // For justified text (Both), compute extra space per gap
         let justify_extra =
             if para.jc == Some(Align::Justify) && !line.is_last && remaining_width > 0.0 {
                 // Count inter-word gaps: spaces between items + spaces within text segments
-                let gap_count = count_word_gaps(&line.items);
+                let gap_count = count_word_gaps(&line.items[ink.clone()]);
                 if gap_count > 0 {
                     remaining_width / gap_count as f64
                 } else {
@@ -3616,8 +3687,9 @@ fn render_paragraph_lines(
             _ => geometry.margin_left + line.indent_left,
         };
 
-        let mut x = x_offset;
+        let mut x = x_offset - hanging_left;
         let mut _accumulated_extra = 0.0;
+        let tab_aligned = tab_aligned_fields(&line.items);
 
         for (visual_item, item) in line.items.iter().enumerate() {
             match item {
@@ -3683,6 +3755,11 @@ fn render_paragraph_lines(
                             None => seg.field_source,
                         },
                         note: seg.note,
+                        tab_aligned: tab_aligned[visual_item].map(|mut field| {
+                            field.start += x_offset;
+                            field.end += x_offset;
+                            field
+                        }),
                     }));
                     text_provenance.push(ReflowTextProvenance {
                         element_position: elements.len() - 1,
@@ -3805,7 +3882,11 @@ fn render_paragraph_lines(
                         geometry.margin_top + y,
                         line.height,
                         para.source_node(),
-                        justify_extra,
+                        if ink.contains(&visual_item) {
+                            justify_extra
+                        } else {
+                            0.0
+                        },
                     );
                     let element_position = (first..elements.len())
                         .find(|position| {
@@ -3818,7 +3899,7 @@ fn render_paragraph_lines(
                         kind: ReflowTextProvenanceKind::Multilingual,
                     });
                 }
-                LineItem::Tab { width, leader } => {
+                LineItem::Tab { width, leader, .. } => {
                     if let Some(leader_seg) = leader {
                         // Render the pre-shaped leader text
                         let baseline_y = geometry.margin_top + y + line.ascent;
@@ -3836,6 +3917,7 @@ fn render_paragraph_lines(
                             field_kind: None,
                             field_source: None,
                             note: None,
+                            tab_aligned: None,
                         }));
                         text_provenance.push(ReflowTextProvenance {
                             element_position: elements.len() - 1,
@@ -3852,11 +3934,11 @@ fn render_paragraph_lines(
                     media_id,
                 } => {
                     let image = media.get(media_id);
-                    // Image positioned at current x, top-aligned with line
+                    // An inline picture stands on the baseline, as in Word.
                     let image = PositionedElement::Image {
                         rect: Rect {
                             x,
-                            y: geometry.margin_top + y,
+                            y: baseline_y - height,
                             width: *width,
                             height: *height,
                         },
@@ -3899,7 +3981,7 @@ fn render_paragraph_lines(
                             PositionedElement::Image {
                                 rect: Rect {
                                     x,
-                                    y: geometry.margin_top + y,
+                                    y: baseline_y - height,
                                     width: *width,
                                     height: *height,
                                 },
@@ -5229,6 +5311,63 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_page_field_after_the_first_number_does_not_move_a_decimal_stop() {
+        let text = |text: &str| {
+            LineItem::Text(directional_test_segment(
+                text,
+                TextDirection::Auto,
+                None,
+                None,
+            ))
+        };
+        let field = || {
+            LineItem::Text(directional_test_segment(
+                "99",
+                TextDirection::Auto,
+                None,
+                Some(oxml_layout::FieldKind::Page),
+            ))
+        };
+        let tab = |align| LineItem::Tab {
+            width: 10.0,
+            leader: None,
+            align,
+            gap: 10.0,
+        };
+        let shifts = |items: &[LineItem]| {
+            tab_aligned_fields(items)
+                .iter()
+                .flatten()
+                .map(|field| field.shift)
+                .collect::<Vec<_>>()
+        };
+        // "Page 99 of 99": the first field is the number the stop aligns,
+        // the second comes after it.
+        let decimal = [
+            tab(TabAlign::Decimal),
+            text("Page "),
+            field(),
+            text(" of "),
+            field(),
+        ];
+        assert_eq!(shifts(&decimal), [1.0, 0.0]);
+        let fields = tab_aligned_fields(&decimal);
+        let first = fields[2].expect("the first field is aligned");
+        assert!((first.start - 10.0).abs() < 1e-9);
+        assert!((first.end - (10.0 + 6.0 * 13.0)).abs() < 1e-9);
+        assert_eq!(
+            shifts(&[tab(TabAlign::Decimal), text("1.5 p. "), field()]),
+            [0.0]
+        );
+        assert_eq!(shifts(&[tab(TabAlign::Center), field()]), [0.5]);
+        assert_eq!(
+            shifts(&[tab(TabAlign::Right), text("Page "), field()]),
+            [1.0]
+        );
+        assert!(shifts(&[tab(TabAlign::Left), field()]).is_empty());
+    }
+
     fn directional_test_segment(
         text: &str,
         direction: TextDirection,
@@ -5301,6 +5440,7 @@ mod tests {
             items: reflow_items,
             params,
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
         let wrap = PlacedWrap {
             rect: Rect {
@@ -5386,6 +5526,7 @@ mod tests {
                 ..Default::default()
             },
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
         let mut elements = Vec::new();
         render_paragraph_lines(
@@ -5457,6 +5598,8 @@ mod tests {
             LineItem::Tab {
                 width: leader.width,
                 leader: Some(leader),
+                align: oxml_layout::TabAlign::Left,
+                gap: 0.0,
             },
             LineItem::Marker(marker.clone()),
         ];
@@ -5473,6 +5616,7 @@ mod tests {
                 ..Default::default()
             },
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
 
         let mut elements = Vec::new();
@@ -5549,6 +5693,8 @@ mod tests {
                 LineItem::Tab {
                     width: leader.width,
                     leader: Some(leader.clone()),
+                    align: oxml_layout::TabAlign::Left,
+                    gap: 0.0,
                 },
                 LineItem::Text(hebrew.clone()),
             ];
@@ -5564,6 +5710,7 @@ mod tests {
                     ..Default::default()
                 },
                 grid_line_pitch_pt: None,
+                paragraph_mark: None,
             }));
             let semantics = ParagraphSemantics {
                 source_node: Some(source_node),
@@ -5650,6 +5797,8 @@ mod tests {
             LineItem::Tab {
                 width: leader.width,
                 leader: Some(leader),
+                align: oxml_layout::TabAlign::Left,
+                gap: 0.0,
             },
             LineItem::Text(hebrew.clone()),
         ];
@@ -5667,6 +5816,7 @@ mod tests {
                 ..Default::default()
             },
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
         let semantics = ParagraphSemantics {
             source_node: Some(rebound),
@@ -5772,6 +5922,8 @@ mod tests {
                 visual_items.push(LineItem::Tab {
                     width: leader.width,
                     leader: Some(leader.clone()),
+                    align: oxml_layout::TabAlign::Left,
+                    gap: 0.0,
                 });
             }
             visual_items.push(LineItem::Text(field.clone()));
@@ -5798,6 +5950,7 @@ mod tests {
                     ..Default::default()
                 },
                 grid_line_pitch_pt: None,
+                paragraph_mark: None,
             }));
             let mut elements = Vec::new();
             render_paragraph_lines(
@@ -5909,6 +6062,7 @@ mod tests {
                 ..Default::default()
             },
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
 
         let mut elements = Vec::new();
@@ -5975,16 +6129,22 @@ mod tests {
             LineItem::Tab {
                 width: dashes.width,
                 leader: Some(dashes),
+                align: oxml_layout::TabAlign::Left,
+                gap: 0.0,
             },
             LineItem::Text(c.clone()),
             LineItem::Tab {
                 width: dots.width,
                 leader: Some(dots),
+                align: oxml_layout::TabAlign::Left,
+                gap: 0.0,
             },
             LineItem::Text(b.clone()),
             LineItem::Tab {
                 width: 12.0,
                 leader: None,
+                align: oxml_layout::TabAlign::Left,
+                gap: 0.0,
             },
             LineItem::Text(a.clone()),
         ];
@@ -6003,6 +6163,7 @@ mod tests {
                 ..Default::default()
             },
             grid_line_pitch_pt: None,
+            paragraph_mark: None,
         }));
 
         let mut elements = Vec::new();

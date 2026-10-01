@@ -508,21 +508,29 @@ text rectangle minus insets, resolve each paragraph through the nine-level
 chain, build inline items, stack lines from the box top, then anchor.
 
 Every shaped segment carries the selected font's ascent, descent, and `hhea`
-line gap. A line's natural advance is the greater of its combined maximum
-ascent and descent and the tallest complete run advance. Omitted line spacing
-uses that natural advance, while percentage line spacing multiplies the largest
-effective run point size. Exact point spacing remains exact, including when it
-is smaller than the glyph box.
+line gap. PowerPoint single spacing is 1.2 times the largest effective run point
+size on the line, for every font whatever its ascent, descent, and line gap.
+Omitted line spacing is single spacing, percentage line spacing multiplies it,
+and exact point spacing remains exact, including when it is smaller than the
+glyph box. Percentage paragraph spacing before and after is a share of the same
+single spacing.
 
 Complex text enters shared layout as one paragraph-wide logical sequence.
 Coverage and script boundaries select deterministic fonts before HarfRust
 receives explicit script, language, and direction. Script identity separates
 Latin, Arabic, Hebrew, Devanagari, Thai, Han, Hangul, and Kana, because each
 needs its own shaper feature set. Hangul and Kana are never folded into Han,
-which would silently change how existing Han text shapes. ICU supplies Thai and
-complex-script opportunities, shared punctuation rules protect CJK line edges,
-and language-specific Liang dictionaries supply conditional hyphens. Fitting
-never divides a shaping cluster. After fitting, UAX 9 reorders each completed
+which would silently change how existing Han text shapes. UAX 14 supplies line
+break opportunities over the whole paragraph, so a word split across runs does
+not break where they meet, and a word boundary before a comma, a space, or the
+hyphen of a compound is not one. ICU word boundaries add opportunities inside
+Thai and other complex-context scripts, shared punctuation rules protect CJK
+line edges, and language-specific Liang dictionaries supply conditional hyphens.
+Spaces before an opportunity, U+0020 only as UAX 14 classes them, hang past
+the end of a line instead of wrapping it: on its visual right in left-to-right
+text and on its visual left in right-to-left text. They do not count against
+the width the line must fit, and Word and PowerPoint alignment and
+justification leave them out. Fitting never divides a shaping cluster. After fitting, UAX 9 reorders each completed
 line for painting without rewriting its logical text or source spans.
 PowerPoint transports resolved paragraph direction beside the established
 resolved-slide model. Its facade supplies that sidecar to the renderer, so an
@@ -540,11 +548,30 @@ paragraph on this path leaves the paragraph block cache, because the retained
 size of a rich inline item cannot be bounded. Shared shaping still owns script
 and coverage segmentation, clusters, offsets, and line fitting. Exact Word line
 spacing places rich text on the Word baseline at 0.8 of the largest run em for
-the line. Automatic spacing and the established Latin-only path retain their
-existing metrics and output bytes. Producer-written fractional paragraph line
-spacing enters layout only after exact normalization to its nearest integer
-twip, so it produces the same geometry and raster bytes as that canonical
-integer input.
+the line.
+
+Every other Word line, on the rich and the Latin-only path alike, is measured
+the way Word measures it. Each run takes the metrics Windows reports for its
+font: the OS/2 `usWinAscent` and `usWinDescent`, plus the external leading, the
+part of the `hhea` line gap the Windows extent does not already cover, which
+Word puts above the ascent. A face that sets `USE_TYPO_METRICS` is measured on
+its typographic values. A single line of Calibri or Carlito is therefore
+2500/2048 em with its baseline 1950/2048 em down, and one of Arial or
+Liberation Sans 2355/2048 em. The line takes the greatest ascent and descent of
+its runs. A line with no run is a line of the font it carries: a blank
+paragraph's mark, resolved through the style chain, and the empty line a break
+leaves, of the nearest text before it. An inline picture or chart stands on the
+baseline, and proportional spacing adds `line / 240 - 1` times the height of
+the line's text only, so a picture keeps its own height. A line holding only
+pictures takes that text height from its paragraph mark, is never shorter than
+one line of the mark, and puts its pictures on its bottom. Exact spacing keeps
+its own rule, at-least spacing takes the greater of the value and this single
+height, and a paragraph re-broken around a floating object is measured again
+the same way.
+
+Producer-written fractional paragraph line spacing enters layout only after
+exact normalization to its nearest integer twip, so it produces the same
+geometry and raster bytes as that canonical integer input.
 
 Word `w:bidi` selects the paragraph base direction and `w:rtl` selects the
 direction of its exact logical run span. Start and end justification and
@@ -569,10 +596,13 @@ Ambiguous ownership, duplicate or gapped logical indices, and baseline changes
 end the line plan. Nested group transforms are cancelled only while expressing
 the same final glyph positions in page coordinates.
 Legacy Latin remains on `GlyphRun` so existing output bytes do not move.
-Non-negative leading is divided equally above and below the glyph box. A
-below-natural exact line keeps its stated height and places no negative leading
-before the baseline. Stored normal-autofit line-spacing reduction applies only
-to explicit percentage line spacing.
+A PowerPoint line taller than single spacing puts its baseline three quarters of
+the way down, or at the font's ascent share of the line when that is smaller. A
+line no taller than single spacing puts its descent at the bottom of the line,
+so it gives up space above the glyphs first, unless that lifts the baseline
+above the same share. PowerPoint rounds baselines to whole points, which this
+does not. A stored normal-autofit line-spacing reduction comes off the
+percentage, and omitted spacing counts as 100 percent.
 
 An empty paragraph shapes a zero-width metrics carrier from its resolved
 `a:endParaRPr` style. Its line height and font-relative paragraph spacing use
@@ -1027,10 +1057,9 @@ with nothing measurable keeps its declared grid.
 - `a:normAutofit fontScale="62500" lnSpcReduction="20000"`: apply verbatim. This
   is both cheapest and most faithful, because it reproduces exactly what the
   authoring application decided. Font scale applies to every effective run and
-  bullet size. Line-spacing reduction multiplies explicit percentage spacing by
-  `1 - lnSpcReduction`. Explicit percentage spacing remains based on the largest
-  effective run point size. Omitted Single and exact point spacing are
-  unchanged.
+  bullet size. Line-spacing reduction comes off the percentage, so 150 percent
+  less `lnSpcReduction="20000"` is 130 percent, and omitted spacing counts as
+  100 percent. Exact point spacing is unchanged.
 - Only a bare `<a:normAutofit/>` needs iteration, and then walk PowerPoint's own
   quantised 2.5 percent ladder rather than binary-searching a continuous scale,
   so the computed value matches what PowerPoint would have written. The ladder
@@ -1531,9 +1560,13 @@ When the effective entry style has no right tab, the generated paragraph adds
 one at page width minus the section's left and right margins. Missing,
 nonpositive, or arithmetically invalid geometry uses the standard 9360 twip
 text width. A style-owned right tab remains authoritative and receives no
-direct duplicate. Numbering marker text and its suffix are separate ordered
-run content. A tab suffix is `w:tab`, a space suffix is preserved whitespace,
-and neither becomes a literal control character inside `w:t`.
+direct duplicate. The entry of a heading numbered with a tab suffix also gets
+a direct left stop after its number, as Word writes it: the first 240 twip
+boundary at least 240 twips past the number, measured at 12 points, counting
+240 twips of indent per level below the first. Numbering marker text and its
+suffix are separate ordered run content. A tab suffix is `w:tab`, a space
+suffix is preserved whitespace, and neither becomes a literal control
+character inside `w:t`.
 
 ### Word watermarks
 
@@ -1731,6 +1764,11 @@ tracked boundary, including deleted and moved-from runs before an accepted
 marker. Complex-field collapse and in-memory direct-run mutation preserve both
 coordinates. When two markers share one projected boundary, encounter order
 qualifies their direction before layout creates a bookmark target.
+
+A page field placeholder in text after a right, centre or decimal tab stop
+records where that text lies on its line. Once pagination gives the field its
+value, the text closes up around it and moves back by the share its stop
+aligns on, as far as the tab allows, so it stays on its stop as in Word.
 
 Only bookmarks named by a valid `PAGEREF` add a zero-width target marker to
 page output. After the document paginates once, the existing field substitution

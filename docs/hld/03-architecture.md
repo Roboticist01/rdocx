@@ -584,6 +584,22 @@ carries it into `oxml-layout::LineBreakParams::default_tab_interval_pt`, whose
 `36.0` default is the exact literal it replaced, so a document that says
 nothing keeps Word's half-inch implicit tab grid.
 
+Tab stops resolve as Word resolves them. Positions are measured from the zero
+indent, not from where a line starts. A paragraph's `w:tabs` add to the stops
+of its styles and list level, a stop replacing an inherited one at its
+position and a `clear` stop removing it. A hanging indent is a left stop at
+the left indent. Bar stops stop no tab. Default stops start after the last
+explicit stop. A right, centre or decimal tab takes its width from the text
+after it, a decimal tab aligning the first full stop or else the end of the
+first number. `LayoutInput::clamp_tabs_past_margin`, set for a
+`w:compatibilityMode` of 15 or later, moves a stop past the right margin to
+the end of its line as Word 2013 does. Earlier modes keep the stop.
+The page-field tab adjustment crosses the shared layout boundary as
+`TabAlignedField` on `GlyphRun`. `LineBreakParams` and `LayoutInput` also expose
+`clamp_tabs_past_margin`. These additions are source compatible for callers
+using the existing defaults and methods. Existing public struct literals must
+supply the new fields when updating to these pre-1 crate versions.
+
 Two consecutive paragraphs of the body, or of one table cell, are separated by
 the larger of the first one's space after and the second one's space before,
 which is what Word does. The paginator reduces a paragraph's space before by

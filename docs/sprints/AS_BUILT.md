@@ -16694,3 +16694,63 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the integrated S78 result.
 
 **Notes for future sessions.** The comment revision sidecar must be resolved before comparing the redline again. The README archive measurement for `rdocx` is 1,216,800 compressed bytes, 7,084,054 member bytes and 36 members.
+
+### F-X146, Word line height and inline picture spacing
+
+**Sprint.** S79
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the incremental behavior of PRs 222, 225 and 237. Shared rich-line breaking and PowerPoint pitch now follow their pinned cases. Word layout resolves run and paragraph-mark font metrics before applying proportional line spacing to text height. Inline pictures keep their own height. Tab stops, numbered TOC entries and page fields follow measured Word positions.
+
+**Non-obvious choices.** The line-height path measures picture-only and empty lines using the paragraph mark. `TabAlignedField` carries the page-field adjustment through shared layout into PDF output. Public `GlyphRun`, `LineBreakParams` and `LayoutInput` fields are additive in pre-1 crates, but callers using struct literals must supply them. PR 222's presentation page digest and the PR 225 and 237 Word baselines were reviewed in separate labelled commits.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/08-rendering-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The four-family, two-size, two-spacing Word pitch matrix and Word-exported inline picture fixture passed. Seven line-height and seven tab-stop regression cases passed on the integrated tree. The changed-crate suite, pinned Word and PowerPoint geometry, scoped verification and microscope pass 2 passed. The integrated full workspace test gate, Clippy, no-default font, WASM, strict docs, README doctests and 22-crate package dry run passed. All archives were below 10 MiB.
+
+**Hash harness.** The separately reviewed PR 222, 225 and 237 behavior changes account for 22 changed entries: seven page images, seven PDF byte hashes, seven page-count hashes and one PDF resource hash. All 49 entries and seven pinned pixel buffers matched the final baseline.
+
+**Notes for future sessions.** F-X163 owns Issue 226's remaining plain-line symptom. Keep later line-layout baselines in deterministic bundled-font mode.
+
+### F-X152, Full-story CLI diff and count repair
+
+**Sprint.** S79
+**Completed.** 2026-10-01
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Integrated PR 236's CLI diff behavior. It compares body, table-cell and related-story paragraph text with stable story locations, bounded sequence matching, one count for each changed paragraph, schema-1 JSON output and optional diff exit status. An unreadable related story is reported as not compared, and an incomplete comparison gets an error verdict.
+
+**Non-obvious choices.** Diff reuses the native story snapshots and the existing `text --json` body-table traversal, so it does not create another story owner model. The unreadable-story refusal was added after the initial replay to prevent a partial result from looking complete.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md`.
+
+**Tests.** The Issue 227 body-cell reproducer and both-sided unreadable-story regression failed on their pre-fix behavior and passed on the integrated result. All 53 CLI integration tests and the facade tests passed. Scoped verification and microscope pass 1 found zero defects and zero smells. The integrated full verification gate passed.
+
+**Hash harness.** Unchanged by this story. All 49 entries matched the reviewed F-X146 baseline.
+
+**Notes for future sessions.** Issue 158's broader fixture and workflow acceptance remains with F-X149. CLI JSON keeps schema 1.
+
+### F-X153, Word Python supplemental contribution
+
+**Sprint.** S79
+**Completed.** 2026-10-01
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Integrated the unique PR 220 contribution on the completed Word binding prefix. CLI `comment add --anchor` selects an exact text occurrence. Numbering validation accepts a level-only style through its based-on chain without rewriting the original style XML. Native `Paragraph::remove_run` and Python `Run.remove()` remove safe runs atomically, retain surrounding markers and refuse references or split fields that cannot be removed safely.
+
+**Non-obvious choices.** The Python operation delegates to native paragraph ownership and invalidates stale handles after mutation. An empty content control stays intact with its properties. Tests save and reopen the accepted comment, numbering and run changes and prove unsafe removal leaves package bytes unchanged.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md` and `docs/hld/10-bindings-spec.md`.
+
+**Tests.** CLI text-anchor, numbering-template, native run-removal and Python run-removal cases passed after save and reopen. The integrated Word Python suite passed 164 tests. Scoped verification and microscope pass 1 found zero defects and zero smells. The integrated workspace, WASM, README, package and preservation gates passed.
+
+**Hash harness.** Unchanged by this story. All 49 entries matched the reviewed F-X146 baseline.
+
+**Notes for future sessions.** F-X147 owns the remaining Issue 168 production checklist, including the full fixture chain. The assigned PR head still needs rebase and hosted CI before upstream closure.

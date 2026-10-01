@@ -13,8 +13,8 @@ and produces fixed or flow output without an Office host.
 - PDF, HTML, Markdown, PNG, JPEG, and multi-page TIFF conversion.
 - Page-range rendering, guarded literal replacement, diffing, and validation
   verdicts that check every related part and every style id.
-- Comment thread inspection and mutation with explicit body run ranges and
-  optional RFC 3339 dates.
+- Comment thread inspection and mutation with explicit body run ranges or an
+  anchor text, and optional RFC 3339 dates.
 - Tracked revision inspection, filtered resolution, table-of-contents rebuilds,
   and document comparison at run, word, or character granularity with ignore
   options.
@@ -25,7 +25,7 @@ and produces fixed or flow output without an Office host.
 
 | Measurement | Value | Version | Platform | Build mode | Input | Command | Statistic | Measured on |
 |---|---|---|---|---|---|---|---|---|
-| Crates.io archive: rdocx-cli | 56,783 compressed bytes, 251,246 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-30 |
+| Crates.io archive: rdocx-cli | 67,503 compressed bytes, 297,170 member bytes, 8 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx-cli` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-10-01 |
 
 ## Use it when
 
@@ -49,12 +49,16 @@ rdocx text report.docx --json
 rdocx layout report.docx --json
 rdocx replace template.docx -p TOKEN -v ready --expect 1 -o report.docx
 rdocx convert report.docx --to pdf -o report.pdf
+rdocx diff before.docx after.docx
+rdocx diff before.docx after.docx --exit-code --json
 rdocx validate report.docx
 rdocx render report.docx --page 0 -o rendered
 rdocx comment list report.docx --json
 rdocx comment add report.docx --start-paragraph 0 --start-run 0 \
   --end-paragraph 0 --end-run 1 --author Reviewer --text 'Check this' \
   --date 2026-09-13T12:00:00Z -o commented.docx
+rdocx comment add report.docx --anchor 'target words' --occurrence 1 \
+  --author Reviewer --text 'Check this' -o commented.docx
 rdocx revision accept reviewed.docx --author Reviewer -o accepted.docx
 rdocx compare original.docx edited.docx --author Reviewer \
   --timestamp 2026-09-13T12:00:00Z -o redline.docx
@@ -68,7 +72,13 @@ Comment `add` ranges use zero-based body paragraph and run boundaries. The
 start is inclusive and the end is exclusive. Run boundaries count the runs that
 `text --json` lists, including the runs inside inline content controls and
 tracked insertions. A range that cannot be anchored exactly, such as one that
-crosses the edge of an inline content control, is refused. Comment replies,
+crosses the edge of an inline content control, is refused. In place of the
+four range flags, `--anchor TEXT` comments on the zero-based `--occurrence`
+(default 0) of a literal, case-sensitive text of the main story, through body
+paragraphs, tables and block content controls, and splits the runs at both
+ends of the match. A text that does not occur, an occurrence past the last
+match, and a match that cannot be anchored exactly exit unsuccessfully without
+creating the output. Comment replies,
 resolution, and removal select a decimal comment id. Comment `add` and `reply`
 write an optional `--date` RFC 3339 timestamp as the comment date. An invalid
 timestamp exits unsuccessfully without creating the output, and without
@@ -154,6 +164,45 @@ item, including preserved items that have no fragments. Each laid-out fragment
 uses points from the top-left page origin and records one-based physical and
 displayed page numbers. A body item that crosses a page boundary has one
 fragment on each occupied page.
+
+`diff` compares the accepted-view paragraph text of every story: body
+paragraphs, the paragraphs of the body's table cells and nested tables, text
+boxes, the headers and footers of each section, footnotes, endnotes, and
+comments. Each story is compared as one sequence through a shortest edit
+script, found by Myers' linear-space algorithm, so a few edits in a long
+document stay fast and memory stays proportional to the story length. Between
+two matched paragraphs, removed and added paragraphs pair in order as changed
+paragraphs. A changed paragraph prints a `-` line and a `+` line, an added one
+only `+`, and a removed one only `-`. The summary line reads
+`N paragraph(s) changed, A added, R removed.`, which replaces the
+`N paragraph(s) differ.` line of earlier releases.
+
+Each line locates its paragraph between brackets. A body paragraph keeps its
+one-based position among the body paragraphs, such as `[2]`. A table cell
+paragraph of the body is located as `[table 1, row 1, cell 2, paragraph 1]`,
+where the table counts the tables placed directly in the body and the rest is
+the `text --json` path made one-based. A header or footer is named by its type
+and the first section that references it, as
+`[header default, section 1, paragraph 1]` or
+`[footer first, section 2, paragraph 1]`, and the two files pair their headers
+and footers by that name. Inserting a new first section with its own header
+therefore shows the old header as changed and itself as added under section 2.
+Notes and comments count in their part, as `[footnote 1, paragraph 1]` or
+`[comment 2, paragraph 1]`, and a text box of the body as
+`[text box 1, paragraph 1]`. A table cell inside a header, a footer, or a
+notes or comments part is labelled `table cell K` in that part, without a row
+and cell path, as `[header default, section 1, table cell 3, paragraph 1]`.
+Outside the body, `paragraph N` counts the paragraphs of its story and a block
+content control reads as `content control N`, counted apart. A story that
+cannot be read is printed as `(not compared: ...)` instead of being counted as
+equal.
+
+`diff --json` writes a schema-1 record with the counts, each difference with
+its story kind, locations, and texts, and the stories not compared.
+`--exit-code` exits with 1 when the compared text differs and 2 on an
+error or an unreadable story, as `diff` and `cmp` do. An unreadable story
+remains in `not_compared` even when another story differs. Without
+`--exit-code`, `diff` exits with 0 after printing a partial comparison.
 
 `replace --expect N` publishes only when the run-aware replacement count is
 exactly `N`. A mismatch exits unsuccessfully without creating or replacing the
