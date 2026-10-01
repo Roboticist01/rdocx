@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)            | 178 | 148 | 0 | 26 |
-| **Total** | **503** | **410** | **0** | **89** |
+| X, Cross-cutting (opportunistic)            | 178 | 148 | 1 | 25 |
+| **Total** | **503** | **410** | **1** | **88** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -704,7 +704,7 @@ regenerated, never hand-edited.
 | F-X148 | Complete rpptx Python production checklist | S81 | L | pending |
 | F-X149 | Word fixture and workflow acceptance gate | S82 | L | pending |
 | F-X150 | Reconcile issue closure evidence | S82 | M | pending |
-| F-X151 | Word preservation and comparison PR intake | S78 | L | pending |
+| F-X151 | Word preservation and comparison PR intake | S78 | L | in-progress |
 | F-X152 | Full-story CLI diff and count repair | S79 | M | pending |
 | F-X153 | Word Python supplemental contribution | S79 | M | pending |
 | F-X154 | Presentation text and preservation repair | S80 | M | pending |
