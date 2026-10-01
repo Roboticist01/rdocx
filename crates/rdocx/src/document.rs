@@ -24222,6 +24222,17 @@ impl Document {
                 .settings
                 .as_ref()
                 .and_then(CT_Settings::default_tab_stop),
+            clamp_tabs_past_margin: self.settings.as_ref().is_some_and(|settings| {
+                settings.compatibility_settings().iter().any(|setting| {
+                    setting.name == "compatibilityMode"
+                        && setting.uri == "http://schemas.microsoft.com/office/word"
+                        && setting
+                            .value
+                            .trim()
+                            .parse::<u32>()
+                            .is_ok_and(|mode| mode >= 15)
+                })
+            }),
             mirror_margins: self
                 .settings
                 .as_ref()
@@ -31367,9 +31378,11 @@ mod tests {
             extracted_logical_lines("presentation", &presentation_pdf),
             expected_presentation
         );
+        // Recorded after PowerPoint line pitch, baseline placement and UAX 14
+        // spans moved the slide text, with the pinned Poppler build.
         assert_eq!(
             rendered_pdf_page_sha("presentation", &presentation_pdf),
-            "4fa599779bbeda5ad5a0d3c647c4a323f76dd151f2fffd9b51bff32382eab1d4"
+            "963dc460e110aa260b7b0a4fbe4a77824b9cf9efe160ca45fdaf30ca08e31f52"
         );
     }
 
@@ -37049,11 +37062,12 @@ mod watermark_tests {
         assert_eq!(
             digests,
             [
-                740_018_920_125_384_146,
-                740_018_920_125_384_146,
-                740_018_920_125_384_146,
-                740_018_920_125_384_146,
-                1_020_215_290_976_271_429,
+                8_654_160_490_163_008_642,
+                8_654_160_490_163_008_642,
+                8_654_160_490_163_008_642,
+                8_654_160_490_163_008_642,
+                8_654_160_490_163_008_642,
+                9_924_658_905_511_625_255,
             ]
         );
     }

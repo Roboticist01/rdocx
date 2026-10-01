@@ -1,6 +1,6 @@
 # F-X146, Word line height and inline picture spacing
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S79
 **Size**: L
 **Depends on**: F-X140
@@ -18,6 +18,17 @@
 ## Approach
 
 Review the incremental diffs of PRs 222, 225 and 237 against their actual parents, then replay compatible changes on the S78 prefix. Keep PowerPoint line pitch and shared rich-line breaking in `oxml-layout` and its existing consumers. Resolve Word line ascent, descent and leading with bundled font metrics before applying proportional spacing to text height only. Preserve inline picture height, mark metrics for picture-only and empty lines, and the existing exact and at-least rules. Reconcile PR 237's tab stops, numbered TOC entry and page-field alignment with the shared line path. Keep the Word rich-line symptom of Issue 226 within this story and leave its plain-line symptom to F-X163. Review every public field addition for compatibility and keep behavioural hash changes in labelled commits.
+
+Carry page-field tab alignment through pagination as
+`oxml_layout::TabAlignedField { start: f64, end: f64, shift: f64, gap: f64 }`
+on `GlyphRun::tab_aligned: Option<TabAlignedField>`. Add
+`LineBreakParams::clamp_tabs_past_margin: bool` and
+`rdocx_layout::LayoutInput::clamp_tabs_past_margin: bool` for the Word
+compatibility-mode rule. These are additive public surface changes in
+pre-1 crates, but callers constructing the public structs with literals must
+supply the new fields. Existing literal callers in this workspace must be
+updated. The new value type carries measured geometry across the existing
+layout and PDF boundary, with no new trait or crate.
 
 ## Rejected alternatives
 
@@ -54,11 +65,11 @@ Expected reviewed rendering deltas from PRs 225 and 237. PR 225 changes Word lin
 
 ## Implementation checklist
 
-- [ ] Review each assigned PR's incremental diff and overlap with the S78 prefix.
-- [ ] Add failing deterministic line, picture, rich-line, tab and TOC regression cases to existing test entrypoints.
-- [ ] Reconcile shared layout and Word conversion changes against the tests.
-- [ ] Run focused layout and rendering gates, pin oracle evidence, and account for each hash and pixel delta.
-- [ ] Run scoped verification and a zero-finding microscope.
+- [x] Review each assigned PR's incremental diff and overlap with the S78 prefix.
+- [x] Add failing deterministic line, picture, rich-line, tab and TOC regression cases to existing test entrypoints.
+- [x] Reconcile shared layout and Word conversion changes against the tests.
+- [x] Run focused layout and rendering gates, pin oracle evidence, and account for each hash and pixel delta.
+- [x] Run scoped verification and a zero-finding microscope.
 
 ## Open questions
 

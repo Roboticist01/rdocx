@@ -10211,13 +10211,14 @@ fn rebuilt_toc_uses_localized_styles_section_tabs_and_structural_suffixes() {
             Some(expected)
         );
     }
-    assert!(
-        entries[0]
-            .properties
-            .as_ref()
-            .and_then(|properties| properties.tabs.as_ref())
-            .is_none()
-    );
+    let numbered_tab = entries[0]
+        .properties
+        .as_ref()
+        .and_then(|properties| properties.tabs.as_ref())
+        .expect("numbered entry has a direct stop after its marker");
+    assert_eq!(numbered_tab.tabs.len(), 1);
+    assert_eq!(numbered_tab.tabs[0].val, ST_TabJc::Left);
+    assert_eq!(numbered_tab.tabs[0].pos, Twips(480));
     for entry in &entries[1..] {
         let tabs = entry
             .properties
@@ -11055,7 +11056,7 @@ fn toc_rebuild_layouts_inline_control_text_before_resolving_later_pages() {
     assert_eq!(document.rebuild_toc().unwrap().entry_count, 2);
     let entries = toc_entry_signatures(&document_xml(&mut document));
     assert_eq!(entries[0].0, format!("{long_title}\t3"));
-    assert_eq!(entries[1].0, "Later heading\t6");
+    assert_eq!(entries[1].0, "Later heading\t7");
 }
 
 #[test]
@@ -12414,7 +12415,7 @@ fn toc_rebuild_layouts_controls_nested_inside_insertions() {
     assert_eq!(document.rebuild_toc().unwrap().entry_count, 2);
     let entries = toc_entry_signatures(&document_xml(&mut document));
     assert_eq!(entries[0].0, format!("{long_title}\t3"));
-    assert_eq!(entries[1].0, "Later nested heading\t5");
+    assert_eq!(entries[1].0, "Later nested heading\t6");
 }
 
 #[test]
@@ -26843,6 +26844,7 @@ fn empty_story_layout_input() -> rdocx_layout::LayoutInput {
 
     rdocx_layout::LayoutInput {
         automatic_hyphenation: false,
+        clamp_tabs_past_margin: false,
         mirror_margins: false,
         gutter_at_top: false,
         do_not_use_html_paragraph_auto_spacing: false,
@@ -27001,8 +27003,11 @@ fn empty_paragraph_uses_resolved_default_metrics() {
         assert_eq!(segment.ascent, resolved.ascent);
         assert_eq!(segment.descent, resolved.descent);
         if index == 0 {
-            assert_eq!(block.lines[0].ascent, resolved.ascent);
-            assert_eq!(block.lines[0].descent, resolved.descent);
+            let word = font_manager
+                .word_line_metrics(segment.font_id, segment.font_size)
+                .expect("Word mark metrics resolve");
+            assert_eq!(block.lines[0].ascent, word.ascent + word.line_gap);
+            assert_eq!(block.lines[0].descent, word.descent);
         }
     }
 
@@ -27340,13 +27345,50 @@ fn dense_form_matches_reviewed_one_page_geometry() {
     // bands are part of the row heights, so the nested table starts below
     // the 1 point band of its row and the last row carries the bottom one.
     assert_eq!(table_lines.len(), 26, "table geometry: {table_lines:?}");
-    assert!(has_line(72.0, 70.5, 306.0, 70.5));
-    assert!(has_line(72.0, 70.0, 72.0, 109.0));
-    assert!(!has_line(72.0, 91.5, 306.0, 91.5));
-    assert!(has_line(72.0, 109.5, 306.0, 109.5));
-    assert!(has_line(311.4, 92.375, 421.4, 92.375));
-    assert!(has_line(421.4, 105.125, 531.4, 105.125));
-    assert!(has_line(306.0, 128.5, 540.0, 128.5));
+    // The preceding line now advances by its Word Windows-font pitch.
+    let word_line_shift = 2.20703125;
+    assert!(has_line(
+        72.0,
+        70.5 + word_line_shift,
+        306.0,
+        70.5 + word_line_shift
+    ));
+    assert!(has_line(
+        72.0,
+        70.0 + word_line_shift,
+        72.0,
+        109.0 + word_line_shift
+    ));
+    assert!(!has_line(
+        72.0,
+        91.5 + word_line_shift,
+        306.0,
+        91.5 + word_line_shift
+    ));
+    assert!(has_line(
+        72.0,
+        109.5 + word_line_shift,
+        306.0,
+        109.5 + word_line_shift
+    ));
+    assert!(has_line(
+        311.4,
+        92.375 + word_line_shift,
+        421.4,
+        92.375 + word_line_shift
+    ));
+    assert!(has_line(
+        421.4,
+        105.125 + word_line_shift,
+        531.4,
+        105.125 + word_line_shift
+    ));
+    assert!(has_line(
+        306.0,
+        128.5 + word_line_shift,
+        540.0,
+        128.5 + word_line_shift
+    ));
 
     let pdf = document.to_pdf_deterministic().expect("dense form PDF");
     assert!(pdf.starts_with(b"%PDF-"));
@@ -27379,8 +27421,8 @@ fn dense_form_matches_reviewed_one_page_geometry() {
         .chunks_exact(4)
         .filter(|pixel| *pixel == [255, 215, 215, 255])
         .count();
-    assert_eq!(checksum, 0xc38a_0cf8_9243_98d1);
-    assert_eq!(non_white_pixels, 32_429);
+    assert_eq!(checksum, 3_354_091_765_578_971_749);
+    assert_eq!(non_white_pixels, 32_467);
     assert_eq!(
         behind_pixels, 0,
         "page-behind stamp is covered by cell shading"
@@ -38364,6 +38406,7 @@ mod advanced_table_geometry_regressions {
     fn layout_input() -> rdocx_layout::LayoutInput {
         rdocx_layout::LayoutInput {
             automatic_hyphenation: false,
+            clamp_tabs_past_margin: false,
             mirror_margins: false,
             gutter_at_top: false,
             do_not_use_html_paragraph_auto_spacing: false,
@@ -39049,6 +39092,52 @@ mod f266a_script_and_font_slot_regressions {
         run.set_language_bidi_value(Some("ar-SA"));
     }
 
+    /// A space that ends a wrapped right-to-left line hangs off its visual
+    /// left. Drawing it inside the line pushed the ink up to a space width
+    /// past the right margin.
+    #[test]
+    fn a_wrapped_right_to_left_line_keeps_its_ink_inside_the_margins() {
+        const TEXT: &str =
+            "שלום עולם זה טקסט ארוך בעברית שנשבר לכמה שורות בתוך התיבה הזאת היום ועוד";
+        let mut document = Document::new();
+        {
+            let mut section = document.section_mut(0).unwrap();
+            section
+                .set_page_size(Length::pt(612.0), Length::pt(792.0))
+                .unwrap();
+            section
+                .set_margins(
+                    Length::pt(72.0),
+                    Length::pt(72.0),
+                    Length::pt(72.0),
+                    Length::pt(72.0),
+                )
+                .unwrap();
+        }
+        for step in 0..70 {
+            let mut paragraph = document
+                .add_paragraph("")
+                .right_to_left(true)
+                .alignment(rdocx::paragraph::Alignment::Left)
+                .indent_left(Length::pt(100.0 + 2.0 * f64::from(step)));
+            style_hebrew(&mut paragraph.add_run(TEXT));
+        }
+
+        let result = document
+            .layout_deterministic()
+            .expect("deterministic right-to-left layout");
+        let runs = rich_runs(&result);
+        assert!(runs.len() > 70);
+        for run in runs.iter().filter(|run| run.logical_text.trim() != "") {
+            let right = run.origin.x + run.x_advances.iter().sum::<f64>();
+            assert!(
+                right <= 540.01,
+                "{:?} ends at {right}, past the 540 pt margin",
+                run.logical_text
+            );
+        }
+    }
+
     #[test]
     fn a_right_to_left_paragraph_keeps_logical_order_in_extracted_text() {
         let mut document = Document::new();
@@ -39586,7 +39675,7 @@ mod floating_table_placement_regressions {
         // on the continuation, which is exactly what a float must not do.
         let build = |position: Option<TableFloatPosition>| {
             let mut document = Document::new();
-            prose(&mut document, 0, 30);
+            prose(&mut document, 0, 25);
             {
                 let mut table = document.add_table(6, 2);
                 table.set_column_width(0, Length::twips(1000));
@@ -39605,14 +39694,15 @@ mod floating_table_placement_regressions {
                     }
                 }
             }
-            prose(&mut document, 30, 34);
+            prose(&mut document, 25, 29);
             document.layout_deterministic().expect("document lays out")
         };
 
         let inline = build(None);
+        let inline_fragments = placed(&inline, 25);
         assert!(
-            placed(&inline, 30).len() > 1,
-            "an inline table this tall is expected to split, which is what the float must not do"
+            inline_fragments.len() > 1,
+            "an inline table this tall is expected to split: {inline_fragments:?}"
         );
 
         let result = build(Some(float_at(TableAnchor::Text, TableAnchor::Text, 0, 0)));
@@ -39621,7 +39711,7 @@ mod floating_table_placement_regressions {
         // One fragment, on the second page, at its full six-row height. A
         // split float would report two fragments, and a repeated header row
         // would make the continuation taller than the rows it carries.
-        assert_eq!(placed(&result, 30), [(2, 72.0, 72.0, 100.0, 119.23)]);
+        assert_eq!(placed(&result, 25), [(2, 72.0, 72.0, 100.0, 134.94)]);
 
         // The prose that follows shares the second page with the float and
         // flows beside it rather than under it, which is what tells the float
@@ -39664,13 +39754,13 @@ mod floating_table_placement_regressions {
         // The float sits 20 points above its own block, which is where the
         // flow left it. The second pass reflowed the line above it without
         // moving it, so the rect the first pass recorded still holds.
-        assert_eq!(placed(&result, 4), [(1, 72.0, 131.48, 100.0, 39.74)]);
+        assert_eq!(placed(&result, 4), [(1, 72.0, 141.96, 100.0, 44.98)]);
 
         // The neighbour above the float is the one the second pass reflowed.
         let boxes = body_line_boxes(&result.layout.pages[0]);
         assert_eq!(
             boxes[3],
-            (139.86, 181.0, 283.23),
+            (149.95, 181.0, 283.23),
             "the line above a text-anchored float was not pushed aside"
         );
         assert_eq!(boxes[2].1, MARGIN_LEFT, "the line clear of the float moved");
@@ -39697,8 +39787,8 @@ mod floating_table_placement_regressions {
 
         let float = float_at(TableAnchor::Margin, TableAnchor::Margin, 0, 0);
         let wrapped = boxes_for(Some(float));
-        assert_eq!(wrapped[0], (80.25, 181.0, 525.39));
-        assert_eq!(wrapped[1], (92.12, 181.0, 277.95));
+        assert_eq!(wrapped[0], (82.47, 181.0, 525.39));
+        assert_eq!(wrapped[1], (96.96, 181.0, 277.95));
 
         // The same table in the flow leaves the measure alone, which is what
         // makes the assertion above about the float and not about the table.
@@ -39733,16 +39823,16 @@ mod floating_table_placement_regressions {
         };
 
         // The first float keeps its anchor. The second drops to the bottom of
-        // the first one's keep-out band, which is 72 plus the 39.74 point
+        // the first one's keep-out band, which is 72 plus the 44.98 point
         // table plus the 4 point bottom clearance, plus its own 4 point top.
         let (first, second) = origins(Some(TableOverlap::Never));
-        assert_eq!(first, [(1, MARGIN_LEFT, MARGIN_TOP, 100.0, 39.74)]);
-        assert_eq!(second, [(1, 82.0, 119.74, 100.0, 39.74)]);
+        assert_eq!(first, [(1, MARGIN_LEFT, MARGIN_TOP, 100.0, 44.98)]);
+        assert_eq!(second, [(1, 82.0, 124.98, 100.0, 44.98)]);
 
         // Two floats that both allow the overlap are left intersecting.
         let (first, second) = origins(None);
-        assert_eq!(first, [(1, MARGIN_LEFT, MARGIN_TOP, 100.0, 39.74)]);
-        assert_eq!(second, [(1, 82.0, 82.0, 100.0, 39.74)]);
+        assert_eq!(first, [(1, MARGIN_LEFT, MARGIN_TOP, 100.0, 44.98)]);
+        assert_eq!(second, [(1, 82.0, 82.0, 100.0, 44.98)]);
     }
 }
 
@@ -41410,4 +41500,726 @@ fn issue_160_edited_styles_part_keeps_ignorable_root_binding() {
         again.get_part("/word/styles.xml"),
         output.get_part("/word/styles.xml")
     );
+}
+
+/// Issue 162, Word's line height: the Windows extent and external leading of
+/// each font, and inline pictures under proportional spacing.
+///
+/// Every expected value was measured on a PDF that Microsoft Word 16 for Mac
+/// exported from the same content, laid out here in deterministic font mode,
+/// where Calibri, Arial, Times New Roman, Cambria and Courier New render with
+/// their metric-compatible bundled faces.
+mod word_line_height_regressions {
+    use rdocx::{Document, Length};
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\nline height probe";
+
+    /// Line pitch in points Word gives each Microsoft face at 10.5, 11 and 12
+    /// points (rows) and `w:line` 240, 264 and 360 auto (columns), measured
+    /// over 25 lines. Word draws on a quarter point grid, so a pitch measured
+    /// that way is good to 0.01 point.
+    const WORD_PITCHES: [(&str, &str, [[f64; 3]; 3]); 5] = [
+        (
+            "Calibri",
+            "Carlito",
+            [
+                [12.816, 14.108, 19.235],
+                [13.431, 14.776, 20.152],
+                [14.651, 16.120, 21.976],
+            ],
+        ),
+        (
+            "Arial",
+            "Liberation Sans",
+            [
+                [12.077, 13.285, 18.120],
+                [12.650, 13.920, 18.975],
+                [13.806, 15.182, 20.704],
+            ],
+        ),
+        (
+            "Times New Roman",
+            "Liberation Serif",
+            [
+                [12.077, 13.285, 18.120],
+                [12.650, 13.920, 18.975],
+                [13.806, 15.182, 20.704],
+            ],
+        ),
+        (
+            "Cambria",
+            "Caladea",
+            [
+                [12.316, 13.545, 18.475],
+                [12.900, 14.191, 19.350],
+                [14.077, 15.484, 21.111],
+            ],
+        ),
+        (
+            "Courier New",
+            "Liberation Mono",
+            [
+                [11.889, 13.087, 17.849],
+                [12.462, 13.712, 18.693],
+                [13.598, 14.963, 20.402],
+            ],
+        ),
+    ];
+    const SIZES: [f64; 3] = [10.5, 11.0, 12.0];
+    const LINES: [i32; 3] = [240, 264, 360];
+
+    /// A paragraph with no spacing before or after and `line` auto spacing.
+    fn spaced(paragraph: &mut rdocx::Paragraph<'_>, line: i32) {
+        paragraph.set_space_before(Length::pt(0.0));
+        paragraph.set_space_after(Length::pt(0.0));
+        paragraph.set_line_spacing_multiple(f64::from(line) / 240.0);
+    }
+
+    fn add_line(document: &mut Document, runs: &[(&str, &str, f64)], line: i32) {
+        let mut paragraph = document.add_paragraph("");
+        spaced(&mut paragraph, line);
+        for (text, font, size) in runs {
+            paragraph.add_run(text).font(font).size(*size);
+        }
+    }
+
+    /// The height of each body item's first fragment, in body order.
+    fn heights(document: &Document) -> Vec<f64> {
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        (0..document.content_count())
+            .map(|index| {
+                result
+                    .body_layout_fragments(index)
+                    .expect("body index is in range")[0]
+                    .height
+            })
+            .collect()
+    }
+
+    /// Calibri was 11 points tall at 11 points, which is its `hhea` ascent
+    /// and descent without the 452 unit line gap, and Arial 1.117 em. Word
+    /// gives each face its OS/2 Windows extent plus the external leading.
+    #[test]
+    fn a_single_line_takes_the_word_pitch_of_every_bundled_face_and_its_microsoft_name() {
+        let mut document = Document::new();
+        let mut expected = Vec::new();
+        for (microsoft, bundled, pitches) in WORD_PITCHES {
+            for font in [microsoft, bundled] {
+                for (row, size) in SIZES.into_iter().enumerate() {
+                    for (column, line) in LINES.into_iter().enumerate() {
+                        add_line(&mut document, &[("Hxgp", font, size)], line);
+                        expected.push((font, size, line, pitches[row][column]));
+                    }
+                }
+            }
+        }
+        let mismatches = heights(&document)
+            .into_iter()
+            .zip(expected)
+            .filter(|(height, (.., word))| (height - word).abs() > 0.02)
+            .collect::<Vec<_>>();
+        assert!(
+            mismatches.is_empty(),
+            "pitches away from Word: {mismatches:?}"
+        );
+    }
+
+    /// Glyphs land on Word's baseline, the Windows ascent plus the external
+    /// leading below the line top. Word's first 48 point baseline, from the
+    /// top margin, on its quarter point grid.
+    #[test]
+    fn a_first_line_puts_its_baseline_where_word_draws_it() {
+        let cases = [
+            ("Calibri", 45.80),
+            ("Carlito", 45.80),
+            ("Arial", 45.05),
+            ("Liberation Sans", 45.05),
+            ("Times New Roman", 44.80),
+            ("Liberation Serif", 44.80),
+            ("Cambria", 45.55),
+            ("Caladea", 45.55),
+            ("Courier New", 40.03),
+            ("Liberation Mono", 40.03),
+        ];
+        let mut document = Document::new();
+        for (font, _) in cases {
+            let mut paragraph = document.add_paragraph("");
+            spaced(&mut paragraph, 240);
+            paragraph.set_page_break_before(true);
+            paragraph.add_run("Hxgp").font(font).size(48.0);
+        }
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        assert_eq!(result.layout.pages.len(), cases.len());
+        for (page, (font, word)) in result.layout.pages.iter().zip(cases) {
+            let mut baseline = None;
+            oxml_layout::walk(&page.elements, &mut |element, _| {
+                if let oxml_layout::PositionedElement::Text(run) = element
+                    && baseline.is_none()
+                    && !run.text.trim().is_empty()
+                {
+                    baseline = Some(run.origin.y - 72.0);
+                }
+            });
+            let baseline = baseline.expect("the page paints its line");
+            assert!(
+                (baseline - word).abs() < 0.13,
+                "{font}: baseline {baseline} against Word's {word}"
+            );
+        }
+    }
+
+    /// A line mixing sizes takes the greater ascent and descent, and the
+    /// external leading of the smaller Arial run stays inside the larger
+    /// Calibri ascent. Word's pitch over 25 lines, and over 16 at 1.5.
+    #[test]
+    fn a_line_mixing_two_sizes_takes_the_word_pitch() {
+        let mut document = Document::new();
+        let cases = [
+            ("Calibri", 11.0, "Calibri", 24.0, 240, 29.307),
+            ("Calibri", 11.0, "Calibri", 24.0, 360, 43.961),
+            ("Arial", 12.0, "Calibri", 20.0, 240, 24.414),
+            ("Arial", 12.0, "Calibri", 20.0, 360, 36.628),
+        ];
+        for (small, small_size, big, big_size, line, _) in cases {
+            add_line(
+                &mut document,
+                &[
+                    ("Mixed ", small, small_size),
+                    ("BIG", big, big_size),
+                    (" small", small, small_size),
+                ],
+                line,
+            );
+        }
+        for (height, case) in heights(&document).into_iter().zip(cases) {
+            assert!((height - case.5).abs() < 0.02, "{case:?}: {height}");
+        }
+    }
+
+    /// A 400 point picture at 1.1 lines made a 440 point line, and Word
+    /// keeps 400 plus a tenth of the Calibri 11 paragraph mark's line. A
+    /// picture beside text keeps its own height and scales only the text.
+    #[test]
+    fn a_picture_line_scales_only_the_height_of_its_text() {
+        let mut document = Document::new();
+        let mut expected = Vec::new();
+        for (line, word) in [(240, 100.0), (264, 101.343), (360, 106.713), (480, 113.427)] {
+            let mut picture =
+                document.add_picture(PNG, "p.png", Length::pt(60.0), Length::pt(100.0));
+            spaced(&mut picture, line);
+            expected.push((line, "alone", word));
+        }
+        {
+            let mut picture =
+                document.add_picture(PNG, "p.png", Length::pt(300.0), Length::pt(400.0));
+            spaced(&mut picture, 264);
+            expected.push((264, "400 point", 401.343));
+        }
+        for (line, word) in [(240, 52.953), (264, 54.297), (360, 59.670)] {
+            let mut picture =
+                document.add_picture(PNG, "p.png", Length::pt(50.0), Length::pt(50.0));
+            spaced(&mut picture, line);
+            picture.add_run("Ab");
+            expected.push((line, "beside Calibri 11 text", word));
+        }
+        for (height, (line, case, word)) in heights(&document).into_iter().zip(expected) {
+            assert!(
+                (height - word).abs() < 0.01,
+                "{case} at w:line {line}: {height} against Word's {word}"
+            );
+        }
+    }
+
+    /// Ten lead lines, a 400 point figure and its caption at 1.5 lines fill
+    /// 628 of the 648 points of a page, which is where Word keeps them. The
+    /// figure line was 600 points and went to the next page on its own.
+    #[test]
+    fn a_figure_and_its_caption_share_the_page_word_puts_them_on() {
+        let mut document = Document::new();
+        for index in 0..10 {
+            add_line(
+                &mut document,
+                &[(&format!("Lead line {index:02}"), "Calibri", 11.0)],
+                360,
+            );
+        }
+        {
+            let mut picture =
+                document.add_picture(PNG, "p.png", Length::pt(300.0), Length::pt(400.0));
+            spaced(&mut picture, 360);
+        }
+        add_line(
+            &mut document,
+            &[("Figure 1. The caption", "Calibri", 11.0)],
+            360,
+        );
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        let page_of = |index: usize| result.body_layout_fragments(index).unwrap()[0].physical_page;
+        assert_eq!((page_of(10), page_of(11)), (1, 1));
+    }
+
+    /// Calibri 11 as Word lays one line of it out, 2500/2048 em.
+    const CALIBRI_11: f64 = 11.0 * 2500.0 / 2048.0;
+    const W: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    /// A document whose body and header are the given raw XML, with Calibri 11
+    /// document defaults and every paragraph single spaced with no spacing.
+    fn raw_document(body: &str, header: &str) -> Document {
+        let styles = format!(
+            r#"<w:styles xmlns:w="{W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>"#
+        );
+        let document_xml = format!(
+            r#"<w:document xmlns:w="{W}"><w:body>{body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>"#
+        );
+        let mut seed = Document::new();
+        let mut package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(
+            seed.to_bytes().expect("seed package"),
+        ))
+        .expect("seed opens");
+        package.set_part("/word/document.xml", document_xml.into_bytes());
+        package.set_part("/word/styles.xml", styles.into_bytes());
+        let mut output = std::io::Cursor::new(Vec::new());
+        package.write_to(&mut output).expect("probe package");
+        let mut document = Document::from_bytes(output.get_ref()).expect("probe reopens");
+        document.set_raw_header_with_images(
+            format!(r#"<w:hdr xmlns:w="{W}">{header}</w:hdr>"#).into_bytes(),
+            &[],
+            rdocx::HdrFtrType::Default,
+        );
+        document
+    }
+
+    /// Painted baselines of the first page whose text starts with `prefix`.
+    fn baselines_of(document: &Document, prefix: &str) -> Vec<f64> {
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        let mut baselines = Vec::new();
+        oxml_layout::walk(&result.layout.pages[0].elements, &mut |element, _| {
+            if let oxml_layout::PositionedElement::Text(run) = element
+                && run.text.starts_with(prefix)
+            {
+                baselines.push(run.origin.y);
+            }
+        });
+        baselines
+    }
+
+    /// A blank paragraph with no mark properties was a 12 point line, and an
+    /// empty line between two breaks fell to 12 points too. Word gives both
+    /// the line of their font: the paragraph mark's, through the style chain,
+    /// and the break run's. Word 16, Calibri 11 defaults: a line of text, two
+    /// blank paragraphs and a line of text span 40.52 points baseline to
+    /// baseline, text, two breaks and text 27.0, on its quarter point grid.
+    #[test]
+    fn a_blank_line_is_a_line_of_its_mark_or_break_font() {
+        let document = raw_document(
+            concat!(
+                r#"<w:p><w:r><w:t>Two</w:t></w:r></w:p><w:p/><w:p/>"#,
+                r#"<w:p><w:r><w:t>Three</w:t></w:r></w:p>"#,
+                r#"<w:p><w:pPr><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/></w:rPr></w:pPr></w:p>"#,
+                r#"<w:p><w:r><w:t>Four</w:t></w:r><w:r><w:br/></w:r><w:r><w:br/></w:r><w:r><w:t>Five</w:t></w:r></w:p>"#,
+                r#"<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>"#,
+                r#"<w:tr><w:tc><w:p><w:r><w:t>CellOne</w:t></w:r></w:p></w:tc></w:tr>"#,
+                r#"<w:tr><w:tc><w:p/></w:tc></w:tr>"#,
+                r#"<w:tr><w:tc><w:p><w:r><w:t>CellThree</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+            ),
+            concat!(
+                r#"<w:p><w:r><w:t>HeaderOne</w:t></w:r></w:p><w:p/>"#,
+                r#"<w:p><w:r><w:t>HeaderThree</w:t></w:r></w:p>"#,
+            ),
+        );
+        let at = |prefix: &str| baselines_of(&document, prefix)[0];
+        let close = |actual: f64, expected: f64, case: &str| {
+            assert!(
+                (actual - expected).abs() < 1e-6,
+                "{case}: {actual} against {expected}"
+            );
+        };
+        // Two blank paragraphs of the Calibri 11 default mark.
+        close(
+            at("Three") - at("Two"),
+            3.0 * CALIBRI_11,
+            "blank paragraphs",
+        );
+        // A blank paragraph whose mark is Arial 12, 2355/2048 em.
+        close(
+            at("Four") - at("Three"),
+            CALIBRI_11 + 12.0 * 2355.0 / 2048.0,
+            "Arial 12 mark",
+        );
+        // The empty line between two breaks is a line of the break's font.
+        close(at("Five") - at("Four"), 2.0 * CALIBRI_11, "two breaks");
+        // A blank cell row and a blank header paragraph, the same rule.
+        close(
+            at("CellThree") - at("CellOne"),
+            2.0 * CALIBRI_11,
+            "blank cell row",
+        );
+        close(
+            at("HeaderThree") - at("HeaderOne"),
+            2.0 * CALIBRI_11,
+            "blank header paragraph",
+        );
+    }
+
+    /// A picture shorter than the paragraph mark still takes a whole line of
+    /// the mark, standing on its bottom. Word 16: a 5 point picture alone is
+    /// a 13.43 point line at `w:line` 240 and 20.14 at 360, its bottom 13.43
+    /// below the line top.
+    #[test]
+    fn a_small_picture_alone_takes_a_line_of_its_paragraph_mark() {
+        let mut document = Document::new();
+        for line in [240, 360] {
+            let mut picture = document.add_picture(PNG, "p.png", Length::pt(5.0), Length::pt(5.0));
+            spaced(&mut picture, line);
+        }
+        let heights = heights(&document);
+        assert!((heights[0] - 13.428).abs() < 0.01, "{heights:?}");
+        assert!((heights[1] - 20.142).abs() < 0.01, "{heights:?}");
+        let result = document.layout_deterministic().expect("lays out");
+        let mut bottom = None;
+        oxml_layout::walk(&result.layout.pages[0].elements, &mut |element, _| {
+            if let oxml_layout::PositionedElement::Image { rect, .. } = element
+                && bottom.is_none()
+            {
+                bottom = Some(rect.y + rect.height);
+            }
+        });
+        let bottom = bottom.expect("the picture is painted");
+        assert!(
+            (bottom - 72.0 - CALIBRI_11).abs() < 1e-6,
+            "picture bottom {bottom}"
+        );
+    }
+}
+
+/// Tab stops placed where Word 16 for Mac places them. The documents use
+/// python-docx's page, whose 1.25 inch margins put the text between x 90 and
+/// x 522.
+mod tab_stop_regressions {
+    use super::{document_with_field_parts, document_xml, wrap_word_body};
+    use rdocx::{Document, ListLevel, StyleBuilder};
+    use rdocx_oxml::borders::{CT_TabStop, CT_Tabs};
+    use rdocx_oxml::properties::CT_PPr;
+    use rdocx_oxml::shared::{ST_TabJc, ST_TabLeader};
+    use rdocx_oxml::units::Twips;
+
+    const SECTION: &str = r#"<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>"#;
+
+    /// A paragraph of runs separated by tabs, after `properties`.
+    fn tabbed(properties: &str, parts: &[&str]) -> String {
+        let runs = parts
+            .iter()
+            .map(|part| format!("<w:r><w:t>{part}</w:t></w:r>"))
+            .collect::<Vec<_>>()
+            .join("<w:r><w:tab/></w:r>");
+        format!("<w:p><w:pPr>{properties}</w:pPr>{runs}</w:p>")
+    }
+
+    fn stops(stops: &[(&str, i32, &str)]) -> String {
+        let stops = stops
+            .iter()
+            .map(|(val, pos, leader)| {
+                format!(r#"<w:tab w:val="{val}" w:leader="{leader}" w:pos="{pos}"/>"#)
+            })
+            .collect::<String>();
+        format!("<w:tabs>{stops}</w:tabs>")
+    }
+
+    fn document(paragraphs: &[String]) -> Document {
+        document_with_field_parts(
+            &wrap_word_body(&format!("{}{SECTION}", paragraphs.concat())),
+            None,
+            None,
+        )
+    }
+
+    /// Where a text run on page one starts and ends, and where each of its
+    /// characters ends, in points from the page edge.
+    fn run(document: &Document, text: &str) -> (f64, f64, Vec<f64>) {
+        let layout = document.layout_deterministic().unwrap();
+        let mut found = None;
+        oxml_layout::walk(&layout.layout.pages[0].elements, &mut |element, _| {
+            if let oxml_layout::PositionedElement::Text(run) = element
+                && run.text == text
+                && found.is_none()
+            {
+                let mut ends = Vec::new();
+                let mut x = run.origin.x;
+                for advance in &run.advances {
+                    x += advance;
+                    ends.push(x);
+                }
+                found = Some((run.origin.x, x, ends));
+            }
+        });
+        found.unwrap_or_else(|| panic!("{text} must be laid out"))
+    }
+
+    fn assert_at(actual: f64, expected: f64, what: &str) {
+        assert!(
+            (actual - expected).abs() < 0.01,
+            "{what}: {actual} instead of {expected}"
+        );
+    }
+
+    /// Word puts the text after the tab at the stop, 150 points from the
+    /// margin. Layout started it 36 points early and laid a right, centre or
+    /// decimal stop as a left one.
+    #[test]
+    fn text_after_a_tab_aligns_on_its_stop() {
+        let document = document(&[
+            tabbed(&stops(&[("left", 3000, "none")]), &["Title", "L12"]),
+            tabbed(&stops(&[("right", 3000, "dot")]), &["Title", "R12"]),
+            tabbed(&stops(&[("center", 3000, "none")]), &["Title", "ABCDEF"]),
+            tabbed(&stops(&[("decimal", 3000, "none")]), &["Title", "123.45"]),
+        ]);
+        assert_at(run(&document, "L12").0, 240.0, "left stop");
+        assert_at(run(&document, "R12").1, 240.0, "right stop");
+        let (start, end, _) = run(&document, "ABCDEF");
+        assert_at((start + end) / 2.0, 240.0, "centre stop");
+        assert_at(run(&document, "123.45").2[2], 240.0, "decimal stop");
+    }
+
+    /// A paragraph's stops add to its style's, as Word merges them, and a
+    /// clear stop removes the style's stop at its position. Default stops
+    /// start after the last explicit stop, and a bar stop is none.
+    #[test]
+    fn paragraph_stops_add_to_style_stops() {
+        let mut document = document(&[
+            tabbed(
+                &format!(
+                    r#"<w:pStyle w:val="Tabbed"/>{}"#,
+                    stops(&[("left", 4000, "none")])
+                ),
+                &["T", "A1", "B1", "C1"],
+            ),
+            tabbed(
+                &format!(
+                    r#"<w:pStyle w:val="Tabbed"/>{}"#,
+                    stops(&[("clear", 2000, "none")])
+                ),
+                &["T", "A2", "B2"],
+            ),
+            tabbed(&stops(&[("left", 3000, "none")]), &["T", "A3", "B3"]),
+            tabbed(&stops(&[("bar", 1500, "none")]), &["T", "A4"]),
+        ]);
+        document
+            .add_style(
+                StyleBuilder::paragraph("Tabbed", "Tabbed").paragraph_properties(CT_PPr {
+                    tabs: Some(CT_Tabs {
+                        tabs: vec![
+                            CT_TabStop::new(ST_TabJc::Left, Twips(2000)),
+                            CT_TabStop {
+                                leader: Some(ST_TabLeader::Dot),
+                                ..CT_TabStop::new(ST_TabJc::Right, Twips(6000))
+                            },
+                        ],
+                    }),
+                    ..Default::default()
+                }),
+            )
+            .unwrap();
+        assert_at(run(&document, "A1").0, 190.0, "style stop");
+        assert_at(run(&document, "B1").0, 290.0, "paragraph stop");
+        assert_at(run(&document, "C1").1, 390.0, "style right stop");
+        assert_at(run(&document, "A2").1, 390.0, "stop after a cleared one");
+        assert_at(run(&document, "B2").0, 414.0, "default stop after the last");
+        assert_at(run(&document, "A3").0, 240.0, "no default stop before");
+        assert_at(run(&document, "B3").0, 270.0, "default stop after");
+        assert_at(run(&document, "A4").0, 126.0, "bar stop");
+    }
+
+    /// The tab after a list number goes to the hanging indent. Layout
+    /// resolved it as if the line started at the margin plus half an inch,
+    /// which put list text 18 points right of Word's.
+    #[test]
+    fn list_text_starts_at_the_hanging_indent() {
+        let mut document = document(&[
+            tabbed(r#"<w:ind w:left="1440" w:hanging="1440"/>"#, &["T", "H1"]),
+            r#"<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:t>Item</w:t></w:r></w:p>"#
+                .to_owned(),
+        ]);
+        let definition = document
+            .add_numbering_definition(&[ListLevel::decimal()])
+            .unwrap();
+        let instance = document.add_numbering_instance(definition, &[]).unwrap();
+        document
+            .link_style_to_numbering("ListParagraph", instance, 0)
+            .unwrap();
+        assert_at(run(&document, "H1").0, 162.0, "hanging indent stop");
+        // Left 720 and hanging 360, the rdocx list default.
+        assert_at(run(&document, "Item").0, 126.0, "list text");
+    }
+
+    /// Word 2010 keeps a right stop past the right margin, and Word 2013
+    /// ends the text at the margin, or at the right indent.
+    #[test]
+    fn a_stop_past_the_right_margin_follows_the_compatibility_mode() {
+        let paragraphs = [
+            tabbed(&stops(&[("right", 10000, "none")]), &["T", "M12"]),
+            tabbed(
+                &format!(
+                    r#"{}<w:ind w:right="2000"/>"#,
+                    stops(&[("right", 9000, "none")])
+                ),
+                &["T", "I12"],
+            ),
+        ];
+        let document_2010 = document(&paragraphs);
+        assert_at(run(&document_2010, "M12").1, 590.0, "Word 2010");
+        assert_at(run(&document_2010, "I12").1, 540.0, "Word 2010 indented");
+        let mut document_2013 = document(&paragraphs);
+        document_2013
+            .set_compatibility_setting(
+                "compatibilityMode",
+                "http://schemas.microsoft.com/office/word",
+                "15",
+            )
+            .unwrap();
+        assert_at(run(&document_2013, "M12").1, 522.0, "Word 2013");
+        assert_at(run(&document_2013, "I12").1, 422.0, "Word 2013 indented");
+    }
+
+    /// The entry of a heading numbered with a tab gets a left stop after its
+    /// number, which Word writes as 480 twips for "1.", so the title stays on
+    /// the left instead of going to the page number stop. Entries of
+    /// unnumbered headings keep their exact bytes.
+    #[test]
+    fn toc_entry_of_a_numbered_heading_keeps_its_title_on_the_left() {
+        let body = r#"
+            <w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>TOC \o "1-2" \h \z \u</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>placeholder</w:t></w:r></w:p>
+            <w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>
+            <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Scope</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Plain</w:t></w:r></w:p>
+        "#;
+        let mut document =
+            document_with_field_parts(&wrap_word_body(&format!("{body}{SECTION}")), None, None);
+        let right_stop = |style_id: &str, name: &str| {
+            StyleBuilder::paragraph(style_id, name).paragraph_properties(CT_PPr {
+                tabs: Some(CT_Tabs {
+                    tabs: vec![CT_TabStop {
+                        leader: Some(ST_TabLeader::Dot),
+                        ..CT_TabStop::new(ST_TabJc::Right, Twips(8640))
+                    }],
+                }),
+                ..Default::default()
+            })
+        };
+        document.add_style(right_stop("TOC1", "toc 1")).unwrap();
+        document.add_style(right_stop("TOC2", "toc 2")).unwrap();
+        let definition = document
+            .add_numbering_definition(&[ListLevel::decimal()])
+            .unwrap();
+        let instance = document.add_numbering_instance(definition, &[]).unwrap();
+        document
+            .link_style_to_numbering("Heading1", instance, 0)
+            .unwrap();
+
+        assert_eq!(document.rebuild_toc().unwrap().entry_count, 2);
+        let xml = document_xml(&mut document);
+        assert!(
+            xml.contains(r#"<w:p><w:pPr><w:pStyle w:val="TOC1"/><w:tabs><w:tab w:val="left" w:pos="480"/></w:tabs></w:pPr>"#),
+            "{xml}"
+        );
+        assert!(
+            xml.contains(r#"<w:p><w:pPr><w:pStyle w:val="TOC2"/></w:pPr>"#),
+            "{xml}"
+        );
+
+        let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+        assert_at(run(&reopened, "Scope").0, 114.0, "numbered entry title");
+        assert_at(run(&reopened, "Plain").0, 90.0, "unnumbered entry title");
+        // The page number ends on the style's right stop at 8640 twips, as in
+        // Word, not where the wider page placeholder ended.
+        assert_at(run(&reopened, "1").1, 522.0, "page number");
+    }
+
+    /// In Word 2013 a left tab that reaches the end of its line takes a line
+    /// of its own, and the text after it starts on the next line. Layout put
+    /// the text right after the line of the tab, one line short.
+    #[test]
+    fn a_left_stop_at_the_end_of_the_line_leaves_the_tab_a_line_of_its_own() {
+        let mut document = document(&[
+            tabbed(&stops(&[("left", 8640, "none")]), &["B", "Body"]),
+            format!(
+                r#"<w:tbl><w:tblPr><w:tblW w:w="4320" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="4320"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="4320" w:type="dxa"/></w:tcPr>{}</w:tc></w:tr></w:tbl>"#,
+                tabbed(&stops(&[("left", 6000, "none")]), &["D", "Cell"])
+            ),
+            "<w:p/>".to_owned(),
+        ]);
+        document
+            .set_compatibility_setting(
+                "compatibilityMode",
+                "http://schemas.microsoft.com/office/word",
+                "15",
+            )
+            .unwrap();
+        let layout = document.layout_deterministic().unwrap();
+        let mut baselines = std::collections::HashMap::new();
+        oxml_layout::walk(&layout.layout.pages[0].elements, &mut |element, _| {
+            if let oxml_layout::PositionedElement::Text(run) = element {
+                baselines.insert(run.text.clone(), run.origin.y);
+            }
+        });
+        // Single-spaced 11 point lines are about 12.4 points apart, so the
+        // text is two lines below the start of the paragraph, not one.
+        for (before, after) in [("B", "Body"), ("D", "Cell")] {
+            let gap = baselines[after] - baselines[before];
+            assert!(gap > 22.0 && gap < 30.0, "{after} is {gap} below {before}");
+        }
+    }
+
+    /// Page fields take their value after pagination, in place of a wider
+    /// placeholder. Word 16 ends "Page 1 of 1" on the right stop, and
+    /// centres "C 1" on the centre stop. Layout left both where the
+    /// placeholders put them, 6 points short of the right stop.
+    #[test]
+    fn page_fields_after_a_right_or_centre_stop_align_on_it() {
+        let field = |instruction: &str| {
+            format!(
+                r#"<w:fldSimple w:instr=" {instruction} "><w:r><w:t>1</w:t></w:r></w:fldSimple>"#
+            )
+        };
+        let document = document(&[format!(
+            r#"<w:p><w:pPr>{}</w:pPr><w:r><w:t>Left</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t xml:space="preserve">C </w:t></w:r>{}<w:r><w:tab/></w:r><w:r><w:t xml:space="preserve">Page </w:t></w:r>{}<w:r><w:t xml:space="preserve"> of </w:t></w:r>{}</w:p>"#,
+            stops(&[("center", 4320, "none"), ("right", 8640, "dot")]),
+            field("PAGE"),
+            field("PAGE"),
+            field("NUMPAGES"),
+        )]);
+        let layout = document.layout_deterministic().unwrap();
+        let mut runs = Vec::new();
+        oxml_layout::walk(&layout.layout.pages[0].elements, &mut |element, _| {
+            if let oxml_layout::PositionedElement::Text(run) = element
+                && !run.text.starts_with('.')
+            {
+                runs.push((
+                    run.text.clone(),
+                    run.origin.x,
+                    run.origin.x + run.advances.iter().sum::<f64>(),
+                ));
+            }
+        });
+        let texts = runs.iter().map(|run| run.0.as_str()).collect::<Vec<_>>();
+        assert_eq!(texts, ["Left", "C ", "1", "Page ", "1", " ", "of ", "1"]);
+        // "C 1" is centred on x 306, and each run follows the one before.
+        assert_at((runs[1].1 + runs[2].2) / 2.0, 306.0, "centred text");
+        assert_at(runs[2].1, runs[1].2, "centred page field");
+        for pair in runs[3..].windows(2) {
+            assert_at(
+                pair[1].1,
+                pair[0].2,
+                &format!("{} after {}", pair[1].0, pair[0].0),
+            );
+        }
+        assert_at(runs[7].2, 522.0, "right-aligned page count");
+    }
 }

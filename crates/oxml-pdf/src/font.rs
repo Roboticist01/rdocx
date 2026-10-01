@@ -541,6 +541,7 @@ mod tests {
             italic: false,
             field_kind: None,
             field_source: None,
+            tab_aligned: None,
             note: None,
         })
     }
