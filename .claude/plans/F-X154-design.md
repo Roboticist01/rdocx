@@ -1,6 +1,6 @@
 # F-X154, Presentation text and preservation repair
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S80
 **Size**: M
 **Depends on**: F-X142
@@ -56,11 +56,11 @@ Expected unchanged for single-line harness inputs. Any changed output requires a
 
 ## Implementation checklist
 
-- [ ] Review PRs 218 and 223 against the current prefix and identify overlap.
-- [ ] Add Issue 215 and 216 failing cases to existing test entrypoints.
-- [ ] Retain unknown body property attributes and implement line separator semantics.
-- [ ] Run focused round-trip, layout, Python, validation and cross-viewer checks.
-- [ ] Run scoped verification and microscope to zero findings.
+- [x] Review PRs 218 and 223 against the current prefix and identify overlap.
+- [x] Add Issue 215 and 216 failing cases to existing test entrypoints.
+- [x] Retain unknown body property attributes and implement line separator semantics.
+- [x] Run focused round-trip, layout, Python, validation and cross-viewer checks.
+- [x] Run scoped verification and microscope to zero findings.
 
 ## Open questions
 

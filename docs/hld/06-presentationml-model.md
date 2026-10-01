@@ -362,7 +362,11 @@ TextFrame::add_paragraph(&mut self) -> TextParagraphMut<'_>;
 TextParagraphMut::add_run(&mut self, text: &str) -> TextRunMut<'_>;
 ```
 
-`TextFrame` also reads and replaces whole-frame text. Paragraph handles replace
+`TextFrame` also reads and replaces whole-frame text. Whole-frame text assigns
+one paragraph per line feed, and a vertical tab creates an `a:br`. This shared
+setter also serves shape, table cell, notes, comment, SmartArt, chart and
+imported text. The ODP importer maps `text:line-break` to a vertical tab so it
+remains a soft break. Paragraph handles replace
 text, paragraph properties, and bullets. Replaced text keeps the formatting of
 the paragraph's first regular run. A paragraph without one formats the new run
 with its `a:endParaRPr`, without hyperlinks, as PowerPoint formats text typed

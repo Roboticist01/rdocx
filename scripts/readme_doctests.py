@@ -391,7 +391,7 @@ ARCHIVE_MEASUREMENTS = {
     "oxml-chart": (102_041, 659_394, 6),
     "oxml-cli-support": (8_614, 30_840, 6),
     "oxml-core": (21_794, 104_404, 15),
-    "oxml-drawing": (169_686, 1_171_264, 24),
+    "oxml-drawing": (171_413, 1_177_432, 24),
     "oxml-layout": (4_632_657, 9_262_715, 51),
     "oxml-media": (12_252, 50_992, 6),
     "oxml-opc": (99_473, 385_350, 12),
@@ -404,12 +404,12 @@ ARCHIVE_MEASUREMENTS = {
     "rdocx-opc": (3_655, 9_668, 6),
     "rdocx-oxml": (411_869, 2_582_774, 32),
     "rdocx-pdf": (8_111, 26_758, 6),
-    "rpptx": (441_824, 2_292_993, 16),
+    "rpptx": (443_869, 2_302_087, 16),
     "rpptx-chart": (6_648, 21_136, 6),
     "rpptx-cli": (40_733, 178_874, 8),
     "rpptx-layout": (84_812, 483_510, 11),
     "rpptx-oxml": (156_451, 1_055_648, 20),
-    "rpptx-render": (62_786, 340_383, 8),
+    "rpptx-render": (63_913, 345_103, 8),
 }
 PACKAGE_VERSIONS = {
     **{name: "0.12.1" for name, _ in LOCAL_PATCHES if not name.startswith("rdocx")},
