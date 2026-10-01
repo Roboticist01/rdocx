@@ -1,6 +1,6 @@
 # F-X152, Full-story CLI diff and count repair
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S79
 **Size**: M
 **Depends on**: F-X143, F-X151
@@ -49,10 +49,10 @@ Expected unchanged. The CLI diff writes no DOCX or rendering output.
 
 ## Implementation checklist
 
-- [ ] Review PR 236's incremental diff and reconcile overlaps with the S78 CLI and story walkers.
-- [ ] Add failing Issue 227 and focused story, count, exit and JSON cases to existing test entrypoints.
-- [ ] Implement story-aware diff and bounded matching with deterministic locations.
-- [ ] Run CLI and facade tests, scoped verification and a zero-finding microscope.
+- [x] Review PR 236's incremental diff and reconcile overlaps with the S78 CLI and story walkers.
+- [x] Add failing Issue 227 and focused story, count, exit and JSON cases to existing test entrypoints.
+- [x] Implement story-aware diff and bounded matching with deterministic locations.
+- [x] Run CLI and facade tests, scoped verification and a zero-finding microscope.
 
 ## Open questions
 
