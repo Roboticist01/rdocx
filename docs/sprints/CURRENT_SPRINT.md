@@ -24,9 +24,9 @@ and prove the focused layout, story and binding cases before the full sprint gat
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X146 | Word line height and inline picture spacing | L | in-progress | codex |
-| F-X152 | Full-story CLI diff and count repair | M | in-progress | codex |
-| F-X153 | Word Python supplemental contribution | M | in-progress | codex |
+| F-X146 | Word line height and inline picture spacing | L | done | - |
+| F-X152 | Full-story CLI diff and count repair | M | done | - |
+| F-X153 | Word Python supplemental contribution | M | done | - |
 
 ## Sequencing note
 
