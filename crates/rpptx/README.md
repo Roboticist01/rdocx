@@ -15,6 +15,10 @@ presentation, notes, handout, PDF, and animation outputs.
 - Add, remove, move, duplicate, and transfer slides.
 - Author and edit text, pictures, shapes, groups, tables, charts, comments,
   SmartArt text, and media.
+- Populate groups, nested to any depth, with text boxes, preset shapes,
+  connectors, groups, tables, and pictures.
+- Insert and remove table rows and columns, extending or shrinking merged
+  cells and growing or shrinking the frame by the row or column size.
 - Produce PDF, PDF/A, resolved slide frames, notes, handouts, and animations.
 - Import HTML, ODP, and PDF through explicit facade APIs.
 - Resolve master, layout, placeholder, theme, chart, SmartArt, media, notes,
@@ -24,7 +28,7 @@ presentation, notes, handout, PDF, and animation outputs.
 
 | Measurement | Value | Version | Platform | Build mode | Input | Command | Statistic | Measured on |
 |---|---|---|---|---|---|---|---|---|
-| Crates.io archive: rpptx | 408,587 compressed bytes, 2,128,353 member bytes, 16 members | 0.12.1 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rpptx` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-29 |
+| Crates.io archive: rpptx | 439,735 compressed bytes, 2,284,273 member bytes, 16 members | 0.12.1 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rpptx` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-09-30 |
 
 ## Use it when
 

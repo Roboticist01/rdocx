@@ -1,51 +1,84 @@
-# Current Sprint, S76
+# Current Sprint, S77
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: review and integrate the first contribution prefix from the 40 open
-GitHub PRs, starting with package and CLI safety, then reconciling Word story,
-identity and comparison changes. Issue acceptance remains
-open until the integrated S79 evidence checks every criterion.
+**Goal**: integrate the remaining reviewed rendering, layout, Python,
+presentation and CLI contributions on the completed S76 prefix. Reconcile
+stacked and overlapping PRs before one combined verification and review
+boundary. Issue acceptance continues through S88 before deferred feature work
+at S89.
 
 ## Spec references
 
-- `docs/hld/03-architecture.md`, for story ownership and comparison behavior.
-- `docs/hld/04-opc-and-packaging.md`, for package fidelity, atomic writes and
-  namespace preservation.
-- `docs/hld/10-bindings-spec.md`, for CLI and binding contracts affected by
-  the contributions.
-- `docs/hld/12-testing-strategy.md`, for source-built regressions, the hash
-  harness, deterministic rendering and differential evidence.
-- `docs/hld/14-development-backlog.md`, for F-X137 through F-X139
-  dependencies, sizes and named test gates.
+- `docs/hld/03-architecture.md`, for crate and facade ownership across the
+  Word, presentation and CLI contributions.
+- `docs/hld/05-drawingml-model.md`, for shared DrawingML geometry, tables and
+  preservation rules touched by rendering and presentation work.
+- `docs/hld/06-presentationml-model.md`, for presentation shapes, tables,
+  layouts, relationships and validation.
+- `docs/hld/08-rendering-spec.md`, for Word and slide layout, PDF and raster
+  rendering behavior.
+- `docs/hld/10-bindings-spec.md`, for native and Python API agreement, handle
+  behavior and both CLI contracts.
+- `docs/hld/12-testing-strategy.md`, for deterministic rendering, the hash
+  harness, fidelity corpora, binding smoke and integration evidence.
+- `docs/hld/14-development-backlog.md`, for F-X140 through F-X158
+  dependencies, PR sets and named test gates.
 
 ## The wave
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X137 | Package and CLI safety contribution wave | L | done | - |
-| F-X138 | Word story and content contribution wave | L | done | - |
-| F-X139 | Word identity and comparison contribution wave | L | done | - |
+| F-X140 | Rendering and layout contribution wave | L | done | - |
+| F-X141 | Word Python contribution wave | L | done | - |
+| F-X142 | Presentation Python contribution wave | L | done | - |
+| F-X143 | Revision listing and CLI story contribution wave | M | done | - |
 
 ## Sequencing note
 
-F-X137 comes first because its save and namespace changes affect every later
-reproduction. F-X138 then establishes the story and run index spaces that
-F-X139 compares. PR 195 precedes 202 and 210, and 202 precedes 211.
-F-X140 and its exclusive hash baseline update move to S77, after the Word
-prefix, so the expected delta is attributable.
-The full PR inventory, overlap and issue acceptance matrix are in
-`docs/sprints/SPRINT_PLAN.md`, under Contribution intake evidence.
-
-The four original unstarted S76 stories, F-X133 and F-271 through F-273,
-resume in S80, the next feature sprint after the four repair boundaries.
-S75's completed records and sprint tag retain their historical IDs.
+F-X140 follows S76's package prefix and owns the first reviewed hash baseline
+update. F-X141 follows F-X140 and owns a separate baseline update for native
+common styles and any reviewed TOC output delta. Each behavior change has its
+own labelled commit and expected delta.
+PR 196's Presentation fidelity gate and PR 206's MSRV and Test failures must
+be resolved on the replayed integrated result before sprint closure. F-X141
+and F-X142 both follow F-X140. Their shared presentation tests and
+documentation make them separate waves, with F-X141 first. In F-X141, PR
+203 follows 201. In F-X142, PRs 208 and 209 follow 189. F-X143 follows F-X141
+and S76's PR 198, with PR 204 replayed after that parent. Reapply only the
+incremental diff of each stacked PR onto the sprint branch, then run its
+focused checks and the combined sprint gate. Rebase and rerun head CI for any
+original PR selected for a direct merge. A superseded PR needs verified
+`main` coverage before it is closed.
 
 ## Definition of done for this sprint
 
-- Every S76 PR is reviewed at its incremental diff, reconciled with prior
-  integration, and has passing relevant focused checks after rebasing.
-- The hash harness remains unchanged. Any output delta is explained before
-  integration, with rendering work and PR 188's baseline update in S77.
-- The integrated S76 result passes `/verify --full` and `/sprint-review`.
-  Issues remain open until their full S78 acceptance evidence exists.
+- Every S77 PR has a reviewed incremental diff replayed on the sprint branch,
+  reconciled overlap and passing relevant focused checks on that replayed
+  result. Original heads selected for a direct merge need a rebase and green
+  CI. Later intake is assigned to S78 through S88.
+- F-X140's intentional rendering delta has its own labelled commit and
+  reviewed expected hash change. The deterministic Word and presentation
+  fidelity gates pass.
+- F-X141 completes the named section-default, native common-style and
+  refreshable TOC behavior gaps, with a separately reviewed baseline delta.
+- Word and presentation Python workflows, typing smoke, native parity,
+  round-trip, validation and rendering checks pass on the integrated result.
+- F-X142 covers every Issue 169 checklist item through a working API or a
+  reviewed scope decision and documented fallback, including shape hyperlinks,
+  anchored comments and built-in table styles.
+- Revision listing covers all stories. The CLI detects malformed related
+  parts and undefined styles in its stated scope.
+- Each S77 F-ID remains scoped to its design, focused tests, applicable oracle
+  cases, `/verify --scoped` and a zero-finding `/microscope`. F-X140 and later
+  formal dependency prefixes use scoped evidence and focused integration
+  checks before their consumers begin. Full verification and sprint review
+  run after all S77 stories are integrated.
+- The combined S77 result passes binding smoke, package, rendering,
+  documentation and release regression checks, then `/verify --full` and
+  `/sprint-review`. Broader issue acceptance remains scheduled for S78
+  through S88.
+- At `/close-sprint`, reconcile S77 PRs and issues against the verified `main`
+  result. Thank each contributor in a human-written PR closure comment. Close
+  an issue only after every criterion passes, and leave partial issues open
+  with their remaining work recorded.

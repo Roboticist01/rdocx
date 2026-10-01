@@ -853,6 +853,15 @@ rejected, saved, and reopened views. The legacy/default compatibility test
 keeps `Document::compare` byte-identical to default options. No sample invokes
 comparison, so the 49-entry hash harness remains unchanged.
 
+Story revision regressions list body, cell, header, footer, note, comment, and
+text-box owners, then compare their identities and counts with accept and
+reject after save and reopen. CLI regressions retain existing revision output
+fields while adding story identity and counts. Text and conversion cases keep
+the body and name a malformed related part in one warning. Validation cases
+reject malformed related XML and undefined style IDs. Python listing and its
+type stub agree with the native inventory. These changes leave the 49-entry
+hash harness unchanged.
+
 `comparison_tracks_changed_table_grids_as_table_replacement` source-builds
 tables that gain a column, lose a column, and resize both columns. Each tracked
 document saves and reopens with deletion before insertion. Acceptance compares
@@ -1285,6 +1294,11 @@ moved and cannot be evaded, including by a change that is purely in
 compression. A fingerprint of extracted text and page geometry alone was
 rejected, because the dependency refresh in F-X020 moved all seven sample PDFs
 while `pdftotext` output stayed identical in 7 of 7.
+
+Focused PDF text regressions require a shaped ligature to map back to its
+full source text through ToUnicode. The seven sample resource and byte hashes
+cover the resulting font maps, while their page, PNG and Word XML hashes remain
+stable.
 
 Document metadata streams are excluded only from `pdf/resources`. They are not
 page resources, and their complete bytes remain covered by `pdf/bytes`. A

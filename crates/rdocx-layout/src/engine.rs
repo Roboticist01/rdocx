@@ -931,7 +931,9 @@ struct ReusableEngineContext {
     charts: HashMap<String, std::result::Result<Box<oxml_chart::CT_ChartSpace>, String>>,
     chart_theme: oxml_drawing::theme::CT_OfficeStyleSheet,
     chart_color_map: oxml_drawing::color::ColorMap,
-    core_properties: Option<rdocx_oxml::core_properties::CoreProperties>,
+    /// Boxed, because every `Document` holds two engines inline and debug
+    /// builds keep many copies of `Document` on deep stacks.
+    core_properties: Option<Box<rdocx_oxml::core_properties::CoreProperties>>,
     hyperlink_urls: HashMap<String, String>,
     footnotes: Option<rdocx_oxml::footnotes::CT_Footnotes>,
     endnotes: Option<rdocx_oxml::footnotes::CT_Footnotes>,
@@ -1027,7 +1029,7 @@ impl ReusableEngineContext {
             charts: input.charts.clone(),
             chart_theme: input.chart_theme.clone(),
             chart_color_map: input.chart_color_map.clone(),
-            core_properties: input.core_properties.clone(),
+            core_properties: input.core_properties.clone().map(Box::new),
             hyperlink_urls: input.hyperlink_urls.clone(),
             footnotes: input.footnotes.clone(),
             endnotes: input.endnotes.clone(),
@@ -1104,7 +1106,7 @@ impl ReusableEngineContext {
             && self.charts == input.charts
             && self.chart_theme == input.chart_theme
             && self.chart_color_map == input.chart_color_map
-            && self.core_properties == input.core_properties
+            && self.core_properties.as_deref() == input.core_properties.as_ref()
             && self.hyperlink_urls == input.hyperlink_urls
             && self.theme == input.theme
             && self.caller_font_aliases == caller_font_aliases
@@ -2273,6 +2275,10 @@ impl Engine {
                 })
                 .count()
         });
+        // The restart begins strictly before the first changed block. A page
+        // boundary right before it may have been chosen by that block, which
+        // moved there whole or broke the page before itself, and an edit can
+        // undo that choice. The document start is always a safe restart.
         let restart_checkpoint = first_changed.and_then(|first_changed| {
             self.restart_cache
                 .as_ref()
@@ -2280,7 +2286,9 @@ impl Engine {
                 .checkpoints
                 .iter()
                 .rev()
-                .find(|checkpoint| checkpoint.next_block_index <= first_changed)
+                .find(|checkpoint| {
+                    checkpoint.next_block_index < first_changed || checkpoint.page_count == 0
+                })
                 .copied()
         });
         let tail_reusable = sources.is_none()
@@ -14714,6 +14722,8 @@ mod tests {
             assert_eq!(displayed, page.page_number.to_string());
         }
 
+        // Paragraph 80 opens page 8 here, so the edit restarts at the clean
+        // boundary before it, paragraph 57 on page 6, and rebuilds four pages.
         change_page_spanning_paragraph(&mut input, 80, 1);
         let warm = engine.layout(&input).expect("warm note and footer edit");
         let fresh = Engine::new_deterministic()
@@ -14721,7 +14731,7 @@ mod tests {
             .layout(&input)
             .expect("fresh note and footer edit");
         assert_layout_results_equal(&warm, &fresh);
-        assert!(engine.page_layout_invocation_count() <= 2);
+        assert!(engine.page_layout_invocation_count() <= 4);
     }
 
     #[test]
@@ -14747,6 +14757,102 @@ mod tests {
                 .is_some_and(|cache| !cache.checkpoints.is_empty()),
             "complete ordinary-prose block boundaries must publish restart checkpoints"
         );
+    }
+
+    /// A paragraph that keeps with next takes its page from the chain after
+    /// it, so a warm edit that grows or shrinks any paragraph of a chain lays
+    /// out as a fresh engine does, wherever the chain falls against the first
+    /// page end, which comes near paragraph 30 here.
+    #[test]
+    fn keep_next_chain_warm_edits_equal_fresh_layout() {
+        let lines = |count: usize| "paragraph of a keep-with-next chain ".repeat(4 * count);
+        let (two, four) = (lines(1), lines(2));
+        // Paragraphs `chain_start` and the one after it keep with next, and
+        // `texts[2]` ends the chain.
+        let chain_input = |chain_start: usize, texts: [&str; 3]| {
+            let mut input = make_input_with_text("");
+            input.document.body.content.clear();
+            for index in 0..70_usize {
+                let mut paragraph = CT_P::new();
+                if let Some(member @ 0..=2) = index.checked_sub(chain_start) {
+                    if member < 2 {
+                        paragraph.properties.get_or_insert_default().keep_next = Some(true);
+                    }
+                    paragraph.add_run(texts[member]);
+                } else {
+                    paragraph.add_run(&format!("ordinary prose paragraph {index:03} line"));
+                }
+                input.document.body.add_paragraph(paragraph);
+            }
+            input
+        };
+        let assert_warm_edit = |before: LayoutInput, after: LayoutInput| {
+            let mut engine = Engine::new_deterministic().expect("bundled fonts load");
+            engine.layout(&before).expect("prime keep-with-next chain");
+            let warm = engine.layout(&after).expect("warm chain edit");
+            let fresh = Engine::new_deterministic()
+                .expect("bundled fonts load")
+                .layout(&after)
+                .expect("fresh chain edit");
+            assert_layout_results_equal(&warm, &fresh);
+        };
+        let original = [two.as_str(), two.as_str(), four.as_str()];
+        for chain_start in 26..33 {
+            for member in 0..3 {
+                for text in ["one line", four.as_str()] {
+                    let mut edited = original;
+                    edited[member] = text;
+                    assert_warm_edit(
+                        chain_input(chain_start, original),
+                        chain_input(chain_start, edited),
+                    );
+                }
+            }
+        }
+    }
+
+    /// A block that did not fit moved whole to the top of the next page, and
+    /// that page boundary is a checkpoint. Once the block is edited shorter it
+    /// may fit where it was, so a warm relayout restarts before it and lays
+    /// out as a fresh engine does.
+    #[test]
+    fn a_block_moved_to_a_new_page_and_edited_shorter_lays_out_as_fresh() {
+        let text = |lines: usize| "block moved whole to the next page ".repeat(3 * lines);
+        let input = |fillers: usize, lines: usize, keep_lines: bool| {
+            let mut input = make_input_with_text("");
+            input.document.body.content.clear();
+            for index in 0..fillers {
+                let mut paragraph = CT_P::new();
+                paragraph.add_run(&format!("ordinary prose paragraph {index:03} line"));
+                input.document.body.add_paragraph(paragraph);
+            }
+            let mut moved = CT_P::new();
+            moved.properties.get_or_insert_default().keep_lines = Some(keep_lines);
+            moved.add_run(&text(lines));
+            input.document.body.add_paragraph(moved);
+            for index in 0..30 {
+                let mut paragraph = CT_P::new();
+                paragraph.add_run(&format!("ordinary prose tail {index:03} line"));
+                input.document.body.add_paragraph(paragraph);
+            }
+            input
+        };
+        // Kept together, or widow-controlled with room for one line only.
+        for (lines, keep_lines) in [(12, true), (4, false)] {
+            for fillers in 20..40 {
+                let mut engine = Engine::new_deterministic().expect("bundled fonts load");
+                engine
+                    .layout(&input(fillers, lines, keep_lines))
+                    .expect("prime moved block");
+                let shorter = input(fillers, 1, keep_lines);
+                let warm = engine.layout(&shorter).expect("warm shorter block");
+                let fresh = Engine::new_deterministic()
+                    .expect("bundled fonts load")
+                    .layout(&shorter)
+                    .expect("fresh shorter block");
+                assert_layout_results_equal(&warm, &fresh);
+            }
+        }
     }
 
     #[test]
@@ -17226,6 +17332,7 @@ mod tests {
                     height: 12.0,
                     is_header: true,
                     cant_split: false,
+                    min_height: 0.0,
                     offset_left: 0.0,
                 },
                 table::TableRow {
@@ -17234,6 +17341,7 @@ mod tests {
                     height: 12.0,
                     is_header: false,
                     cant_split: false,
+                    min_height: 0.0,
                     offset_left: 0.0,
                 },
             ],

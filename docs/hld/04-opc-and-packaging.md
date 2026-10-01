@@ -68,6 +68,9 @@ relationships. `Document::new()` selects Word-compatible DOCX. DOCM and DOTM
 declare macro-capable main-part identity without inventing a VBA project. Empty
 core properties omit created and modified timestamps, so equivalent fresh
 constructions remain byte-identical.
+Word-compatible construction includes the common Word style definitions in its
+initial styles part. It does not add a template part or alter producer styles
+when opening an existing package.
 
 Word story discovery begins with the main body and its nested cell and text-box
 owners, then follows header and footer references in document order and note
@@ -77,6 +80,13 @@ records are not public story owners. Each `StoryId` includes the normalized
 source part, owner kind, source-order ordinal, and a structural fingerprint.
 Any changed owner makes a retained identity stale before indexed content can be
 resolved.
+
+Revision inventory uses these same supported story owners and reports their
+`StoryId` with each record. A revision reachable by resolution without a
+discoverable owner is an error. CLI text extraction retains readable body text
+and names any malformed related part in a warning. Validation instead fails
+on malformed related XML or an undefined style reference, including in a
+package produced by the Rust facade.
 
 Story items are projections over the existing typed and retained package
 sources. Body and comment items can expose owned XML serialized from their
@@ -367,7 +377,15 @@ content-type override. A package that creates metadata without an existing
 relationship uses `/docProps/core.xml` and adds the missing package
 relationship. If that conventional part name is already occupied without the
 core-properties relationship, serialization returns an error before changing
-the package.
+the package. `CoreProperties` models all fifteen elements of the core-properties
+schema, from title, subject, creator, keywords, description, last modified by,
+created and modified to category, content status, identifier, language, last
+printed, revision and version, each as text. A rewrite after one
+change therefore keeps every other property. Unset values are not written, so
+a part holding only the original eight serializes byte for byte as before. The
+Word `Document` and the layout engine context it holds twice keep the model
+behind a `Box`, so the larger model does not grow `Document` against the debug
+test-thread stack budget that `CT_PPr` boxing also protects.
 
 The Word facade applies the same package-level ownership rule to application
 and custom properties. New property families reserve collision-safe part and

@@ -19,10 +19,10 @@ use rdocx::{
     FragmentConflictPolicy, HdrFtrType, HeaderFooterKind, HyperlinkItemRef, HyperlinkRef, Length,
     ListLevel, MailMergeControl, MailMergeData, MailMergeFormattedText, MailMergeImage,
     MailMergeRecord, MailMergeValue, ParagraphFrame, ParagraphItemRef, ParagraphRef, RasterFormat,
-    RasterOptions, RasterOutput, RenderOptions, RevisionView, RunItemRef, RunPosition, RunRange,
-    RunRef, StoryId, StoryItemKind, StoryKind, StoryRunPosition, StoryRunRange, StyleBuilder,
-    StyleType, TableRef, TcField, TocEntrySelection, TocField, TocRebuildReport, UnderlineStyle,
-    UnsupportedXmlRef, WordCreationProfile, WordPackageClass,
+    RasterOptions, RasterOutput, RenderOptions, RevisionKind, RevisionView, RunItemRef,
+    RunPosition, RunRange, RunRef, StoryId, StoryItemKind, StoryKind, StoryRunPosition,
+    StoryRunRange, StyleBuilder, StyleType, TableRef, TcField, TocEntrySelection, TocField,
+    TocRebuildReport, UnderlineStyle, UnsupportedXmlRef, WordCreationProfile, WordPackageClass,
 };
 use rdocx_oxml::content_control::SdtContent;
 use rdocx_oxml::document::{BodyContent, CT_Body, CT_SectPr};
@@ -37,6 +37,12 @@ fn f254_story(document: &Document, kind: StoryKind) -> StoryId {
         .into_iter()
         .find(|story| story.kind() == kind)
         .unwrap()
+}
+
+#[test]
+fn f_x143_story_revision_listing_is_available_for_an_empty_document() {
+    let document = Document::new();
+    assert!(document.story_revisions().unwrap().is_empty());
 }
 
 fn f254_item(document: &Document, story: &StoryId, index: usize) -> ContentLocation {
@@ -1515,6 +1521,203 @@ fn replace_image_preserves_drawings_and_story_relationship_ownership() {
     );
 }
 
+const RELATIONSHIPS_NS: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+/// Replace the body of a fresh document and add the given main-document
+/// relationships and header, then reopen it.
+fn hyperlink_story_document(body: &str, header: Option<&str>) -> Document {
+    let mut seed = Document::new();
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap())).unwrap();
+    let header_reference = if header.is_some() {
+        r#"<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/></w:sectPr>"#
+    } else {
+        "<w:sectPr/>"
+    };
+    package.set_part(
+        "/word/document.xml",
+        format!(
+            r#"<w:document xmlns:w="{W_NS}" xmlns:r="{RELATIONSHIPS_NS}"><w:body>{body}{header_reference}</w:body></w:document>"#
+        )
+        .into_bytes(),
+    );
+    let relationships = package.get_or_create_part_rels("/word/document.xml");
+    for (id, target) in [
+        ("rIdShared", "https://shared.example/"),
+        ("rIdOwn", "https://own.example/"),
+    ] {
+        relationships.items.push(oxml_opc::Relationship {
+            id: id.to_owned(),
+            rel_type: oxml_opc::relationship::rel_types::HYPERLINK.to_owned(),
+            target: target.to_owned(),
+            target_mode: Some("External".to_owned()),
+        });
+    }
+    if let Some(header) = header {
+        relationships.add_with_id(
+            "rIdHeader",
+            oxml_opc::relationship::rel_types::HEADER,
+            "header1.xml",
+        );
+        package.set_part(
+            "/word/header1.xml",
+            format!(r#"<w:hdr xmlns:w="{W_NS}" xmlns:r="{RELATIONSHIPS_NS}">{header}</w:hdr>"#)
+                .into_bytes(),
+        );
+        package.content_types.add_override(
+            "/word/header1.xml",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml",
+        );
+        package
+            .get_or_create_part_rels("/word/header1.xml")
+            .items
+            .push(oxml_opc::Relationship {
+                id: "rIdHeaderLink".to_owned(),
+                rel_type: oxml_opc::relationship::rel_types::HYPERLINK.to_owned(),
+                target: "https://header.example/".to_owned(),
+                target_mode: Some("External".to_owned()),
+            });
+    }
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut bytes).unwrap();
+    Document::from_bytes(&bytes.into_inner()).unwrap()
+}
+
+fn hyperlink_targets(
+    document: &Document,
+    kind: StoryKind,
+) -> Vec<(String, Option<String>, Option<String>)> {
+    let story = f254_story(document, kind);
+    document
+        .story_links(&story)
+        .unwrap()
+        .into_iter()
+        .map(|(_, link)| (link.text, link.url, link.anchor))
+        .collect()
+}
+
+#[test]
+fn hyperlinks_can_be_retargeted_and_removed_in_every_story() {
+    let mut document = hyperlink_story_document(
+        concat!(
+            r#"<w:p><w:hyperlink r:id="rIdShared"><w:r><w:t>one</w:t></w:r></w:hyperlink>"#,
+            r#"<w:hyperlink r:id="rIdShared"><w:r><w:rPr><w:rStyle w:val="Hyperlink"/><w:b/></w:rPr><w:t>two</w:t></w:r></w:hyperlink></w:p>"#,
+            r#"<w:p><w:hyperlink w:anchor="target" w:history="1"><w:r><w:t>anchor</w:t></w:r></w:hyperlink></w:p>"#,
+            r#"<w:p><w:hyperlink r:id="rIdOwn" w:tooltip="tip"><w:r><w:t>own</w:t></w:r></w:hyperlink></w:p>"#,
+        ),
+        Some(
+            r#"<w:p><w:hyperlink r:id="rIdHeaderLink"><w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr><w:t>head</w:t></w:r></w:hyperlink></w:p>"#,
+        ),
+    );
+    let body = f254_story(&document, StoryKind::Body);
+    let before = document.to_bytes().unwrap();
+    assert!(document.set_hyperlink_url(&body, 4, "https://x/").is_err());
+    assert!(document.remove_hyperlink(&body, 4).is_err());
+    assert_eq!(document.to_bytes().unwrap(), before);
+
+    // A shared relationship is not retargeted for the other link.
+    document
+        .set_hyperlink_url(&body, 0, "https://one.example/")
+        .unwrap();
+    assert!(
+        document
+            .set_hyperlink_url(&body, 1, "https://stale/")
+            .is_err()
+    );
+    let body = f254_story(&document, StoryKind::Body);
+    // An anchor link becomes external and keeps its other attributes.
+    document
+        .set_hyperlink_url(&body, 2, "https://anchor.example/")
+        .unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    // An unshared relationship is retargeted in place.
+    document
+        .set_hyperlink_url(&body, 3, "https://own.example/new")
+        .unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    assert_eq!(
+        hyperlink_targets(&document, StoryKind::Body),
+        [
+            ("one", Some("https://one.example/"), None),
+            ("two", Some("https://shared.example/"), None),
+            ("anchor", Some("https://anchor.example/"), None),
+            ("own", Some("https://own.example/new"), None),
+        ]
+        .map(|(text, url, anchor): (&str, Option<&str>, Option<&str>)| (
+            text.to_owned(),
+            url.map(str::to_owned),
+            anchor.map(str::to_owned)
+        ))
+    );
+    let links = document.story_links(&body).unwrap();
+    // The package-wide snapshot numbers links exactly as story_links does.
+    assert_eq!(
+        document
+            .story_link_snapshots()
+            .unwrap()
+            .into_iter()
+            .filter(|(location, _)| location.story() == &body)
+            .collect::<Vec<_>>(),
+        links
+    );
+    assert_eq!(links[3].1.rel_id.as_deref(), Some("rIdOwn"));
+    assert_ne!(links[0].1.rel_id.as_deref(), Some("rIdShared"));
+
+    // Removing the last link to a relationship unwraps its runs and prunes it.
+    document.remove_hyperlink(&body, 1).unwrap();
+    let header = f254_story(&document, StoryKind::Header);
+    document
+        .set_hyperlink_url(&header, 0, "https://header.example/new")
+        .unwrap();
+    assert_eq!(
+        hyperlink_targets(&document, StoryKind::Header),
+        [(
+            "head".to_owned(),
+            Some("https://header.example/new".to_owned()),
+            None
+        )]
+    );
+    let header = f254_story(&document, StoryKind::Header);
+    document.remove_hyperlink(&header, 0).unwrap();
+
+    let saved = document.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&saved).unwrap();
+    assert_eq!(
+        reopened
+            .story_link_snapshots()
+            .unwrap()
+            .into_iter()
+            .map(|(_, link)| link.text)
+            .collect::<Vec<_>>(),
+        ["one", "anchor", "own"]
+    );
+    assert_eq!(reopened.paragraph(0).unwrap().text(), "onetwo");
+    let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&saved)).unwrap();
+    let document_xml =
+        String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+    assert!(document_xml.contains("<w:b/>"));
+    assert!(!document_xml.contains("Hyperlink"));
+    assert!(!document_xml.contains("w:anchor"));
+    assert!(document_xml.contains(r#"w:history="1""#));
+    assert!(document_xml.contains(r#"w:tooltip="tip""#));
+    let relationships = package.get_part_rels("/word/document.xml").unwrap();
+    assert!(relationships.get_by_id("rIdShared").is_none());
+    assert_eq!(
+        relationships.get_by_id("rIdOwn").unwrap().target,
+        "https://own.example/new"
+    );
+    let header_xml =
+        String::from_utf8(package.get_part("/word/header1.xml").unwrap().to_vec()).unwrap();
+    assert!(header_xml.contains("<w:t>head</w:t>"));
+    assert!(!header_xml.contains("hyperlink") && !header_xml.contains("rStyle"));
+    assert!(
+        package
+            .get_part_rels("/word/header1.xml")
+            .is_none_or(|relationships| relationships.items.is_empty())
+    );
+}
+
 #[test]
 fn issue_163_split_run_uses_the_direct_body_index_after_a_table() {
     let mut document = Document::new();
@@ -1526,6 +1729,113 @@ fn issue_163_split_run_uses_the_direct_body_index_after_a_table() {
     assert_eq!(body_index, 2);
     assert_eq!(document.split_run(body_index, 0, 6).unwrap(), 1);
     assert_eq!(document.paragraphs()[1].text(), "Target run.");
+}
+
+#[test]
+fn set_picture_size_resizes_every_drawing_of_a_relationship() {
+    const A_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+    const WP_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+    const WPG_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
+    let png: &[u8] = b"\x89PNG\r\n\x1a\noriginal";
+    let mut seed = Document::new();
+    seed.add_picture(png, "one.png", Length::emu(1), Length::emu(1));
+    seed.add_picture(
+        b"\x89PNG\r\n\x1a\nother",
+        "two.png",
+        Length::emu(1),
+        Length::emu(1),
+    );
+    let ids = seed
+        .images()
+        .into_iter()
+        .map(|image| image.embed_id)
+        .collect::<Vec<_>>();
+    let (shared, other) = (&ids[0], &ids[1]);
+    let picture = |id: &str, cx: u32, cy: u32| {
+        format!(
+            r#"<a:graphic><a:graphicData uri="{PIC_NS}"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="p"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="{id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>"#
+        )
+    };
+    let body = format!(
+        concat!(
+            r#"<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="100" cy="200"/><wp:effectExtent l="10" t="20" r="10" b="20"/><wp:docPr id="1" name="inline"/>{inline}</wp:inline></w:drawing></w:r></w:p>"#,
+            r#"<w:p><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>12345</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>678</wp:posOffset></wp:positionV><wp:extent cx="300" cy="300"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="2" name="anchor"/>{anchor}</wp:anchor></w:drawing></w:r></w:p>"#,
+            r#"<w:p><w:r><w:drawing><wp:inline><wp:extent cx="700" cy="700"/><wp:docPr id="3" name="group"/><a:graphic><a:graphicData uri="{WPG_NS}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr/><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="g"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="{shared}"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="700" cy="700"/></a:xfrm></pic:spPr></pic:pic></wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"#,
+            r#"<w:p><w:r><w:drawing><wp:inline><wp:extent cx="900" cy="900"/><wp:docPr id="4" name="other"/>{other}</wp:inline></w:drawing></w:r></w:p>"#,
+        ),
+        inline = picture(shared, 100, 200),
+        anchor = picture(shared, 300, 300),
+        other = picture(other, 900, 900),
+        WPG_NS = WPG_NS,
+        shared = shared,
+    );
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap())).unwrap();
+    package.set_part(
+        "/word/document.xml",
+        format!(
+            r#"<w:document xmlns:w="{W_NS}" xmlns:r="{RELATIONSHIPS_NS}" xmlns:wp="{WP_NS}" xmlns:a="{A_NS}" xmlns:pic="{PIC_NS}" xmlns:wpg="{WPG_NS}"><w:body>{body}<w:sectPr/></w:body></w:document>"#
+        )
+        .into_bytes(),
+    );
+    package
+        .get_or_create_part_rels("/word/document.xml")
+        .items
+        .push(oxml_opc::Relationship {
+            id: "rIdLink".to_owned(),
+            rel_type: oxml_opc::relationship::rel_types::HYPERLINK.to_owned(),
+            target: "https://example.test/".to_owned(),
+            target_mode: Some("External".to_owned()),
+        });
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut bytes).unwrap();
+    let mut document = Document::from_bytes(&bytes.into_inner()).unwrap();
+
+    let before = document.to_bytes().unwrap();
+    for (id, width) in [
+        ("rIdMissing", 50),
+        ("rIdLink", 50),
+        (shared.as_str(), -1),
+        (shared.as_str(), 0),
+    ] {
+        assert!(
+            document
+                .set_picture_size(id, Length::emu(width), Length::emu(400))
+                .is_err()
+        );
+        assert_eq!(document.to_bytes().unwrap(), before);
+    }
+    assert_eq!(
+        document
+            .set_picture_size(shared, Length::emu(50), Length::emu(400))
+            .unwrap(),
+        2
+    );
+
+    let saved = document.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&saved).unwrap();
+    assert_eq!(
+        reopened
+            .images()
+            .into_iter()
+            .map(|image| (image.width_emu, image.height_emu, image.is_anchor))
+            .collect::<Vec<_>>(),
+        [
+            (50, 400, false),
+            (50, 400, true),
+            (700, 700, false),
+            (900, 900, false)
+        ]
+    );
+    let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(&saved)).unwrap();
+    let xml = String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+    assert_eq!(xml.matches(r#"<a:ext cx="50" cy="400"/>"#).count(), 2);
+    assert!(xml.contains(r#"<wp:effectExtent l="5" t="40" r="5" b="40"/>"#));
+    assert!(xml.contains(r#"<wp:effectExtent l="0" t="0" r="0" b="0"/>"#));
+    assert!(xml.contains("<wp:posOffset>12345</wp:posOffset>"));
+    assert!(xml.contains(r#"<a:ext cx="700" cy="700"/>"#));
+    assert!(xml.contains(r#"<a:ext cx="900" cy="900"/>"#));
 }
 
 #[test]
@@ -22760,6 +23070,81 @@ fn story_items_expose_safe_direct_body_owners() {
 }
 
 #[test]
+fn story_item_snapshots_mark_the_direct_children_of_every_owner() {
+    let document = document_with_header_story(
+        r#"<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>left</w:t></w:r><w:sdt><w:sdtContent><w:r><w:t xml:space="preserve"> inline</w:t></w:r></w:sdtContent></w:sdt><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p><w:sdt><w:sdtContent><w:sdt><w:sdtContent><w:p><w:r><w:t>block</w:t></w:r></w:p></w:sdtContent></w:sdt></w:sdtContent></w:sdt><w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:hdr>"#,
+    );
+    let items = document
+        .story_item_snapshots()
+        .unwrap()
+        .into_iter()
+        .filter(|item| item.location().story().kind() != rdocx::StoryKind::Body)
+        .map(|item| {
+            (
+                item.location().story().kind(),
+                item.location().item_kind(),
+                item.is_direct_child(),
+                item.text().map(str::to_owned),
+            )
+        })
+        .collect::<Vec<_>>();
+    let text = |value: &str| Some(value.to_owned());
+    assert_eq!(
+        items,
+        [
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::Paragraph,
+                true,
+                text("left inline1")
+            ),
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::ContentControl,
+                false,
+                text(" inline")
+            ),
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::Field,
+                false,
+                text("1")
+            ),
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::ContentControl,
+                true,
+                text("block")
+            ),
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::ContentControl,
+                false,
+                text("block")
+            ),
+            (
+                rdocx::StoryKind::Header,
+                rdocx::StoryItemKind::Table,
+                true,
+                None
+            ),
+            (
+                rdocx::StoryKind::TableCell,
+                rdocx::StoryItemKind::PreservedNode,
+                true,
+                None
+            ),
+            (
+                rdocx::StoryKind::TableCell,
+                rdocx::StoryItemKind::Paragraph,
+                true,
+                text("cell")
+            ),
+        ]
+    );
+}
+
+#[test]
 fn comparison_drawings_survive_accept_and_reject() {
     for granularity in [
         rdocx::ComparisonGranularity::Run,
@@ -24817,6 +25202,290 @@ fn scoped_revision_resolution_visits_every_compared_story_once() {
     let resolved = comparison_part_xml(&mut document, "/word/header1.xml");
     assert!(!resolved.contains(r#"w:id="71""#), "{resolved}");
     assert!(resolved.contains(r#"w:id="72""#), "{resolved}");
+}
+
+fn story_revision_resolution_counts(document: &mut Document) -> (usize, usize) {
+    let bytes = document
+        .to_bytes()
+        .expect("serialize tracked story document");
+    let accepted = Document::from_bytes(&bytes)
+        .expect("open accepted story copy")
+        .accept_all()
+        .expect("accept every story revision");
+    let rejected = Document::from_bytes(&bytes)
+        .expect("open rejected story copy")
+        .reject_all()
+        .expect("reject every story revision");
+    (accepted, rejected)
+}
+
+fn story_revision_rows(document: &Document) -> Vec<(StoryKind, String, usize, i32, RevisionKind)> {
+    let stories = document.stories().expect("inventory stories");
+    document
+        .story_revisions()
+        .expect("list story revisions")
+        .into_iter()
+        .map(|revision| {
+            assert!(
+                stories.contains(revision.story()),
+                "{:?} is not a reported story",
+                revision.story()
+            );
+            (
+                revision.story().kind(),
+                revision.story().part_name().to_owned(),
+                revision.story().owner_index(),
+                revision.id(),
+                revision.kind(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn story_revisions_list_a_compared_footer_that_the_main_listing_omits() {
+    let footer_document = |text: &str| {
+        let mut document = Document::new();
+        document.add_paragraph("Body.");
+        document.set_footer(text);
+        Document::from_bytes(&document.to_bytes().expect("serialize footer fixture"))
+            .expect("open footer fixture")
+    };
+    let mut tracked = footer_document("Footer lorem ipsum");
+    let edited = footer_document("Footer lorem IPSUM");
+    tracked
+        .compare(&edited, "R", "2026-09-27T12:00:00Z")
+        .expect("compare footer-only edit");
+
+    assert!(tracked.revisions().is_empty());
+    let revisions = tracked.story_revisions().expect("list story revisions");
+    assert_eq!(revisions.len(), 2, "{revisions:?}");
+    let footer = tracked
+        .stories()
+        .expect("inventory stories")
+        .into_iter()
+        .find(|story| story.kind() == StoryKind::Footer)
+        .expect("footer story");
+    assert!(revisions.iter().all(|revision| revision.story() == &footer));
+    assert!(revisions.iter().all(|revision| revision.author() == "R"));
+    assert!(
+        revisions
+            .iter()
+            .all(|revision| revision.timestamp() == Some("2026-09-27T12:00:00Z"))
+    );
+    let mut kinds = revisions
+        .iter()
+        .map(|revision| revision.kind())
+        .collect::<Vec<_>>();
+    kinds.sort_by_key(|kind| format!("{kind:?}"));
+    assert_eq!(kinds, [RevisionKind::Deletion, RevisionKind::Insertion]);
+    assert_eq!(story_revision_resolution_counts(&mut tracked), (2, 2));
+
+    let reopened = Document::from_bytes(&tracked.to_bytes().expect("serialize redline"))
+        .expect("reopen redline");
+    assert_eq!(
+        reopened.story_revisions().expect("list reopened revisions"),
+        revisions
+    );
+}
+
+#[test]
+fn story_revisions_name_every_compared_story_and_match_resolution_counts() {
+    let mut tracked = document_with_comparison_stories("original");
+    let edited = document_with_comparison_stories("edited");
+    tracked
+        .compare(&edited, "Word", "2026-09-04T09:00:00Z")
+        .expect("full-story comparison");
+
+    let rows = story_revision_rows(&tracked);
+    let mut per_story = Vec::<(StoryKind, String, usize, usize)>::new();
+    for (kind, part_name, owner_index, _, _) in &rows {
+        match per_story
+            .iter_mut()
+            .find(|(k, p, o, _)| k == kind && p == part_name && o == owner_index)
+        {
+            Some(entry) => entry.3 += 1,
+            None => per_story.push((*kind, part_name.clone(), *owner_index, 1)),
+        }
+    }
+    let expected_stories = [
+        (StoryKind::Body, "/word/document.xml"),
+        (StoryKind::Header, "/word/header1.xml"),
+        (StoryKind::Footer, "/word/footer1.xml"),
+        (StoryKind::Comment, "/word/comments.xml"),
+        (StoryKind::Footnote, "/word/footnotes.xml"),
+        (StoryKind::Endnote, "/word/endnotes.xml"),
+    ];
+    assert_eq!(
+        per_story
+            .iter()
+            .map(|(kind, part_name, owner_index, _)| (*kind, part_name.as_str(), *owner_index))
+            .collect::<Vec<_>>(),
+        expected_stories
+            .iter()
+            .map(|(kind, part_name)| (*kind, *part_name, 0))
+            .collect::<Vec<_>>(),
+        "{rows:?}"
+    );
+    assert!(per_story.iter().all(|(.., count)| *count >= 2), "{rows:?}");
+    assert_eq!(
+        rows.iter()
+            .filter(|(kind, ..)| *kind == StoryKind::Body)
+            .count(),
+        tracked.revisions().len()
+    );
+    assert_eq!(
+        story_revision_resolution_counts(&mut tracked),
+        (rows.len(), rows.len())
+    );
+}
+
+#[test]
+fn story_revisions_fold_cells_and_report_text_boxes_as_their_own_story() {
+    let mut header = document_with_comparison_header(concat!(
+        r#"<w:tbl><w:tblPr/><w:tblGrid/><w:tr><w:tc><w:p><w:ins w:id="81" w:author="Ada"><w:r><w:t>cell</w:t></w:r></w:ins></w:p></w:tc></w:tr></w:tbl>"#,
+        r#"<w:p><w:pPr><w:rPr><w:ins w:id="82" w:author="Ada"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:rPrChange w:id="82" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>marked</w:t></w:r></w:p>"#,
+        r#"<w:p><w:r><w:pict><v:shape id="box" style="width:100pt;height:50pt"><v:textbox><w:txbxContent><w:p><w:del w:id="83" w:author="Grace"><w:r><w:delText>boxed</w:delText></w:r></w:del></w:p></w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>"#,
+    ));
+    let header_row = |kind, id, revision| (kind, "/word/header1.xml".to_owned(), 0, id, revision);
+    assert_eq!(
+        story_revision_rows(&header),
+        [
+            header_row(StoryKind::Header, 81, RevisionKind::Insertion),
+            header_row(StoryKind::Header, 82, RevisionKind::Insertion),
+            header_row(StoryKind::Header, 82, RevisionKind::RunPropertyChange),
+            header_row(StoryKind::TextBox, 83, RevisionKind::Deletion),
+        ]
+    );
+    assert_eq!(story_revision_resolution_counts(&mut header), (4, 4));
+
+    let mut body = document_with_content_controls(&wrap_word_body(concat!(
+        r#"<w:p><w:ins w:id="91" w:author="Ada"><w:r><w:t>body</w:t></w:r></w:ins></w:p>"#,
+        r#"<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="vml-box" style="width:100pt;height:50pt"><v:textbox><w:txbxContent><w:p><w:ins w:id="92" w:author="Ada"><w:r><w:t>vml box</w:t></w:r></w:ins></w:p></w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>"#,
+        r#"<w:p><w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:v="urn:schemas-microsoft-com:vml"><mc:Choice Requires="wps"><w:pict><v:shape id="choice-box"><v:textbox><w:txbxContent><w:p><w:ins w:id="93" w:author="Ada"><w:r><w:t>choice</w:t></w:r></w:ins></w:p></w:txbxContent></v:textbox></v:shape></w:pict></mc:Choice><mc:Fallback><w:pict><v:shape id="fallback-box"><v:textbox><w:txbxContent><w:p><w:ins w:id="93" w:author="Ada"><w:r><w:t>fallback</w:t></w:r></w:ins></w:p></w:txbxContent></v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>"#,
+    )));
+    assert_eq!(body.revisions().len(), 1);
+    let body_row = |kind, id| {
+        let revision = RevisionKind::Insertion;
+        (kind, "/word/document.xml".to_owned(), 0, id, revision)
+    };
+    assert_eq!(
+        story_revision_rows(&body),
+        [
+            body_row(StoryKind::Body, 91),
+            body_row(StoryKind::TextBox, 92),
+            body_row(StoryKind::Body, 93),
+            body_row(StoryKind::Body, 93),
+        ]
+    );
+    assert_eq!(story_revision_resolution_counts(&mut body), (4, 4));
+}
+
+#[test]
+fn story_revisions_refuse_a_revision_outside_every_story_owner() {
+    let mut document = document_with_comparison_stories("same");
+    let bytes = document.to_bytes().expect("serialize note fixture");
+    let mut package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(bytes))
+        .expect("open note fixture package");
+    let footnotes = String::from_utf8(
+        package
+            .get_part("/word/footnotes.xml")
+            .expect("footnotes part")
+            .to_vec(),
+    )
+    .expect("footnotes are UTF-8")
+    .replacen(
+        "<w:separator/></w:r>",
+        r#"<w:separator/></w:r><w:ins w:id="95" w:author="Ada"><w:r><w:t>edited separator</w:t></w:r></w:ins>"#,
+        1,
+    );
+    assert!(footnotes.contains(r#"w:id="95""#), "{footnotes}");
+    package.set_part("/word/footnotes.xml", footnotes.into_bytes());
+    let mut output = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut output).expect("write note fixture");
+    let mut document = Document::from_bytes(output.get_ref()).expect("open note fixture");
+
+    assert!(document.stories().is_ok());
+    let error = document
+        .story_revisions()
+        .expect_err("a separator revision has no story");
+    assert!(error.to_string().contains("has no story owner"), "{error}");
+    // Resolution still reaches the separator, so omitting it would undercount.
+    assert_eq!(story_revision_resolution_counts(&mut document), (1, 1));
+}
+
+#[test]
+fn story_revisions_scan_the_main_part_bytes_that_resolution_scans() {
+    let word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    let listed_and_resolved = |mut document: Document| {
+        let rows = story_revision_rows(&document);
+        assert_eq!(
+            story_revision_resolution_counts(&mut document),
+            (rows.len(), rows.len()),
+            "{rows:?}"
+        );
+        assert_eq!(document.accept_all().expect("accept in memory"), rows.len());
+        rows
+    };
+    let body_row = |id| {
+        let revision = RevisionKind::Insertion;
+        (
+            StoryKind::Body,
+            "/word/document.xml".to_owned(),
+            0,
+            id,
+            revision,
+        )
+    };
+
+    // The typed serialization writes the default namespace as `w:`, so a
+    // listing of it would miss the unprefixed revision that accept resolves.
+    let default_namespace = document_with_content_controls(&format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><document xmlns="{word}" xmlns:w="{word}"><body><p><ins w:id="30" w:author="Ada"><r><t>added</t></r></ins></p></body></document>"#
+    ));
+    assert_eq!(listed_and_resolved(default_namespace), [body_row(30)]);
+
+    // The typed serialization drops `xmlns:x` from a modeled ancestor, so
+    // `stories()` reports no text box and the revision belongs to the body.
+    // A modified document replays the declaration on a paragraph or run and
+    // cannot be staged with it on the body, and the listing follows accept.
+    for owner in ["body", "p", "r"] {
+        let declaration = |element| {
+            if element == owner {
+                format!(r#" xmlns:x="{word}""#)
+            } else {
+                String::new()
+            }
+        };
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{word}"><w:body{}><w:p{}><w:r{}><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="box"><v:textbox><x:txbxContent><x:p><x:ins x:id="31" x:author="Ada"><x:r><x:t>boxed</x:t></x:r></x:ins></x:p></x:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p></w:body></w:document>"#,
+            declaration("body"),
+            declaration("p"),
+            declaration("r"),
+        );
+        let document = document_with_content_controls(&xml);
+        assert!(document.revisions().is_empty());
+        assert_eq!(listed_and_resolved(document), [body_row(31)], "{xml}");
+
+        let mut modified = document_with_content_controls(&xml);
+        modified.add_paragraph("after");
+        if owner == "body" {
+            let listed = modified.story_revisions().expect_err("unstaged listing");
+            let accepted = modified.accept_all().expect_err("unstaged accept");
+            assert_eq!(listed.to_string(), accepted.to_string());
+        } else {
+            assert_eq!(listed_and_resolved(modified), [body_row(31)], "{xml}");
+        }
+    }
+
+    // A text box that both serializations report keeps its own story when
+    // one before it loses its binding.
+    let mixed = document_with_content_controls(&format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{word}"><w:body><w:p xmlns:x="{word}"><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="lost"><v:textbox><x:txbxContent><x:p><x:ins x:id="31" x:author="Ada"><x:r><x:t>lost</x:t></x:r></x:ins></x:p></x:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p><w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape id="kept"><v:textbox><w:txbxContent><w:p><w:ins w:id="32" w:author="Ada"><w:r><w:t>kept</w:t></w:r></w:ins></w:p></w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p></w:body></w:document>"#
+    ));
+    let mut kept = body_row(32);
+    kept.0 = StoryKind::TextBox;
+    assert_eq!(listed_and_resolved(mixed), [body_row(31), kept]);
 }
 
 #[test]
@@ -38928,4 +39597,225 @@ fn issue_159_content_control_identity_only_comparison_has_no_revision() {
         .unwrap();
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     assert!(compared.revisions().is_empty());
+}
+
+mod keep_with_next_regressions {
+    use rdocx::{Document, Length};
+
+    const BODY: &str = "Sed ut perspiciatis unde omnis iste natus error sit voluptatem \
+        accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo \
+        inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo \
+        enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia \
+        consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.";
+
+    /// A paragraph on an exact line, with its spacing set directly.
+    fn add_line(document: &mut Document, text: &str, line: f64, after: f64) {
+        let mut paragraph = document.add_paragraph(text);
+        paragraph.set_line_spacing(line);
+        paragraph.set_space_before(Length::pt(0.0));
+        paragraph.set_space_after(Length::pt(after));
+    }
+
+    /// `count` single-line fillers of 14 points, 14 * `count` points in all.
+    fn fillers(count: usize) -> Document {
+        let mut document = Document::new();
+        for index in 0..count {
+            add_line(&mut document, &format!("Filler {index:02}"), 14.0, 0.0);
+        }
+        document
+    }
+
+    /// An 18 point heading line in the Heading 1 style, which keeps with next.
+    fn add_heading(document: &mut Document, text: &str, after: f64) {
+        add_line(document, text, 18.0, after);
+        let last = document.content_count() - 1;
+        document
+            .paragraph_mut(last)
+            .expect("the heading was just added")
+            .set_style("Heading1");
+    }
+
+    /// The physical page each body item from `first` on starts on.
+    fn pages_from(document: &Document, first: usize) -> Vec<usize> {
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        (first..document.content_count())
+            .map(|index| {
+                result
+                    .body_layout_fragments(index)
+                    .expect("body index is in range")[0]
+                    .physical_page
+            })
+            .collect()
+    }
+
+    /// The 648 point page holds 44 fillers (616 points) and an 18 point
+    /// heading. The next line would still fit under the heading, but not under
+    /// its 6 points after, so the body opens page 2 and the heading goes with
+    /// it. Layout left out the space after and kept the heading on page 1.
+    #[test]
+    fn a_heading_follows_its_next_line_past_its_own_space_after() {
+        let mut document = fillers(44);
+        add_heading(&mut document, "Heading", 6.0);
+        add_line(&mut document, BODY, 14.0, 0.0);
+        assert_eq!(pages_from(&document, 44), vec![2, 2]);
+
+        // Without the space after, the heading and the first line fit.
+        let mut document = fillers(44);
+        add_heading(&mut document, "Heading", 0.0);
+        let mut body = document.add_paragraph(BODY);
+        body.set_line_spacing(14.0);
+        body.set_space_before(Length::pt(0.0));
+        body.set_space_after(Length::pt(0.0));
+        body.set_widow_control(false);
+        assert_eq!(pages_from(&document, 44), vec![1, 1]);
+    }
+
+    /// One line of the next paragraph fits under the heading, but widow
+    /// control does not leave a single line at the foot of the page, so that
+    /// paragraph opens page 2 and the heading, kept with next by direct
+    /// formatting here, goes with it. Layout measured the next paragraph's
+    /// first line only.
+    #[test]
+    fn a_kept_paragraph_follows_a_widow_controlled_next_paragraph() {
+        let build = |widow_control: bool| {
+            let mut document = fillers(44);
+            add_line(&mut document, "Kept with next", 18.0, 0.0);
+            document
+                .paragraph_mut(44)
+                .expect("the kept paragraph was just added")
+                .set_keep_with_next(true);
+            add_line(&mut document, BODY, 14.0, 0.0);
+            document
+                .paragraph_mut(45)
+                .expect("the body was just added")
+                .set_widow_control(widow_control);
+            document
+        };
+        assert_eq!(pages_from(&build(true), 44), vec![2, 2]);
+        // Without widow control the body leaves its first line on page 1.
+        assert_eq!(pages_from(&build(false), 44), vec![1, 1]);
+    }
+
+    /// Two headings that keep with next and the body after them share a page:
+    /// the whole chain moves when the body's first line does not fit. Layout
+    /// checked each heading against the paragraph after it only, which left
+    /// the first heading alone at the foot of page 1.
+    #[test]
+    fn a_chain_of_kept_paragraphs_moves_as_one() {
+        let mut document = fillers(43);
+        add_heading(&mut document, "Heading", 0.0);
+        add_heading(&mut document, "Subheading", 0.0);
+        add_line(&mut document, BODY, 14.0, 0.0);
+        assert_eq!(pages_from(&document, 43), vec![2, 2, 2]);
+
+        // A chain no page can hold still leaves from its first heading, as in
+        // Word, and then breaks where page 2 ends: 36 headings of 18 points
+        // fill its 648 points.
+        let mut document = fillers(43);
+        for index in 0..40 {
+            add_heading(&mut document, &format!("Heading {index:02}"), 0.0);
+        }
+        add_line(&mut document, BODY, 14.0, 0.0);
+        let mut expected = vec![2; 36];
+        expected.resize(41, 3);
+        assert_eq!(pages_from(&document, 43), expected);
+    }
+
+    /// A paragraph that keeps with next stays with the first row of the table
+    /// after it, whose exact 24 point row fits under the paragraph but not
+    /// under its 8 points after.
+    #[test]
+    fn a_kept_paragraph_follows_the_first_row_of_a_table() {
+        let mut document = fillers(43);
+        add_line(&mut document, "Kept with next", 18.0, 8.0);
+        document
+            .paragraph_mut(43)
+            .expect("the kept paragraph was just added")
+            .set_keep_with_next(true);
+        {
+            let mut table = document.add_table(2, 1);
+            for row in 0..2 {
+                table
+                    .cell(row, 0)
+                    .expect("cell exists")
+                    .set_text(&format!("Row {row}"));
+                table
+                    .row(row)
+                    .expect("row exists")
+                    .set_height_exact(Length::pt(24.0));
+            }
+        }
+        assert_eq!(pages_from(&document, 43), vec![2, 2]);
+    }
+}
+
+mod row_minimum_height_split_regressions {
+    use rdocx::{Document, Length};
+
+    /// 43 fillers of 14 points leave 46 of the 648 point page, then a
+    /// borderless one-cell table whose row holds four 14 point lines, with a
+    /// minimum height of `minimum` points when there is one. Three lines, 42
+    /// points, fit on page 1.
+    fn probe(minimum: Option<f64>) -> Document {
+        let mut document = Document::new();
+        for index in 0..43 {
+            let mut paragraph = document.add_paragraph(&format!("Filler {index:02}"));
+            paragraph.set_line_spacing(14.0);
+            paragraph.set_space_before(Length::pt(0.0));
+            paragraph.set_space_after(Length::pt(0.0));
+        }
+        {
+            let mut table = document.add_table(1, 1);
+            table.set_cell_margins(
+                Length::pt(0.0),
+                Length::pt(5.0),
+                Length::pt(0.0),
+                Length::pt(5.0),
+            );
+            let mut cell = table.cell(0, 0).expect("cell exists");
+            cell.set_text("Row line 0");
+            for line in 1..4 {
+                cell.add_paragraph(&format!("Row line {line}"));
+            }
+            for line in 0..4 {
+                let mut paragraph = cell.paragraph_mut(line).expect("cell paragraph");
+                paragraph.set_line_spacing(14.0);
+                paragraph.set_space_before(Length::pt(0.0));
+                paragraph.set_space_after(Length::pt(0.0));
+            }
+            if let Some(minimum) = minimum {
+                table
+                    .row(0)
+                    .expect("row exists")
+                    .set_height(Length::pt(minimum));
+            }
+        }
+        document
+    }
+
+    /// The pages the table's row lands on.
+    fn row_pages(document: &Document) -> Vec<usize> {
+        let result = document
+            .layout_deterministic()
+            .expect("document lays out in deterministic font mode");
+        result
+            .body_layout_fragments(43)
+            .expect("the table is body item 43")
+            .iter()
+            .map(|fragment| fragment.physical_page)
+            .collect()
+    }
+
+    /// Word 16 splits a row with a minimum height only when the part that
+    /// stays on the first page reaches that minimum, and otherwise moves the
+    /// row whole. Layout split it whatever its minimum.
+    #[test]
+    fn a_row_splits_only_when_its_first_part_reaches_its_minimum_height() {
+        assert_eq!(row_pages(&probe(None)), vec![1, 2]);
+        assert_eq!(row_pages(&probe(Some(40.0))), vec![1, 2]);
+        assert_eq!(row_pages(&probe(Some(44.0))), vec![2]);
+        assert_eq!(row_pages(&probe(Some(100.0))), vec![2]);
+    }
 }

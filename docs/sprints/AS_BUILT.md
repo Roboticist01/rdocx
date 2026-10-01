@@ -16458,3 +16458,179 @@ unsupported ownership and geometry cases rather than duplicating content.
 **Hash harness.** Unchanged, 49 of 49 at the integrated S76 gate.
 
 **Notes for future sessions.** The broader Issue 159 and 161 acceptance matrices remain assigned to S78. Retain `work/f-x139-codex` and its worktree through sprint closure.
+
+### F-X140, Rendering and layout contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated PRs 175, 188, 196, 199, 200, 206 and 207.
+Presentation PDF backgrounds, optional gradient attributes, duplicated
+paragraph properties, picture geometry and connector styles now survive the
+supported read, edit and render paths. Word keep-with-next chains, row minimum
+heights and warm restart boundaries follow their focused regressions. PDF
+ToUnicode maps preserve ligature text for extraction.
+
+**Non-obvious choices.** PR 188's PDF mapping change and its 14 expected
+hash keys were isolated in a labelled commit. The PR 206 fixture expectation
+was corrected only after inspecting the generated deck. Stacked and
+overlapping contributions were replayed against the completed S76 prefix,
+with unmodelled XML and schema order preserved.
+
+**Deviations from the design plan.** None. The full workspace gate and sprint
+review are reserved for the final integrated S77 result under the current
+workflow.
+
+**Spec sections touched.** `docs/hld/05-drawingml-model.md`,
+`docs/hld/06-presentationml-model.md`,
+`docs/hld/07-inheritance-and-resolution.md`,
+`docs/hld/08-rendering-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The worker's golden gate passed pinned Word and presentation
+fidelity, focused layout and presentation regression suites,
+`/verify --scoped F-X140`, and microscope pass 1 with zero defects and zero
+smells. The integrated prefix passed formatting, workspace Clippy and the
+affected Word and presentation suites reached by the interrupted full run.
+The complete full gate remains due at S77 closure.
+
+**Hash harness.** Fourteen declared `pdf/resources` and `pdf/bytes` keys
+changed across seven samples for the ToUnicode ligature correction. All 49
+entries matched the reviewed baseline in the worker handoff.
+
+**Notes for future sessions.** Retain the F-X140 worker branch and worktree
+through the final sprint review. PR-head CI still needs rerun after the
+contribution branches are rebased.
+
+### F-X141, Word Python contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-09-30
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 176, 187, 194,
+201, 203 and 212. The Word Python binding now exposes contributed table,
+section, style, field, replacement, story, rendering and core-property
+operations with matching stubs and native behavior. Section updates fill
+missing partners from layout defaults. New native compatible documents define
+common Word styles. Inserted TOCs rebuild after heading changes.
+
+**Non-obvious choices.** PR 194's inherited S76 commits and PR 203's PR 201
+base were excluded from replay. A shared Python test helper was reconciled
+without losing either bytes or text behavior. The bundled presentation
+template SHA was checked against preserved revision metadata. The worker
+records the separately labelled F-X141 hash update at `2382c5c9`. A
+microscope finding led to bounded TOC width arithmetic and a regression for
+extreme section values. Package measurements and stale sprint-policy test
+expectations were refreshed after the scoped gate exposed them.
+
+**Deviations from the design plan.** None in product scope. The complete
+workspace gate and sprint review remain due once at S77 closure.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/04-opc-and-packaging.md`, `docs/hld/08-rendering-spec.md`,
+`docs/hld/10-bindings-spec.md` and `docs/hld/14-development-backlog.md`.
+
+**Tests.** The native common-style and TOC rebuild acceptance cases failed
+before implementation and passed afterward. Final Word suites passed 482 unit,
+326 integration and 658 regression tests. Presentation suites passed 84 unit,
+243 integration and 33 CLI integration tests. The Python binding suite passed
+120 tests, strict mypy and stubtest passed, and the public authoring
+conformance harness passed with a host-only compile timeout increase. Scoped
+Clippy, both WASM targets, 131 repository-policy tests, five touched-crate
+publish dry runs and the 10 MiB archive limit passed. Microscope pass 3
+reported zero defects and zero smells.
+
+**Hash harness.** Sixteen declared keys changed: `word/styles.xml` in all
+seven samples, and `word/document.xml`, `pdf/pages` and `pdf/bytes` in each
+of feature_showcase, proposal and report. All 49 entries matched the
+separately reviewed baseline. The integrated full sprint hash check remains
+due at S77 closure.
+
+**Notes for future sessions.** Issue 168 remains open. F-X147 and F-X153
+cover the remaining acceptance checklist. PR-head CI needs rerun after the
+contribution branches are rebased. The clean F-X141 worker worktree can be
+removed after this dependency-prefix record to save disk space.
+
+### F-X142, Presentation Python contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 173, 181, 189,
+192, 208 and 209. The Presentation Python binding now retains run handles,
+provides checked and aliased text replacement, resolves inherited placeholder
+geometry, and supports contributed shape, group and table operations. The
+remaining Issue 169 checklist gained shape hyperlink operations, shape and
+text-range comment anchors, and rendering for built-in table styles without
+a package definition.
+
+**Non-obvious choices.** PRs 208 and 209 inherited PR 189, so only their
+incremental changes were replayed. Direct geometry presence stays distinct
+from the resolved `effective_geometry()` accessor. Comment anchors retain
+schema order and unknown XML forms. Group refit and row height behavior follow
+the pinned python-pptx 1.0.2 workflow cases. F-X148 independently audits the
+production fixture after this integration.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/05-drawingml-model.md`,
+`docs/hld/06-presentationml-model.md`,
+`docs/hld/07-inheritance-and-resolution.md`,
+`docs/hld/08-rendering-spec.md`, `docs/hld/10-bindings-spec.md` and
+`docs/hld/14-development-backlog.md`.
+
+**Tests.** The focused Python and Rust deck workflow covered saved-package
+round-trip, validation, rendering, hyperlinks, comments, groups, tables and
+built-in styles. Scoped verification and microscope pass 1 reported zero
+defects and zero smells. The integrated full workspace gate, 63 Presentation
+Python tests, strict mypy and stubtest, pinned python-pptx cases, 421-slide
+fidelity completeness gate, publication dry run and crate size ceiling passed.
+
+**Hash harness.** Unchanged after F-X140 and F-X141. All 49 entries matched
+the reviewed integrated baseline.
+
+**Notes for future sessions.** Issue 169 remains open until F-X148 and F-X156
+finish their independently scheduled production and rendering acceptance.
+The 421-slide SSIM trend is advisory and remains below its 80 percent target.
+PR heads must be rebased and rerun in CI before closure.
+
+### F-X143, Revision listing and CLI story contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-10-01
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 186 and 204 after
+the S76 PR 198 prefix. Native and Python revision listing now identify every
+supported story. CLI schema 1 retains its existing fields while adding story
+identity, counts and `all-supported-stories` scope. Text and conversions keep
+the body and warn once by named part when a related story is malformed.
+Validation rejects malformed related parts and undefined styles, including
+missing definitions in Rust-generated samples.
+
+**Non-obvious choices.** Owned `StoryRevision` snapshots agree with the
+supported revision resolver. A revision reached by resolution without a story
+owner is an error. The CDATA regression found by microscope pass 1 was fixed
+and checked again. PR 204's inherited PR 198 commits were not replayed.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/04-opc-and-packaging.md`, `docs/hld/10-bindings-spec.md` and
+`docs/hld/12-testing-strategy.md`.
+
+**Tests.** Focused story revision, CLI text, conversion and validation cases
+passed after save and reopen. The Word Python suite passed 121 tests with
+strict mypy and stubtest. Scoped verification and microscope pass 3 reported
+zero defects and zero smells. The integrated full workspace, 18-page Word
+fidelity completeness and five-page multilingual hard gate, publish dry run
+and dependency direction checks passed.
+
+**Hash harness.** Unchanged after the two reviewed S77 baseline updates. All
+49 entries matched.
+
+**Notes for future sessions.** Issues 160 and 165 remain open for their full
+acceptance matrices in later sprints. PR heads need rebase and CI reruns before
+closure. The 18-page Word SSIM trend is advisory and below its target.
