@@ -1,6 +1,6 @@
 # F-X155, Presentation drawing API contribution
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S80
 **Size**: L
 **Depends on**: F-X142, F-X154
@@ -35,8 +35,10 @@ Review each assigned PR's incremental diff and replay its accepted behaviour in 
 | regression | Relationship and schema-order cases | Slide target removal prunes only owned relationships, and changed drawing children remain in schema order with raw siblings intact. |
 | integration | Existing `rpptx-py` suite and typing smoke | Python handles, enum values and stubs agree with native mutations after save and reopen. |
 | differential | Pinned python-pptx 1.0.2 reader | Authored effects, links and geometry have equivalent parsed structure, with documented intentional API differences. |
-| golden | Cross-viewer drawing probe | Deterministic rpptx render matches pinned LibreOffice and PowerPoint observations within declared tolerances. |
-| gate | Backlog integration test gate | Authored effects and links reopen in python-pptx, validate and match pinned cross-viewer renders. |
+| golden | Cross-viewer drawing probe | Deterministic rpptx render matches pinned LibreOffice 26.2.5.2 within a declared tolerance. PowerPoint 16.104 remains unverified under the S80 scope decision. |
+| gate | Backlog integration test gate | Authored effects and links reopen in python-pptx, validate and match the pinned LibreOffice versus deterministic rpptx render within the declared tolerance. |
+
+The authored deck package SHA-256 is `5a612c739359ea8f56ff18f797b9df38f56440fedaf64f756d31760516b91344`. The native and LibreOffice 26.2.5.2 renders are 2001 by 1125 pixels at 150 DPI. At least 99.7% of pixels must have a maximum RGB channel difference of 12 or less, and each channel's mean absolute error must be 0.2 or less on the 0 to 255 scale. Observed values were 99.790149% and 0.150657, 0.146659 and 0.141661. Python-pptx 1.0.2 reopened the deck and confirmed the authored geometry and slide target. PowerPoint 16.104 was not available for a trustworthy check.
 
 ## HLD impact
 
@@ -61,12 +63,12 @@ Expected unchanged. Any intentional harness change needs its own labelled behavi
 
 ## Implementation checklist
 
-- [ ] Review PRs 219, 221, 224, 230 and 234 against their current bases and the F-X154 prefix.
-- [ ] Add failing cases for slide jumps, line ends, shadows, geometry and effect index to existing test entrypoints.
-- [ ] Reconcile OXML, facade, renderer, Python handles and stubs in dependency order.
-- [ ] Validate, reopen and cross-render the authored drawing deck.
-- [ ] Run focused checks, scoped verification and microscope to zero findings.
+- [x] Review PRs 219, 221, 224, 230 and 234 against their current bases and the F-X154 prefix.
+- [x] Add failing cases for slide jumps, line ends, shadows, geometry and effect index to existing test entrypoints.
+- [x] Reconcile OXML, facade, renderer, Python handles and stubs in dependency order.
+- [x] Validate, reopen and cross-render the authored drawing deck.
+- [x] Run focused checks, scoped verification and microscope to zero findings.
 
 ## Open questions
 
-None. Issue 217 assigns slide import and scoped replacement to F-X156, and the five PRs define this story's authoring slice.
+Issue 217 assigns slide import and scoped replacement to F-X156, and the five PRs define this story's authoring slice. For S80 closure, the user accepted pinned LibreOffice 26.2.5.2 versus deterministic rpptx rendering and python-pptx reopen evidence while PowerPoint 16.104 remains explicitly unverified. The installed PowerPoint is 16.113.3 and its AppleScript version query did not return. This scope decision does not claim a PowerPoint pass.

@@ -1,22 +1,24 @@
 use std::path::PathBuf;
 
 use oxml_py_support::{ContentPath, PathSeg};
-use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyByteArray, PyBytes, PyIterator, PyList, PySlice, PyString, PyTuple};
+use smallvec::smallvec;
 
-use crate::dml::{FillTarget, PyFillFormat, PyLineFormat};
+use crate::dml::{FillTarget, PyFillFormat, PyLineFormat, PyShadowFormat};
 use crate::normalize_index;
 use crate::presentation::PyPresentation;
 use crate::rpptx_to_pyerr;
+use crate::slide::PySlide;
 use crate::table::PyTable;
 use crate::text::PyTextFrame;
 use crate::validate_path;
 
 const MIN_COORDINATE: i64 = -27_273_042_329_600;
-const MAX_COORDINATE: i64 = 27_273_042_316_900;
-const ANGLE_UNITS_PER_DEGREE: f64 = 60_000.0;
-const ANGLE_UNITS_PER_TURN: i64 = 21_600_000;
+pub(crate) const MAX_COORDINATE: i64 = 27_273_042_316_900;
+pub(crate) const ANGLE_UNITS_PER_DEGREE: f64 = 60_000.0;
+pub(crate) const ANGLE_UNITS_PER_TURN: i64 = 21_600_000;
 /// `a:srcRect` stores a crop inset in thousandths of a percent.
 const CROP_UNITS_PER_FRACTION: f64 = 100_000.0;
 
@@ -77,6 +79,20 @@ fn image_bytes(image_file: &Bound<'_, PyAny>) -> PyResult<(Vec<u8>, String)> {
         .unwrap_or("image")
         .to_owned();
     Ok((bytes, filename))
+}
+
+/// Reads an `MSO_SHAPE` member, its integer value, or a DrawingML preset name.
+fn preset_name(py: Python<'_>, shape_type: &Bound<'_, PyAny>) -> PyResult<String> {
+    if shape_type.is_instance_of::<PyString>() {
+        return shape_type.extract::<String>();
+    }
+    let value = shape_type.extract::<i64>()?;
+    py.import("rpptx.enum.shapes")?
+        .getattr("MSO_SHAPE")?
+        .call1((value,))
+        .map_err(|_| PyValueError::new_err("unsupported MSO_SHAPE value"))?
+        .getattr("xml_value")?
+        .extract::<String>()
 }
 
 fn check_coordinate(name: &str, value: i64, minimum: i64) -> PyResult<()> {
@@ -432,6 +448,41 @@ impl PyShape {
             .map(|member| Some(member.unbind()))
     }
 
+    /// The `MSO_SHAPE` member of an auto shape's preset geometry.
+    ///
+    /// A picture reports its mask, or `None` without a preset. Any other
+    /// shape raises `ValueError`, as python-pptx does.
+    #[getter]
+    fn auto_shape_type(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        let (kind, preset) = self.read(py, |shape| {
+            (shape.kind(), shape.auto_shape_type().map(str::to_owned))
+        })?;
+        match (kind, preset) {
+            (_, Some(preset)) => py
+                .import("rpptx.enum.shapes")?
+                .getattr("MSO_SHAPE")?
+                .call_method1("from_xml", (preset,))
+                .map(|member| Some(member.unbind())),
+            (rpptx::ShapeKind::Picture, None) => Ok(None),
+            _ => Err(PyValueError::new_err("shape is not an auto shape")),
+        }
+    }
+
+    /// Replaces the preset geometry and resets its adjustments to defaults.
+    #[setter]
+    fn set_auto_shape_type(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let refused = self.read(py, |shape| match shape.kind() {
+            rpptx::ShapeKind::Shape => shape.shape_type() == Some(rpptx::ShapeType::TextBox),
+            rpptx::ShapeKind::Picture => false,
+            _ => true,
+        })?;
+        if refused {
+            return Err(PyValueError::new_err("shape is not an auto shape"));
+        }
+        let preset = preset_name(py, value)?;
+        self.edit(py, |shape| shape.set_auto_shape_type(&preset))
+    }
+
     #[getter]
     fn adjustments(&self, py: Python<'_>) -> PyResult<Py<PyAdjustmentCollection>> {
         if self.read(py, |shape| shape.kind())? != rpptx::ShapeKind::Shape {
@@ -470,6 +521,46 @@ impl PyShape {
                 FillTarget::Line,
             ),
         )
+    }
+
+    /// The shadow of a shape, picture, connector, or group.
+    ///
+    /// A graphic frame raises `NotImplementedError`, as in python-pptx.
+    #[getter]
+    fn shadow(&self, py: Python<'_>) -> PyResult<Py<PyShadowFormat>> {
+        match self.read(py, |shape| shape.kind())? {
+            rpptx::ShapeKind::Shape
+            | rpptx::ShapeKind::Picture
+            | rpptx::ShapeKind::Connector
+            | rpptx::ShapeKind::Group => {}
+            rpptx::ShapeKind::GraphicFrame => {
+                return Err(PyNotImplementedError::new_err(
+                    "shadow property on GraphicFrame not yet supported",
+                ));
+            }
+            rpptx::ShapeKind::AlternateContent => {
+                return Err(PyValueError::new_err("shape has no shadow"));
+            }
+        }
+        Py::new(
+            py,
+            PyShadowFormat::new(self.presentation.clone_ref(py), self.path.clone()),
+        )
+    }
+
+    /// The theme effect style index the shape's `p:style` references, or
+    /// `None` without one. Writing 0 removes the theme's effect, such as the
+    /// shadow of a connector from `add_connector`. The setter takes an `int`
+    /// only: `None` is refused, because dropping `p:style` would leave a
+    /// connector without a direct line invisible.
+    #[getter]
+    fn theme_effect_index(&self, py: Python<'_>) -> PyResult<Option<u32>> {
+        self.read(py, |shape| shape.theme_effect_index())
+    }
+
+    #[setter]
+    fn set_theme_effect_index(&self, py: Python<'_>, value: u32) -> PyResult<()> {
+        self.edit(py, |shape| shape.set_theme_effect_index(value))
     }
 
     /// The shape element serialized on its own, as bytes.
@@ -659,6 +750,62 @@ impl PyShapeClickAction {
                 path: self.path.clone(),
             },
         )
+    }
+
+    /// The slide the click action jumps to, or `None` for any other action.
+    #[getter]
+    fn target_slide(&self, py: Python<'_>) -> PyResult<Option<Py<PySlide>>> {
+        let presentation = self.presentation.borrow(py);
+        validate_path(
+            py,
+            &presentation,
+            &self.path,
+            "shape click action",
+            ".click_action",
+        )?;
+        let shape_id = shape_ref_at(&presentation.inner, &self.path)
+            .and_then(|shape| shape.non_visual_id())
+            .ok_or_else(|| PyValueError::new_err("shape has no id"))?;
+        let Some(target) = presentation
+            .inner
+            .shape_target_slide(slide_index(&self.path)?, shape_id)
+            .map_err(|error| rpptx_to_pyerr(py, error))?
+        else {
+            return Ok(None);
+        };
+        let path = presentation
+            .revisions
+            .capture(smallvec![PathSeg::Slide(target)]);
+        Py::new(py, PySlide::new(self.presentation.clone_ref(py), path)).map(Some)
+    }
+
+    /// Makes the click action jump to `slide`, or removes it for `None`, as
+    /// python-pptx does. The relationship the old click action used goes when
+    /// nothing else on the slide uses it.
+    #[setter]
+    fn set_target_slide(&self, py: Python<'_>, slide: Option<PyRef<'_, PySlide>>) -> PyResult<()> {
+        let target = match slide {
+            Some(slide) if !slide.presentation.is(&self.presentation) => {
+                return Err(PyValueError::new_err("slide is not in this presentation"));
+            }
+            Some(slide) => Some(slide.validate(py)?),
+            None => None,
+        };
+        let mut presentation = self.presentation.borrow_mut(py);
+        validate_path(
+            py,
+            &presentation,
+            &self.path,
+            "shape click action",
+            ".click_action",
+        )?;
+        let shape_id = shape_ref_at(&presentation.inner, &self.path)
+            .and_then(|shape| shape.non_visual_id())
+            .ok_or_else(|| PyValueError::new_err("shape has no id"))?;
+        presentation
+            .inner
+            .set_shape_target_slide(slide_index(&self.path)?, shape_id, target)
+            .map_err(|error| rpptx_to_pyerr(py, error))
     }
 }
 
@@ -915,17 +1062,7 @@ impl PyShapeCollection {
         width: i64,
         height: i64,
     ) -> PyResult<Py<PyShape>> {
-        let preset = if shape_type.is_instance_of::<PyString>() {
-            shape_type.extract::<String>()?
-        } else {
-            let value = shape_type.extract::<i64>()?;
-            py.import("rpptx.enum.shapes")?
-                .getattr("MSO_SHAPE")?
-                .call1((value,))
-                .map_err(|_| PyValueError::new_err("unsupported MSO_SHAPE value"))?
-                .getattr("xml_value")?
-                .extract::<String>()?
-        };
+        let preset = preset_name(py, shape_type)?;
         self.add(py, |shapes| {
             shapes
                 .add_shape(

@@ -4,6 +4,7 @@ use std::ops::Range;
 
 use oxml_core::OxmlError;
 use oxml_core::raw_xml::{capture_element, capture_empty_element};
+use oxml_drawing::effect::{CT_EffectList, raw_is_effect_dag};
 use oxml_drawing::fill::Fill;
 use oxml_drawing::geometry::CT_PresetGeometry2D;
 use oxml_drawing::namespace::A_NS;
@@ -729,6 +730,13 @@ impl CT_ShapeStyle {
         }))
     }
 
+    /// Serializes the style on its own, for owners that keep it as bytes.
+    pub(crate) fn to_fragment(&self) -> Result<Vec<u8>> {
+        let mut writer = Writer::new(Vec::new());
+        self.write_xml(&mut writer)?;
+        Ok(writer.into_inner())
+    }
+
     fn write_xml<W: Write>(&self, writer: &mut Writer<W>) -> Result<()> {
         let mut start = BytesStart::new("p:style");
         push_attributes(&mut start, &self.raw_attributes);
@@ -822,6 +830,7 @@ pub struct CT_ShapeTree {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct GroupProperties {
     transform: Option<CT_Transform2D>,
+    effects: Option<CT_EffectList>,
     raw_attributes: RawAttributes,
     raw_children: OrderedRawChildren,
 }
@@ -1090,6 +1099,17 @@ impl CT_Shape {
     /// Returns the optional typed format-scheme references.
     pub fn style(&self) -> Option<&CT_ShapeStyle> {
         self.raw.style.as_deref()
+    }
+
+    /// Sets the `idx` of the style's `a:effectRef`, the theme effect style
+    /// the shape draws. Index 0 references no theme effect. Returns `false`
+    /// and changes nothing when the shape has no style.
+    pub fn set_effect_reference_index(&mut self, index: u32) -> bool {
+        let Some(style) = self.raw.style.as_mut() else {
+            return false;
+        };
+        style.effect_reference.index = index;
+        true
     }
 
     /// Returns whether `p:cNvSpPr/@txBox` marks this shape as a text box.
@@ -1436,6 +1456,7 @@ impl CT_ShapeTree {
             },
             group_properties: GroupProperties {
                 transform: None,
+                effects: None,
                 raw_attributes: Vec::new(),
                 raw_children: OrderedRawChildren::default(),
             },
@@ -1642,6 +1663,7 @@ impl CT_GroupShape {
             },
             group_properties: GroupProperties {
                 transform: None,
+                effects: None,
                 raw_attributes: Vec::new(),
                 raw_children: OrderedRawChildren::default(),
             },
@@ -1705,12 +1727,28 @@ impl CT_GroupShape {
 
     /// Returns the group transform, creating an empty one when absent.
     pub fn group_transform_mut(&mut self) -> &mut CT_Transform2D {
-        if self.group_properties.transform.is_none() {
-            self.group_properties.raw_children.shift_boundaries_from(0);
-        }
         self.group_properties
             .transform
             .get_or_insert_with(CT_Transform2D::default)
+    }
+
+    /// Returns the direct `a:effectLst` of `p:grpSpPr`, when present.
+    pub fn effects(&self) -> Option<&CT_EffectList> {
+        self.group_properties.effects.as_ref()
+    }
+
+    /// Replaces or removes the direct `a:effectLst` of `p:grpSpPr`.
+    ///
+    /// An `a:effectDag` excludes an effect list, so a group that carries one
+    /// refuses a new list rather than writing both.
+    pub fn set_effects(&mut self, effects: Option<CT_EffectList>) -> Result<()> {
+        if effects.is_some() && self.group_properties.has_effect_dag() {
+            return Err(OxmlError::InvalidValue(
+                "p:grpSpPr carries an a:effectDag, which excludes an a:effectLst".to_owned(),
+            ));
+        }
+        self.group_properties.effects = effects;
+        Ok(())
     }
 
     /// Changes the producer-facing non-visual group name.
@@ -2157,6 +2195,7 @@ impl GroupProperties {
                 Event::Empty(start) => {
                     return Ok(Self {
                         transform: None,
+                        effects: None,
                         raw_attributes: root_attributes(&start, FIXED_SHAPE_TREE_PREFIXES)?,
                         raw_children: OrderedRawChildren::default(),
                     });
@@ -2173,45 +2212,27 @@ impl GroupProperties {
         start: &BytesStart<'_>,
         namespaces: &NamespaceBindings,
     ) -> Result<Self> {
-        let mut transform = None;
-        let mut raw_children = OrderedRawChildren::default();
+        let mut properties = Self {
+            transform: None,
+            effects: None,
+            raw_attributes: root_attributes(start, FIXED_SHAPE_TREE_PREFIXES)?,
+            raw_children: OrderedRawChildren::default(),
+        };
         let mut boundary = 0usize;
         let mut buffer = Vec::new();
         loop {
             match reader.read_event_into(&mut buffer)? {
                 Event::Start(child) => {
-                    let child_namespaces = namespaces.with_start(&child)?;
-                    let is_transform = child_namespaces.element_uri(child.name().as_ref())
-                        == Some(A_NS)
-                        && local_name(child.name().as_ref()) == b"xfrm";
-                    if is_transform {
-                        child_namespaces.reject_writer_conflicts(FIXED_SHAPE_TREE_PREFIXES)?;
-                    }
+                    let name = local_name(child.name().as_ref()).to_vec();
+                    let modelled = is_modelled_group_property(namespaces, &child)?;
                     let raw = capture_element(reader, &child)?;
-                    capture_group_property_child(
-                        is_transform,
-                        raw,
-                        &mut transform,
-                        &mut raw_children,
-                        &mut boundary,
-                    )?;
+                    properties.capture_child(&name, modelled, raw, &mut boundary)?;
                 }
                 Event::Empty(child) => {
-                    let child_namespaces = namespaces.with_start(&child)?;
-                    let is_transform = child_namespaces.element_uri(child.name().as_ref())
-                        == Some(A_NS)
-                        && local_name(child.name().as_ref()) == b"xfrm";
-                    if is_transform {
-                        child_namespaces.reject_writer_conflicts(FIXED_SHAPE_TREE_PREFIXES)?;
-                    }
+                    let name = local_name(child.name().as_ref()).to_vec();
+                    let modelled = is_modelled_group_property(namespaces, &child)?;
                     let raw = capture_empty_element(&child)?;
-                    capture_group_property_child(
-                        is_transform,
-                        raw,
-                        &mut transform,
-                        &mut raw_children,
-                        &mut boundary,
-                    )?;
+                    properties.capture_child(&name, modelled, raw, &mut boundary)?;
                 }
                 Event::End(end) if local_name(end.name().as_ref()) == b"grpSpPr" => break,
                 Event::Eof => {
@@ -2221,24 +2242,69 @@ impl GroupProperties {
             }
             buffer.clear();
         }
-        Ok(Self {
-            transform,
-            raw_attributes: root_attributes(start, FIXED_SHAPE_TREE_PREFIXES)?,
-            raw_children,
-        })
+        Ok(properties)
+    }
+
+    /// Records one `p:grpSpPr` child. Boundary 0 lies between `a:xfrm` and
+    /// the effect slot, boundary 1 after it, where `a:scene3d` and
+    /// `a:extLst` always go so that an effect list added later precedes them.
+    fn capture_child(
+        &mut self,
+        name: &[u8],
+        modelled: bool,
+        raw: Vec<u8>,
+        boundary: &mut usize,
+    ) -> Result<()> {
+        match (modelled, name) {
+            (true, b"xfrm") => {
+                if self.transform.is_some() {
+                    return Err(OxmlError::InvalidValue(
+                        "duplicate DrawingML group transform".to_owned(),
+                    ));
+                }
+                if !self.raw_children.is_empty() || self.effects.is_some() {
+                    return Err(OxmlError::InvalidValue(
+                        "a:xfrm must precede other p:grpSpPr children".to_owned(),
+                    ));
+                }
+                self.transform = Some(
+                    CT_Transform2D::from_xml(&raw)
+                        .map_err(|error| OxmlError::InvalidValue(error.to_string()))?,
+                );
+            }
+            (true, _) if self.effects.is_none() => {
+                self.effects = Some(
+                    CT_EffectList::from_xml(&raw)
+                        .map_err(|error| OxmlError::InvalidValue(error.to_string()))?,
+                );
+                *boundary = 1;
+            }
+            _ => {
+                if matches!(name, b"scene3d" | b"extLst") {
+                    *boundary = 1;
+                }
+                self.raw_children.push(*boundary, raw);
+            }
+        }
+        Ok(())
     }
 
     fn write_xml<W: Write>(&self, writer: &mut Writer<W>) -> Result<()> {
         let mut start = BytesStart::new("p:grpSpPr");
         push_attributes(&mut start, &self.raw_attributes);
-        if self.transform.is_none() && self.raw_children.is_empty() {
+        if self.transform.is_none() && self.effects.is_none() && self.raw_children.is_empty() {
             writer.write_event(Event::Empty(start))?;
             return Ok(());
         }
         writer.write_event(Event::Start(start))?;
-        emit_raw(writer, self.raw_children.at(0))?;
         if let Some(transform) = &self.transform {
             transform
+                .write_xml(writer)
+                .map_err(|error| OxmlError::InvalidValue(error.to_string()))?;
+        }
+        emit_raw(writer, self.raw_children.at(0))?;
+        if let Some(effects) = &self.effects {
+            effects
                 .write_xml(writer)
                 .map_err(|error| OxmlError::InvalidValue(error.to_string()))?;
         }
@@ -2246,35 +2312,26 @@ impl GroupProperties {
         writer.write_event(Event::End(BytesEnd::new("p:grpSpPr")))?;
         Ok(())
     }
+
+    fn has_effect_dag(&self) -> bool {
+        (0..=1).any(|boundary| self.raw_children.at(boundary).any(raw_is_effect_dag))
+    }
 }
 
-fn capture_group_property_child(
-    is_transform: bool,
-    raw: Vec<u8>,
-    transform: &mut Option<CT_Transform2D>,
-    raw_children: &mut OrderedRawChildren,
-    boundary: &mut usize,
-) -> Result<()> {
-    if is_transform {
-        if transform.is_some() {
-            return Err(OxmlError::InvalidValue(
-                "duplicate DrawingML group transform".to_owned(),
-            ));
-        }
-        if !raw_children.is_empty() {
-            return Err(OxmlError::InvalidValue(
-                "a:xfrm must precede other p:grpSpPr children".to_owned(),
-            ));
-        }
-        *transform = Some(
-            CT_Transform2D::from_xml(&raw)
-                .map_err(|error| OxmlError::InvalidValue(error.to_string()))?,
-        );
-        *boundary = 1;
-    } else {
-        raw_children.push(*boundary, raw);
+/// Reports whether a `p:grpSpPr` child is the DrawingML `a:xfrm` or
+/// `a:effectLst` it models, after checking that its fixed `a:` prefix can be
+/// written back.
+fn is_modelled_group_property(
+    namespaces: &NamespaceBindings,
+    child: &BytesStart<'_>,
+) -> Result<bool> {
+    let child_namespaces = namespaces.with_start(child)?;
+    let modelled = child_namespaces.element_uri(child.name().as_ref()) == Some(A_NS)
+        && matches!(local_name(child.name().as_ref()), b"xfrm" | b"effectLst");
+    if modelled {
+        child_namespaces.reject_writer_conflicts(FIXED_SHAPE_TREE_PREFIXES)?;
     }
-    Ok(())
+    Ok(modelled)
 }
 
 fn push_attributes(start: &mut BytesStart<'_>, attributes: &RawAttributes) {
@@ -2554,5 +2611,22 @@ mod style_tests {
         assert!(tree.move_child(0, 3).is_err());
         assert!(tree.move_child(3, 0).is_err());
         assert_eq!(tree.to_xml().unwrap(), before);
+    }
+
+    #[test]
+    fn effect_reference_index_changes_only_a_present_style() {
+        let xml = br#"<p:sp xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:nvSpPr><p:cNvPr id="2" name="Box"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:style><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="2"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style></p:sp>"#;
+        let mut shape = CT_Shape::from_xml(xml).unwrap();
+
+        assert!(shape.set_effect_reference_index(0));
+
+        let written = String::from_utf8(shape.to_xml().unwrap()).unwrap();
+        assert!(written.contains(
+            r#"<a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef>"#
+        ));
+        let mut unstyled = CT_Shape::new_preset(3, "Shape 3", "rect", Default::default()).unwrap();
+        let before = unstyled.clone();
+        assert!(!unstyled.set_effect_reference_index(0));
+        assert_eq!(unstyled, before);
     }
 }

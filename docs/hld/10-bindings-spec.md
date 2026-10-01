@@ -471,14 +471,41 @@ sRGB colour as `RGBColor`, or `None` for any other colour, and writing it keeps
 the transforms of an existing sRGB colour. Reading `LineFormat.color` changes
 nothing, and assigning its `rgb` makes the line fill solid. `LineFormat.width`
 reads zero without a width, writes `None` as zero, and rejects values above
-the `ST_LineWidth` maximum. `adjustments` is a live `AdjustmentCollection` of
+the `ST_LineWidth` maximum. `LineFormat.dash_style` reads the `a:prstDash`
+value as an `MSO_LINE_DASH_STYLE` member, or `None` without one or with a
+custom dash, and assigning `None` removes either dash. Its members keep the
+python-pptx values and XML values, and `DOT`, `SYSTEM_DASH_DOT` and
+`SYSTEM_DASH_DOT_DOT` read the three presets python-pptx cannot, all three of
+which PowerPoint for Mac's scripting interface writes. `head_end` and
+`tail_end` are live `LineEndFormat` views whose `type`, `width` and `length`
+read and write `a:headEnd` or `a:tailEnd` as `MSO_ARROWHEAD_STYLE`,
+`MSO_ARROWHEAD_WIDTH` and `MSO_ARROWHEAD_LENGTH` members, numbered as the
+Office enumerations of the same names. `NONE` writes `type="none"`, as
+PowerPoint for Mac's scripting interface does when an arrow is removed. `None`
+removes one attribute, and an end left without attributes is removed. An
+`a:ln` left empty is kept, as python-pptx keeps it. A removal never creates an
+`a:ln`. `adjustments` is a live `AdjustmentCollection` of
 the effective preset adjustments, normalized so that 1.0 is 100000, and
-assignment truncates as python-pptx does. `xml` returns the element serialized
-on its own as bytes. A picture's `image` is a frozen `Image` snapshot with
-`blob`, `content_type`, and the python-pptx `ext`, and `replace_image` changes
-only that picture through the native staged replacement. `crop_left`,
-`crop_top`, `crop_right`, and `crop_bottom` read and write the picture's
-`a:srcRect` insets as python-pptx floats, where 0.25 is a quarter of the image.
+assignment truncates as python-pptx does. `auto_shape_type` reads the
+`MSO_SHAPE` member of the preset through `MSO_SHAPE.from_xml`, which picks the
+first member in definition order when two share a preset. A picture reports
+its mask or `None`, and a shape without an auto-shape preset raises
+`ValueError`. Custom geometry raises too, as python-pptx does, although issue
+#217 asked for `None`. A shape with `prst="upArrow"` also raises `ValueError`,
+where python-pptx returns `UP_ARROW`. The generated preset table has no
+`upArrow`. rpptx accepts an `MSO_SHAPE` member or preset name to replace the
+geometry and reset adjustments. A text box or unsupported shape kind raises
+`ValueError`. An unknown preset raises `RpptxError`.
+
+`theme_effect_index` reads the `a:effectRef` index of an ordinary shape or
+connector style, or `None` without one. Writing 0 removes the theme effect,
+including a connector's shadow, while retaining its theme line style. The
+setter accepts an `int` only. A shape without a typed style refuses the write.
+`xml` returns the shape element as bytes. A picture's `image` is a frozen
+`Image` snapshot, and `replace_image` changes only that picture through the
+native staged replacement. `crop_left`, `crop_top`, `crop_right`, and
+`crop_bottom` read and write the picture's `a:srcRect` insets as python-pptx
+floats, where 0.25 is a quarter of the image.
 A missing edge reads 0.0, a write rounds half to even as python-pptx does and
 changes nothing when the value is unchanged, and a value that is not finite or
 outside the `ST_Percentage` range raises `ValueError`. Other shape kinds raise
@@ -487,6 +514,36 @@ outside the `ST_Percentage` range raises `ValueError`. Other shape kinds raise
 of the shape's non-visual properties. It shares relationship reuse and pruning
 with run hyperlinks, and a write does not advance the revision. `None` or an
 empty string clears it.
+`Shape.click_action.target_slide` reads the slide a named, first, last, next,
+or previous slide jump opens, or `None`, and assigning a `Slide` of the same
+presentation goes through the native `set_shape_target_slide`, while `None`
+removes the click action. A slide of another presentation raises `ValueError`.
+A group accepts a click action, where python-pptx raises `TypeError`, because
+PowerPoint honours it. Two current `Slide` handles compare equal when they name
+the same slide, so `target_slide == prs.slides[2]` holds, and like python-pptx a
+`Slide` is not hashable. No click action write advances the revision.
+
+`shadow` returns a live `ShadowFormat` for ordinary shapes, pictures,
+connectors, and groups, and raises `NotImplementedError` for a graphic frame
+as python-pptx does. `inherit` is python-pptx's: it reads whether the shape
+has no `a:effectLst`, assigning `True` removes the list and every effect in
+it, and assigning `False` adds an empty one. The outer shadow properties are
+`visible`, `color`, `alpha`, `blur_radius`, `distance`, `direction`, `align`,
+and `rotate_with_shape`. They read `None` without an `a:outerShdw` of the
+shape's own, a theme shadow included, and read the schema default for an
+omitted attribute. Assigning one to a shape without an outer shadow first
+adds the shadow PowerPoint for Mac writes for its Offset Diagonal Bottom
+Right preset, measured through `msoShadow21`: preset black at 40% opacity,
+a 4 pt blur, 3 pt away at 45 degrees, aligned top left and not rotating
+with the shape. `visible = False` removes the outer shadow and keeps the
+list, so the theme shadow stays off, and changes nothing on a shape without
+an outer shadow of its own. `color` is a `ColorFormat` whose `rgb` keeps the
+opacity across a change of colour kind and replaces an `a:scrgbClr` or
+`a:hslClr` whole. `alpha` runs from 0.0 transparent to 1.0 opaque, and 1.0
+removes `a:alpha`. Beside those two unmodelled colours `alpha` reads `None`
+and assigning it is a `ValueError`. `direction` uses the `rotation` degrees
+and rounding. `align` is an `ST_RectAlignment` token string, and lengths are
+EMU.
 
 `ShapeCollection.add_shape` accepts a DrawingML preset name or an `MSO_SHAPE`
 member. `add_connector` follows the python-pptx signature, `add_group_shape`
