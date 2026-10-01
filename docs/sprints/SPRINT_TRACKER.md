@@ -505,6 +505,8 @@ defended.
 
 | F-X140 | S77 | L | 5 | 1 | 2026-09-30 | Integrated seven rendering and layout PRs with reviewed ligature PDF hashes, presentation preservation and Word pagination regressions |
 | F-X141 | S77 | L | 5 | 1 | 2026-09-30 | Integrated six Word Python PRs, added native common styles and refreshable TOCs, and reviewed a separate 16-key baseline delta |
+| F-X142 | S77 | L | 5 | 1 | 2026-10-01 | Integrated six Presentation Python PRs and completed the Issue 169 API, comment anchor and built-in table style checklist |
+| F-X143 | S77 | M | 3 | 1 | 2026-10-01 | Integrated two revision and CLI PRs with all-story listing, related-part warnings and strict validation |
 
 ## Velocity
 

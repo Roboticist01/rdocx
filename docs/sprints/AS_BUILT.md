@@ -16551,3 +16551,86 @@ due at S77 closure.
 cover the remaining acceptance checklist. PR-head CI needs rerun after the
 contribution branches are rebased. The clean F-X141 worker worktree can be
 removed after this dependency-prefix record to save disk space.
+
+### F-X142, Presentation Python contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 173, 181, 189,
+192, 208 and 209. The Presentation Python binding now retains run handles,
+provides checked and aliased text replacement, resolves inherited placeholder
+geometry, and supports contributed shape, group and table operations. The
+remaining Issue 169 checklist gained shape hyperlink operations, shape and
+text-range comment anchors, and rendering for built-in table styles without
+a package definition.
+
+**Non-obvious choices.** PRs 208 and 209 inherited PR 189, so only their
+incremental changes were replayed. Direct geometry presence stays distinct
+from the resolved `effective_geometry()` accessor. Comment anchors retain
+schema order and unknown XML forms. Group refit and row height behavior follow
+the pinned python-pptx 1.0.2 workflow cases. F-X148 independently audits the
+production fixture after this integration.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/05-drawingml-model.md`,
+`docs/hld/06-presentationml-model.md`,
+`docs/hld/07-inheritance-and-resolution.md`,
+`docs/hld/08-rendering-spec.md`, `docs/hld/10-bindings-spec.md` and
+`docs/hld/14-development-backlog.md`.
+
+**Tests.** The focused Python and Rust deck workflow covered saved-package
+round-trip, validation, rendering, hyperlinks, comments, groups, tables and
+built-in styles. Scoped verification and microscope pass 1 reported zero
+defects and zero smells. The integrated full workspace gate, 63 Presentation
+Python tests, strict mypy and stubtest, pinned python-pptx cases, 421-slide
+fidelity completeness gate, publication dry run and crate size ceiling passed.
+
+**Hash harness.** Unchanged after F-X140 and F-X141. All 49 entries matched
+the reviewed integrated baseline.
+
+**Notes for future sessions.** Issue 169 remains open until F-X148 and F-X156
+finish their independently scheduled production and rendering acceptance.
+The 421-slide SSIM trend is advisory and remains below its 80 percent target.
+PR heads must be rebased and rerun in CI before closure.
+
+### F-X143, Revision listing and CLI story contribution wave
+
+**Sprint.** S77
+**Completed.** 2026-10-01
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Integrated the unique changes from PRs 186 and 204 after
+the S76 PR 198 prefix. Native and Python revision listing now identify every
+supported story. CLI schema 1 retains its existing fields while adding story
+identity, counts and `all-supported-stories` scope. Text and conversions keep
+the body and warn once by named part when a related story is malformed.
+Validation rejects malformed related parts and undefined styles, including
+missing definitions in Rust-generated samples.
+
+**Non-obvious choices.** Owned `StoryRevision` snapshots agree with the
+supported revision resolver. A revision reached by resolution without a story
+owner is an error. The CDATA regression found by microscope pass 1 was fixed
+and checked again. PR 204's inherited PR 198 commits were not replayed.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`,
+`docs/hld/04-opc-and-packaging.md`, `docs/hld/10-bindings-spec.md` and
+`docs/hld/12-testing-strategy.md`.
+
+**Tests.** Focused story revision, CLI text, conversion and validation cases
+passed after save and reopen. The Word Python suite passed 121 tests with
+strict mypy and stubtest. Scoped verification and microscope pass 3 reported
+zero defects and zero smells. The integrated full workspace, 18-page Word
+fidelity completeness and five-page multilingual hard gate, publish dry run
+and dependency direction checks passed.
+
+**Hash harness.** Unchanged after the two reviewed S77 baseline updates. All
+49 entries matched.
+
+**Notes for future sessions.** Issues 160 and 165 remain open for their full
+acceptance matrices in later sprints. PR heads need rebase and CI reruns before
+closure. The 18-page Word SSIM trend is advisory and below its target.
