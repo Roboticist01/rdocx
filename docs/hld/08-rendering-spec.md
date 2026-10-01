@@ -1101,8 +1101,12 @@ deterministic renderers use their own bundle. Tracked layouts remain uncached
 and use the normal engine with a distinct revision-view paragraph identity.
 Caller-supplied font layouts construct an isolated engine, remain uncached, and
 cannot observe bundled or system fonts. Caller-font access returns an owned
-bundle. The separate bundled-fallback caller-font mode retains one reusable
-deterministic-base engine. Caller faces have highest priority, missing families
+bundle. `to_pdf_with_fonts` instead lays out uncached in a fresh normal-font
+engine with the caller fonts loaded over it, so a family the caller does not
+supply resolves as `to_pdf` resolves it, from system fonts when the
+`system-fonts` feature is enabled and then from the bundled fonts. The separate
+bundled-fallback caller-font mode retains one reusable deterministic-base
+engine. Caller faces have highest priority, missing families
 resolve from bundled faces, and system fonts remain unavailable. Its owned
 result shares immutable pages and font bytes without caching the completed
 bundle. Every PDF and raster path borrows its `LayoutResult` field from the same
@@ -1484,6 +1488,14 @@ so the rectangle is inset here and the edges carry no further offset.
 `w:display` selects `allPages`, `firstPage` or `notFirstPage` against the
 section's own first page, and `w:zOrder="back"` draws the frame before every
 other element on the page while the default draws it after.
+
+That renderer draws `dashed`, `dotted`, `dotDash` and `dotDotDash` with a dash
+pattern and `double` as two lines. A style without a pattern of its own draws
+as the nearest one, `dashSmallGap` as `dashed` and `dashDotStroked` as
+`dotDash`, and every other line style, `triple` and the `thinThickThin` family
+included, draws as one solid line. A picture border such as `apples` has no
+line to draw, so it draws nothing, while every `ST_Border` token, picture
+borders included, survives an edit and a save.
 
 `w:lnNumType` numbers body lines in the margin. The number is right-aligned
 `w:distance` clear of the track it labels, defaulting to Word's automatic

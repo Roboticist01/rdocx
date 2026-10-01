@@ -853,6 +853,16 @@ rejected, saved, and reopened views. The legacy/default compatibility test
 keeps `Document::compare` byte-identical to default options. No sample invokes
 comparison, so the 49-entry hash harness remains unchanged.
 
+The Word contribution regression gate checks caller-font PDF fallback, whole
+paragraph comparison with hyperlinks, bookmarks, and rebuilt TOCs, exporter
+visibility through block and inline controls, namespace and border retention,
+XML-character rejection before package publication, and complex fields whose
+text or sibling fields share one physical run. Changed package, facade,
+DrawingML, and Presentation sources also run their native suites, the rdocx
+Python binding suite, and the unchanged 49-entry hash harness. The binding
+suite includes empty caller-font directories and retains the ordinary PDF
+fallback. Every published archive row is remeasured against the exact source.
+
 Story revision regressions list body, cell, header, footer, note, comment, and
 text-box owners, then compare their identities and counts with accept and
 reject after save and reopen. CLI regressions retain existing revision output

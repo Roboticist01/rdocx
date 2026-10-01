@@ -4374,7 +4374,7 @@ fn hdr_ftr_type_order(value: HdrFtrType) -> u8 {
     }
 }
 
-fn xml_relationship_ids_in_order(xml: &[u8]) -> Result<Vec<String>> {
+pub(crate) fn xml_relationship_ids_in_order(xml: &[u8]) -> Result<Vec<String>> {
     xml_relationship_ids_in_order_with_bindings(xml, &[])
 }
 
@@ -10036,7 +10036,7 @@ fn insert_html_content_into_cell(
     Ok(())
 }
 
-fn visit_body_paragraphs(content: &[BodyContent], visitor: &mut impl FnMut(&CT_P)) {
+pub(crate) fn visit_body_paragraphs(content: &[BodyContent], visitor: &mut impl FnMut(&CT_P)) {
     for item in content {
         match item {
             BodyContent::Paragraph(paragraph) => visit_paragraph(paragraph, visitor),
@@ -10872,6 +10872,156 @@ fn collect_sdt_relationship_ids(control: &CT_Sdt, output: &mut Vec<String>) {
             SdtContent::RawXml(_) => {}
         }
     }
+}
+
+/// A body child as the ODT and RTF writers export it.
+pub(crate) enum ExportItem<'a> {
+    Paragraph(&'a CT_P),
+    /// A table, with the rows, cells and cell content that content controls
+    /// wrap in place, see [`unwrap_table_controls`].
+    Table(Box<Cow<'a, CT_Tbl>>),
+    /// A block content control. What it wraps follows it.
+    ContentControl,
+    RawXml,
+}
+
+/// The body children in document order with their source paths, `body[i]`.
+/// A block content control is transparent: what it wraps follows it at
+/// `{its path}/content[k]`, nested controls included.
+pub(crate) fn body_export_items(content: &[BodyContent]) -> Vec<(ExportItem<'_>, String)> {
+    let mut items = Vec::new();
+    for (index, item) in content.iter().enumerate() {
+        let path = format!("body[{index}]");
+        match item {
+            BodyContent::Paragraph(paragraph) => {
+                items.push((ExportItem::Paragraph(paragraph), path))
+            }
+            BodyContent::Table(table) => items.push((
+                ExportItem::Table(Box::new(unwrap_table_controls(table))),
+                path,
+            )),
+            BodyContent::ContentControl(control) => {
+                push_control_export_items(control, path, &mut items)
+            }
+            BodyContent::RawXml(_) => items.push((ExportItem::RawXml, path)),
+        }
+    }
+    items
+}
+
+fn push_control_export_items<'a>(
+    control: &'a CT_Sdt,
+    path: String,
+    items: &mut Vec<(ExportItem<'a>, String)>,
+) {
+    items.push((ExportItem::ContentControl, path.clone()));
+    for (index, item) in control.content.iter().enumerate() {
+        let path = format!("{path}/content[{index}]");
+        match item {
+            SdtContent::Paragraph(paragraph) => {
+                items.push((ExportItem::Paragraph(paragraph), path))
+            }
+            SdtContent::Table(table) => items.push((
+                ExportItem::Table(Box::new(unwrap_table_controls(table))),
+                path,
+            )),
+            SdtContent::ContentControl(nested) => push_control_export_items(nested, path, items),
+            // A control around a paragraph or a table holds no rows, cells or
+            // runs of its own.
+            SdtContent::Row(_) | SdtContent::Cell(_) | SdtContent::Run(_) => {}
+            SdtContent::RawXml(_) => items.push((ExportItem::RawXml, path)),
+        }
+    }
+}
+
+/// Whether a table, not counting the tables nested in its cells, holds a
+/// content control around a row, a cell or cell content.
+fn table_has_content_controls(table: &CT_Tbl) -> bool {
+    !table.content_controls.is_empty()
+        || table.rows.iter().any(|row| {
+            !row.content_controls.is_empty()
+                || row.cells.iter().any(|cell| {
+                    cell.content
+                        .iter()
+                        .any(|content| matches!(content, CellContent::ContentControl(_)))
+                })
+        })
+}
+
+/// The table with the rows, cells and cell content that its content controls
+/// wrap in place of the controls, nested ones included. Borrowed when the
+/// table has no such control.
+pub(crate) fn unwrap_table_controls(table: &CT_Tbl) -> Cow<'_, CT_Tbl> {
+    if !table_has_content_controls(table) {
+        return Cow::Borrowed(table);
+    }
+    let rows = table
+        .rows()
+        .into_iter()
+        .map(|row| CT_Row {
+            table_property_exception: row.table_property_exception.clone(),
+            properties: row.properties.clone(),
+            cells: row
+                .cells()
+                .into_iter()
+                .map(|cell| {
+                    let mut content = Vec::with_capacity(cell.content.len());
+                    for item in &cell.content {
+                        match item {
+                            CellContent::ContentControl(control) => {
+                                push_control_cell_content(control, &mut content)
+                            }
+                            item => content.push(item.clone()),
+                        }
+                    }
+                    CT_Tc {
+                        properties: cell.properties.clone(),
+                        content,
+                        extra_xml: cell.extra_xml.clone(),
+                    }
+                })
+                .collect(),
+            extra_xml: row.extra_xml.clone(),
+            content_controls: Vec::new(),
+        })
+        .collect();
+    Cow::Owned(CT_Tbl {
+        properties: table.properties.clone(),
+        grid: table.grid.clone(),
+        rows,
+        extra_xml: table.extra_xml.clone(),
+        content_controls: Vec::new(),
+    })
+}
+
+fn push_control_cell_content(control: &CT_Sdt, content: &mut Vec<CellContent>) {
+    for item in &control.content {
+        match item {
+            SdtContent::Paragraph(paragraph) => {
+                content.push(CellContent::Paragraph(paragraph.clone()))
+            }
+            SdtContent::Table(table) => content.push(CellContent::Table(table.clone())),
+            SdtContent::ContentControl(nested) => push_control_cell_content(nested, content),
+            SdtContent::Row(_)
+            | SdtContent::Cell(_)
+            | SdtContent::Run(_)
+            | SdtContent::RawXml(_) => {}
+        }
+    }
+}
+
+/// Visit the drawings the exporters write, in the order they write them: those
+/// of the accepted view of every paragraph (see `CT_P::accepted_view`), in
+/// the paragraphs [`visit_body_paragraphs`] reaches.
+pub(crate) fn visit_accepted_drawings(
+    content: &[BodyContent],
+    visitor: &mut impl FnMut(&CT_Drawing),
+) {
+    visit_body_paragraphs(content, &mut |paragraph| {
+        for run in &paragraph.accepted_view().runs {
+            visit_run_drawings(run, visitor);
+        }
+    });
 }
 
 pub(crate) fn visit_all_drawings(content: &[BodyContent], visitor: &mut impl FnMut(&CT_Drawing)) {
@@ -22486,16 +22636,28 @@ impl Document {
     ///
     /// A `replacement` that contains `placeholder` is substituted once, not
     /// repeatedly.
+    ///
+    /// A `replacement` holding a character XML 1.0 cannot carry is accepted
+    /// here and refused when the document is saved. [`Self::try_replace_text`]
+    /// refuses it at once.
     pub fn replace_text(&mut self, placeholder: &str, replacement: &str) -> usize {
-        self.try_replace_text(placeholder, replacement)
-            .expect("text replacement package preflight failed")
+        let mut candidate = self.clone_for_staging();
+        let count = candidate
+            .replace_batch(&[(placeholder, replacement)])
+            .expect("text replacement package preflight failed");
+        self.commit_staged_mutation(candidate);
+        count
     }
 
     /// Fallible twin of [`Self::replace_text`].
     ///
     /// The complete replacement is staged, serialized, and reopened before it
     /// replaces the live document. A preflight failure leaves `self` unchanged.
+    /// A `replacement` holding a character XML 1.0 cannot carry, such as
+    /// U+0001, is refused with an error naming it and its position, as
+    /// python-docx refuses such text.
     pub fn try_replace_text(&mut self, placeholder: &str, replacement: &str) -> Result<usize> {
+        oxml_core::xml::reject_non_xml_characters("replacement text", replacement)?;
         let mut candidate = self.clone_for_staging();
         let count = candidate.replace_batch(&[(placeholder, replacement)])?;
         self.commit_staged_mutation(candidate);
@@ -22756,6 +22918,7 @@ impl Document {
     /// of them and the text of tracked insertions. Returns the total number of replacements made, or an error if the
     /// regex is invalid.
     pub fn replace_regex(&mut self, pattern: &str, replacement: &str) -> Result<usize> {
+        oxml_core::xml::reject_non_xml_characters("replacement text", replacement)?;
         let re =
             regex::Regex::new(pattern).map_err(|e| Error::Other(format!("invalid regex: {e}")))?;
         let mut candidate = self.clone_for_staging();
@@ -22766,6 +22929,9 @@ impl Document {
 
     /// Replace multiple regex patterns at once. Returns total replacements.
     pub fn replace_all_regex(&mut self, patterns: &[(String, String)]) -> Result<usize> {
+        for (_, replacement) in patterns {
+            oxml_core::xml::reject_non_xml_characters("replacement text", replacement)?;
+        }
         let compiled = patterns
             .iter()
             .map(|(pattern, replacement)| {
@@ -23426,12 +23592,19 @@ impl Document {
     }
 
     /// Render the selected revision view to PDF with user-provided fonts.
+    ///
+    /// The caller fonts are added to the fonts `to_pdf` resolves from, in the
+    /// order [`Self::to_pdf_with_fonts`] lists. [`Self::layout_with_fonts`] is
+    /// the layout limited to the caller and embedded fonts.
     pub fn to_pdf_with_fonts_and_options(
         &self,
         font_files: &[(&str, &[u8])],
         options: RenderOptions,
     ) -> Result<Vec<u8>> {
-        let layout = self.layout_with_fonts_and_options(font_files, options)?;
+        let input = self.build_layout_input_with_fonts(font_files, options);
+        #[cfg(test)]
+        record_layout_invocation();
+        let layout = rdocx_layout::layout_document_with_provenance(&input)?;
         Ok(oxml_pdf::render_to_pdf(&layout.layout))
     }
 
@@ -28700,6 +28873,45 @@ mod tests {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .is_none()
+        );
+    }
+
+    /// `to_pdf_with_fonts` documents caller fonts over the fonts `to_pdf`
+    /// uses. It rendered through the caller-only layout instead, so a family
+    /// that neither the caller nor the document supplies failed the render.
+    #[test]
+    fn pdf_with_caller_fonts_falls_back_to_the_fonts_to_pdf_uses() {
+        let (caller_family, caller_bytes) = caller_only_font();
+        let mut document = Document::new();
+        document.add_paragraph("Calibri resolves as to_pdf resolves it");
+        document
+            .add_paragraph("")
+            .add_run("a family nobody supplies")
+            .font("Unobtainium Sans");
+        document
+            .add_paragraph("")
+            .add_run("caller face must win")
+            .font(caller_family);
+
+        assert_eq!(
+            document
+                .to_pdf_with_fonts(&[])
+                .expect("an empty caller set renders like to_pdf"),
+            document.to_pdf().unwrap()
+        );
+        let pdf = document
+            .to_pdf_with_fonts(&[(caller_family, &caller_bytes)])
+            .expect("missing families fall back past the caller set");
+        assert!(
+            pdf.windows(caller_family.len())
+                .any(|window| window == caller_family.as_bytes()),
+            "the caller face is embedded"
+        );
+        assert!(
+            document
+                .layout_with_fonts(&[(caller_family, &caller_bytes)])
+                .is_err(),
+            "the caller-only layout stays strict"
         );
     }
 

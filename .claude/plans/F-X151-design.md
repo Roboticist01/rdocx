@@ -1,6 +1,6 @@
 # F-X151, Word preservation and comparison PR intake
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S78
 **Size**: L
 **Depends on**: F-X143
@@ -13,13 +13,14 @@ Six Word contributions remain on PR branches based before the S77 prefix. Direct
 
 - `docs/hld/03-architecture.md`, "What stays put" and "Facade conventions", for story, comparison, exporter, and preservation ownership.
 - `docs/hld/04-opc-and-packaging.md`, "The package", for exact source bytes, relationships, and package validation.
+- `docs/hld/05-drawingml-model.md`, "Text", for DrawingML XML-character handling.
 - `docs/hld/08-rendering-spec.md`, "The PDF backend", for caller font fallback and layout output.
 - `docs/hld/10-bindings-spec.md`, "Python API shape" and "CI", for the failed PR 239 binding gate.
 - `docs/hld/12-testing-strategy.md`, "Test taxonomy", "The hash harness", and "Binding tests", for regression and output evidence.
 
 ## Approach
 
-Review the incremental source commits from PRs 214, 228, 229, 232, 233, and 239 against their own bases. Port their behavior and tests onto the S77 prefix in separate labelled commits. Reconcile PR 214 caller font fallback with PR 194's current implementation. Preserve the existing S77 public APIs and avoid carrying stale archive measurements or unrelated branch rewrites. Run the PR 239 Python binding gate on the reconciled result.
+Review the incremental source commits from PRs 214, 228, 229, 232, 233, and 239 against their own bases. PR 233 also repairs DrawingML and Presentation XML-character handling, which remains part of its incremental acceptance and requires the DrawingML HLD update. Port their behavior and tests onto the S77 prefix in separate labelled commits. Reconcile PR 214 caller font fallback with PR 194's current implementation. Preserve the existing S77 public APIs and avoid carrying stale archive measurements or unrelated branch rewrites. Run the PR 239 Python binding gate on the reconciled result.
 
 ## Rejected alternatives
 
@@ -40,6 +41,7 @@ Review the incremental source commits from PRs 214, 228, 229, 232, 233, and 239 
 
 - `docs/hld/03-architecture.md`
 - `docs/hld/04-opc-and-packaging.md`
+- `docs/hld/05-drawingml-model.md`
 - `docs/hld/08-rendering-spec.md`
 - `docs/hld/10-bindings-spec.md`
 - `docs/hld/12-testing-strategy.md`
@@ -57,10 +59,10 @@ Expected unchanged unless an individual imported behavior changes a sampled outp
 
 ## Implementation checklist
 
-- [ ] Review the incremental diff and provenance of each PR.
-- [ ] Port behavior and focused tests in dependency order, reconciling overlaps against S77.
-- [ ] Re-run PR 239's failed Python binding gate.
-- [ ] Run scoped verification and a zero-finding microscope.
+- [x] Review the incremental diff and provenance of each PR.
+- [x] Port behavior and focused tests in dependency order, reconciling overlaps against S77.
+- [x] Re-run PR 239's failed Python binding gate.
+- [x] Run scoped verification and a zero-finding microscope.
 
 ## Open questions
 
