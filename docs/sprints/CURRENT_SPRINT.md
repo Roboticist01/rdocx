@@ -1,84 +1,58 @@
-# Current Sprint, S77
+# Current Sprint, S78
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: integrate the remaining reviewed rendering, layout, Python,
-presentation and CLI contributions on the completed S76 prefix. Reconcile
-stacked and overlapping PRs before one combined verification and review
-boundary. Issue acceptance continues through S88 before deferred feature work
-at S89.
+**Goal**: land the reviewed Word preservation and comparison contributions on
+the completed S77 prefix. Then run the attached identity and producer matrices
+and finish the comparison and redline acceptance criteria for Issues 157, 159,
+160 and 161.
 
 ## Spec references
 
-- `docs/hld/03-architecture.md`, for crate and facade ownership across the
-  Word, presentation and CLI contributions.
-- `docs/hld/05-drawingml-model.md`, for shared DrawingML geometry, tables and
-  preservation rules touched by rendering and presentation work.
-- `docs/hld/06-presentationml-model.md`, for presentation shapes, tables,
-  layouts, relationships and validation.
-- `docs/hld/08-rendering-spec.md`, for Word and slide layout, PDF and raster
-  rendering behavior.
-- `docs/hld/10-bindings-spec.md`, for native and Python API agreement, handle
-  behavior and both CLI contracts.
-- `docs/hld/12-testing-strategy.md`, for deterministic rendering, the hash
-  harness, fidelity corpora, binding smoke and integration evidence.
-- `docs/hld/14-development-backlog.md`, for F-X140 through F-X158
-  dependencies, PR sets and named test gates.
+- `docs/hld/03-architecture.md`, for the Word facade, comparison and CLI crate
+  boundaries.
+- `docs/hld/04-opc-and-packaging.md`, for source-preserving story and package
+  round trips.
+- `docs/hld/08-rendering-spec.md`, for layout-backed field and TOC behavior
+  exercised by the producer matrix.
+- `docs/hld/10-bindings-spec.md`, for Python and CLI comparison options and
+  redline parity.
+- `docs/hld/12-testing-strategy.md`, for deterministic fixtures, the hash
+  harness and the integrated regression gate.
+- `docs/hld/14-development-backlog.md`, for the F-X151, F-X144 and F-X145
+  contracts and their dependencies.
 
 ## The wave
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X140 | Rendering and layout contribution wave | L | done | - |
-| F-X141 | Word Python contribution wave | L | done | - |
-| F-X142 | Presentation Python contribution wave | L | done | - |
-| F-X143 | Revision listing and CLI story contribution wave | M | done | - |
+| F-X151 | Word preservation and comparison PR intake | L | pending | - |
+| F-X144 | Identity and producer matrices across operations | L | pending | - |
+| F-X145 | Comparison options and redline completion | L | pending | - |
 
 ## Sequencing note
 
-F-X140 follows S76's package prefix and owns the first reviewed hash baseline
-update. F-X141 follows F-X140 and owns a separate baseline update for native
-common styles and any reviewed TOC output delta. Each behavior change has its
-own labelled commit and expected delta.
-PR 196's Presentation fidelity gate and PR 206's MSRV and Test failures must
-be resolved on the replayed integrated result before sprint closure. F-X141
-and F-X142 both follow F-X140. Their shared presentation tests and
-documentation make them separate waves, with F-X141 first. In F-X141, PR
-203 follows 201. In F-X142, PRs 208 and 209 follow 189. F-X143 follows F-X141
-and S76's PR 198, with PR 204 replayed after that parent. Reapply only the
-incremental diff of each stacked PR onto the sprint branch, then run its
-focused checks and the combined sprint gate. Rebase and rerun head CI for any
-original PR selected for a direct merge. A superseded PR needs verified
-`main` coverage before it is closed.
+F-X151 follows completed F-X143 and reviews the incremental changes in PRs
+214, 228, 229, 232, 233 and 239 against the S77 prefix. Resolve PR 214's
+recorded overlap with PR 194, and rerun the failed PR 239 Python binding gate
+on the reconciled result. F-X144 follows F-X151 and completes the identity,
+producer and add_picture matrices. F-X145 follows F-X144 and completes the
+comparison option, edited-side comment, rebuilt TOC and marker-order cases.
+Use focused checks and a zero-finding microscope per story, then the full
+verification and sprint review once on the combined result.
 
 ## Definition of done for this sprint
 
-- Every S77 PR has a reviewed incremental diff replayed on the sprint branch,
-  reconciled overlap and passing relevant focused checks on that replayed
-  result. Original heads selected for a direct merge need a rebase and green
-  CI. Later intake is assigned to S78 through S88.
-- F-X140's intentional rendering delta has its own labelled commit and
-  reviewed expected hash change. The deterministic Word and presentation
-  fidelity gates pass.
-- F-X141 completes the named section-default, native common-style and
-  refreshable TOC behavior gaps, with a separately reviewed baseline delta.
-- Word and presentation Python workflows, typing smoke, native parity,
-  round-trip, validation and rendering checks pass on the integrated result.
-- F-X142 covers every Issue 169 checklist item through a working API or a
-  reviewed scope decision and documented fallback, including shape hyperlinks,
-  anchored comments and built-in table styles.
-- Revision listing covers all stories. The CLI detects malformed related
-  parts and undefined styles in its stated scope.
-- Each S77 F-ID remains scoped to its design, focused tests, applicable oracle
-  cases, `/verify --scoped` and a zero-finding `/microscope`. F-X140 and later
-  formal dependency prefixes use scoped evidence and focused integration
-  checks before their consumers begin. Full verification and sprint review
-  run after all S77 stories are integrated.
-- The combined S77 result passes binding smoke, package, rendering,
-  documentation and release regression checks, then `/verify --full` and
-  `/sprint-review`. Broader issue acceptance remains scheduled for S78
-  through S88.
-- At `/close-sprint`, reconcile S77 PRs and issues against the verified `main`
-  result. Thank each contributor in a human-written PR closure comment. Close
-  an issue only after every criterion passes, and leave partial issues open
-  with their remaining work recorded.
+- Each contributed PR has a reviewed incremental diff on the S77 prefix, with
+  overlaps reconciled and focused checks passing on the replayed result.
+- The Issue 157 add_picture column and all Issue 159 identity rows pass every
+  named operation without lost identity or comparison refusal.
+- The Issue 160 producer matrix, content-control walker locations, unchanged
+  comments bytes and mc:Ignorable checks pass on edited parts.
+- Python and CLI comparison options agree. Edited-side comments, rebuilt TOCs
+  and marker placement meet every Issue 161 redline case.
+- The combined result passes the hash harness, the applicable binding and
+  package regressions, `/verify --full` and `/sprint-review` before closure.
+- At `/close-sprint`, reconcile S78 PRs and issues against verified `main`,
+  thank contributors in specific human-written comments, and close issues
+  only after their complete criteria have evidence.
