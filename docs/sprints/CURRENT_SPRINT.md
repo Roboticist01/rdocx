@@ -40,19 +40,23 @@ F-X140 follows S76's package prefix and owns the first reviewed hash baseline
 update. F-X141 follows F-X140 and owns a separate baseline update for native
 common styles and any reviewed TOC output delta. Each behavior change has its
 own labelled commit and expected delta.
-PR 196's Presentation fidelity gate and PR 206's MSRV and Test gates must pass
-before integration. F-X141 and F-X142 both follow F-X140. Their shared
-presentation tests and documentation make them separate waves, with F-X141
-first. In F-X141, PR 203
-follows 201. In F-X142, PRs 208 and 209 follow 189. F-X143 follows F-X141
+PR 196's Presentation fidelity gate and PR 206's MSRV and Test failures must
+be resolved on the replayed integrated result before sprint closure. F-X141
+and F-X142 both follow F-X140. Their shared presentation tests and
+documentation make them separate waves, with F-X141 first. In F-X141, PR
+203 follows 201. In F-X142, PRs 208 and 209 follow 189. F-X143 follows F-X141
 and S76's PR 198, with PR 204 replayed after that parent. Reapply only the
-incremental diff of each stacked PR, then rebase and rerun CI.
+incremental diff of each stacked PR onto the sprint branch, then run its
+focused checks and the combined sprint gate. Rebase and rerun head CI for any
+original PR selected for a direct merge. A superseded PR needs verified
+`main` coverage before it is closed.
 
 ## Definition of done for this sprint
 
-- Every S77 PR has a reviewed incremental diff, reconciled overlap and
-  passing relevant focused checks after rebasing. Later intake is assigned
-  to S78 through S88.
+- Every S77 PR has a reviewed incremental diff replayed on the sprint branch,
+  reconciled overlap and passing relevant focused checks on that replayed
+  result. Original heads selected for a direct merge need a rebase and green
+  CI. Later intake is assigned to S78 through S88.
 - F-X140's intentional rendering delta has its own labelled commit and
   reviewed expected hash change. The deterministic Word and presentation
   fidelity gates pass.

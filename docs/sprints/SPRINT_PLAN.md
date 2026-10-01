@@ -1567,17 +1567,20 @@ F-X140 reviews PRs 175, 188, 196, 199, 200, 206 and 207. It owns the
 first labelled and reviewed hash baseline update. F-X141 owns a second,
 separate baseline update for native common styles and any reviewed TOC output
 delta. No other S77 story may move the baseline.
-PR 196's Presentation fidelity gate and PR 206's MSRV and Test gates must
-pass before integration. F-X141 reviews PRs 176, 187, 194, 201, 203 and 212. PR 203 follows
-201. F-X142 reviews PRs 173, 181, 189, 192, 208 and 209. PRs 208
+PR 196's Presentation fidelity gate and PR 206's MSRV and Test failures must
+be resolved on the replayed integrated result before sprint closure. F-X141
+reviews PRs 176, 187, 194, 201, 203 and 212. PR 203 follows 201. F-X142
+reviews PRs 173, 181, 189, 192, 208 and 209. PRs 208
 and 209 follow 189. F-X141 also completes the named section-default, native
 common-style and refreshable TOC gaps beyond those PRs. F-X142 completes the
 full Issue 169 checklist, including the API and rendering items outside its
 PR set. F-X143 reviews PRs 186 and 204, with 204 following
 S76 PR 198. Replay only each stacked PR's incremental diff after its
-parent lands, then rebase the head and rerun CI. Binding smoke, package,
-rendering, documentation and release regression checks run on the combined
-result, followed by `/verify --full` and `/sprint-review`.
+parent lands, run focused checks on the replayed result, and require a rebase
+and green head CI for any original PR selected for a direct merge. Close a
+superseded PR only after its coverage is verified on `main`. Binding smoke,
+package, rendering, documentation and release regression checks run on the
+combined result, followed by `/verify --full` and `/sprint-review`.
 
 #### Sprint S78, Word producer and comparison repair
 
