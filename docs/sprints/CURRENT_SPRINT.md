@@ -26,7 +26,7 @@ and finish the comparison and redline acceptance criteria for Issues 157, 159,
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X151 | Word preservation and comparison PR intake | L | in-progress | codex |
+| F-X151 | Word preservation and comparison PR intake | L | done | - |
 | F-X144 | Identity and producer matrices across operations | L | pending | - |
 | F-X145 | Comparison options and redline completion | L | pending | - |
 

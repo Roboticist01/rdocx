@@ -16634,3 +16634,23 @@ and dependency direction checks passed.
 **Notes for future sessions.** Issues 160 and 165 remain open for their full
 acceptance matrices in later sprints. PR heads need rebase and CI reruns before
 closure. The 18-page Word SSIM trend is advisory and below its target.
+
+### F-X151, Word preservation and comparison PR intake
+
+**Sprint.** S78
+**Completed.** 2026-10-01
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Integrated the incremental behavior and focused tests from PRs 214, 228, 229, 232, 233 and 239 on the completed S77 prefix. Word comparison, revision handling, exporters, namespace and border retention, XML character validation, and shared-run field text now retain their reviewed behavior across native and Python paths.
+
+**Non-obvious choices.** Each PR behavior was recorded in a separate labelled worker commit because the full PR branches predated S77. Microscope review found two additional cases: authored UTF-16 XML with a forbidden character and an ignored hyperlink whose relationship id appeared only as a bookmark name. Both were fixed in separate commits. The existing caller font fallback required the Python test to expect a successful PDF for an empty font directory.
+
+**Deviations from the design plan.** None. The plan was extended before implementation to list DrawingML's HLD section for PR 233.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, `docs/hld/04-opc-and-packaging.md`, `docs/hld/05-drawingml-model.md`, `docs/hld/08-rendering-spec.md`, `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The combined changed-crate suite, 121 Word Python binding tests, UTF-16 package writer case, and comparison hyperlink carry regressions passed. The bookmark-name regression failed before the fix and passed after it. Scoped format, Clippy, no-default font, WASM, documentation, repository-policy and 22-crate packaging gates passed. Microscope pass 2 found zero defects and zero smells. Final integrated workspace verification remains due at sprint closure.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker prefix.
+
+**Notes for future sessions.** F-X144 and F-X145 consume this prefix. The imported PR heads still require rebase and hosted CI before their upstream closure.

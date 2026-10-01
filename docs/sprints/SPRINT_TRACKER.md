@@ -509,6 +509,8 @@ defended.
 | F-X142 | S77 | L | 5 | 1 | 2026-10-01 | Integrated six Presentation Python PRs and completed the Issue 169 API, comment anchor and built-in table style checklist |
 | F-X143 | S77 | M | 3 | 1 | 2026-10-01 | Integrated two revision and CLI PRs with all-story listing, related-part warnings and strict validation |
 
+| F-X151 | S78 | L | 5 | 1 | 2026-10-01 | Integrated six Word PR behaviors with scoped review fixes, unchanged hash output and 121 passing Python tests |
+
 ## Velocity
 
 Recalculated at each sprint close. The backlog assumes about 2 stories per week
