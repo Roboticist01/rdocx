@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)              | 179 | 165 | 0 | 10 |
-| **Total** | **504** | **427** | **0** | **73** |
+| X, Cross-cutting (opportunistic)              | 179 | 165 | 1 | 9 |
+| **Total** | **504** | **427** | **1** | **72** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -722,5 +722,5 @@ regenerated, never hand-edited.
 | F-X166 | Picture and final-block comparison revisions | S84 | L | pending |
 | F-X167 | Accepted-view exporters and readers | S84 | L | pending |
 | F-X168 | Current issue and contribution closure evidence | S84 | M | pending |
-| F-X169 | Reconcile live contributions and open issue contracts | S84 | L | pending |
+| F-X169 | Reconcile live contributions and open issue contracts | S84 | L | in-progress |
 <!-- AUTOGEN:backlog-MX END -->
