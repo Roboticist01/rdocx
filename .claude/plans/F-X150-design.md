@@ -1,6 +1,6 @@
 # F-X150, Reconcile issue closure evidence
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S82
 **Size**: M
 **Depends on**: F-X149, F-X158
@@ -17,7 +17,7 @@
 
 ## Approach
 
-Build a criterion ledger inside the F-X150 design plan or its HLD impact section, with one row per criterion in the 22-issue snapshot. Each row names a passing test or observation at the integrated SHA, or says unresolved and identifies the gap. Check live issue state when GitHub access returns. Close only issues whose complete criterion set is evidenced, with Issue 158 last after both fixture gates and final full verification and sprint review. Leave incomplete issues open with an evidence comment if the external service is available.
+Build a criterion ledger in `docs/hld/12-testing-strategy.md`, with one row per issue in the 22-issue snapshot. Each row names a passing test or observation on the integrated prefix, or says unresolved and identifies the gap. Check live issue state. Record candidate closures and open decisions for `/close-sprint`, which alone reconciles external issues after integrated `main` is pushed. Issue 158 remains open while any child criterion is unresolved. The final `/verify --full` and `/sprint-review` must pass before any closure action.
 
 ## Rejected alternatives
 
@@ -29,8 +29,8 @@ Build a criterion ledger inside the F-X150 design plan or its HLD impact section
 | Category | Test | Asserts |
 |---|---|---|
 | integration | Criterion ledger audit | Every criterion from the 22-issue snapshot has a passing artifact or explicit unresolved result. |
-| regression | Evidence locator check in existing sprint workflow tests | Every passing row resolves to a real test or immutable observation. |
-| gate | Backlog integration test gate | Criterion ledger is complete, and final sprint verify and review pass before closure actions. |
+| regression | `test_s82_original_issue_closure_ledger_has_resolvable_evidence` in existing sprint workflow tests | Every passing row resolves to a real test, every original issue appears once, and open decisions follow unresolved rows. |
+| gate | Criterion ledger audit | Ledger is complete on the integrated prefix. Final sprint verify and review pass before `/close-sprint` acts on issues. |
 
 ## HLD impact
 
@@ -46,12 +46,12 @@ Expected unchanged.
 
 ## Implementation checklist
 
-- [ ] Enumerate every criterion in the original 22-issue snapshot.
-- [ ] Bind each to a current passing artifact or an explicit unresolved result.
-- [ ] Confirm both fixture gates and final integrated verification and review before any issue closure.
-- [ ] Reconcile live issue state, close fully evidenced issues with Issue 158 last, and leave incomplete issues open.
-- [ ] Run scoped verification and microscope to zero findings.
+- [x] Enumerate every criterion in the original 22-issue snapshot.
+- [x] Bind each to a current passing artifact or an explicit unresolved result.
+- [x] Confirm both fixture gates and record that final integrated verification and review remain required before any issue closure.
+- [x] Reconcile live issue state, prepare post-main closure candidates for `/close-sprint`, and identify incomplete issues to leave open.
+- [x] Run scoped verification and microscope to zero findings.
 
 ## Open questions
 
-None. GitHub issue access is available through the approved remote read path. Both reporter attachments are identified and SHA-bound. An incomplete criterion keeps its issue open.
+None. GitHub issue access is available through the approved remote read path. Both reporter attachments are identified and SHA-bound. An incomplete criterion keeps its issue open. `/close-sprint` performs external issue reconciliation only after the integrated `main` push.
