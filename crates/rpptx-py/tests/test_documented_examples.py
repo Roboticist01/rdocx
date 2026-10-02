@@ -4379,3 +4379,268 @@ def test_issue_217_complete_deck_chain(tmp_path):
             close = sum(max(errors[offset:offset + 3]) <= 24 for offset in range(0, len(errors), 3))
             assert close / (len(errors) / 3) >= 0.97, label
             assert sum(errors) / len(errors) <= 3.0, label
+
+
+def test_issue_158_deck_fixture_acceptance(tmp_path):
+    """The reporter's exported deck must survive its complete edit workflow."""
+    import hashlib
+    import os
+    import posixpath
+    import shutil
+    import subprocess
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    import pptx
+    import rpptx
+    from PIL import Image
+    from rpptx.dml.color import RGBColor
+    from rpptx.enum.dml import MSO_ARROWHEAD_LENGTH, MSO_ARROWHEAD_STYLE, MSO_ARROWHEAD_WIDTH
+    from rpptx.enum.shapes import MSO_CONNECTOR_TYPE, MSO_SHAPE
+
+    root = Path(__file__).resolve().parents[3]
+    fixture = Path(os.environ.get(
+        "RPPTX_ISSUE_158_FIXTURE", root / "corpus/issue-158/fixture-deck.pptx"
+    ))
+    if not fixture.is_file() and "RPPTX_ISSUE_158_FIXTURE" not in os.environ:
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        request = urllib.request.Request(
+            "https://github.com/user-attachments/files/32701103/fixture-deck.pptx",
+            headers={"User-Agent": "rdocx-issue-158-acceptance/1"},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            fixture.write_bytes(response.read())
+    source_bytes = fixture.read_bytes()
+    assert hashlib.sha256(source_bytes).hexdigest() == (
+        "8b703c862792470d3732c6eea07d280d3023525f8653cee4c12d9fc9d14c464a"
+    )
+    assert importlib.metadata.version("python-pptx") == "1.0.2"
+    source_oracle = pptx.Presentation(fixture)
+    assert len(source_oracle.slides) == 7
+    assert (source_oracle.slide_width, source_oracle.slide_height) == (9144000, 6858000)
+
+    # Add two preservation sentinels to the reporter's actual package. Neither
+    # feature appears in the source deck, but both must survive the same edits.
+    parts = _package_parts(source_bytes)
+    slide7 = parts["ppt/slides/slide7.xml"]
+    gradient = (
+        b'<p:bg><p:bgPr><a:gradFill rotWithShape="1"><a:gsLst>'
+        b'<a:gs pos="0"><a:srgbClr val="FFFFFF"/></a:gs>'
+        b'<a:gs pos="100000"><a:srgbClr val="E0EAF4"/></a:gs>'
+        b'</a:gsLst><a:lin scaled="0"/></a:gradFill><a:effectLst/>'
+        b'</p:bgPr></p:bg>'
+    )
+    body_property = (
+        b'<a:bodyPr rot="5400000" vertOverflow="clip" horzOverflow="clip" '
+        b'numCol="2" spcCol="91440" rtlCol="1" fromWordArt="1" '
+        b'anchorCtr="0" forceAA="1" upright="1" compatLnSpc="0">'
+        b'<a:prstTxWarp prst="textNoShape"><a:avLst/>'
+        b'</a:prstTxWarp></a:bodyPr>'
+    )
+    assert slide7.count(b"<p:cSld><p:spTree>") == 1
+    assert b"<a:bodyPr/>" in slide7
+    slide7 = slide7.replace(b"<p:cSld><p:spTree>", b"<p:cSld>" + gradient + b"<p:spTree>", 1)
+    parts["ppt/slides/slide7.xml"] = slide7.replace(b"<a:bodyPr/>", body_property, 1)
+    source = tmp_path / "issue-158-source.pptx"
+    source.write_bytes(_package_bytes(parts))
+
+    deck = rpptx.Presentation(source)
+    assert len(deck.slides) == 7 and deck.validate() == ()
+    unit = rpptx.Inches(1)
+
+    def text_shape():
+        return next(shape for shape in deck.slides[1].shapes
+                    if shape.has_text_frame and shape.text.strip())
+
+    run = text_shape().text_frame.paragraphs[0].runs[0]
+    original_font = (run.font.name, run.font.size, run.font.bold)
+    run.text += " edited"
+    assert (text_shape().text_frame.paragraphs[0].runs[0].font.name,
+            text_shape().text_frame.paragraphs[0].runs[0].font.size,
+            text_shape().text_frame.paragraphs[0].runs[0].font.bold) == original_font
+    text_shape().text_frame.paragraphs[0].space_after = 6 * 12700
+    text_shape().text_frame.paragraphs[0].line_spacing = 0.9
+    text_shape().text_frame.margin_left = 0
+    text_shape().text_frame.word_wrap = True
+    assert text_shape().text_frame.paragraphs[0].space_after == 6 * 12700
+    original_left, _, original_width, _ = text_shape().effective_geometry()
+    text_shape().left = original_left + unit // 10
+    text_shape().width = original_width - unit // 10
+    assert (text_shape().left, text_shape().width) == (
+        original_left + unit // 10, original_width - unit // 10
+    )
+
+    shape = deck.slides[1].shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, unit, unit, 2 * unit, unit // 2
+    )
+    card_id = shape.shape_id
+    shape.fill.solid()
+    deck.slides[1].shapes[-1].fill.fore_color.rgb = RGBColor(0xDD, 0xEE, 0xFF)
+    deck.slides[1].shapes[-1].line.width = 12700
+    deck.slides[1].shapes[-1].line.color.rgb = RGBColor(0, 0, 0)
+    connector = deck.slides[1].shapes.add_connector(
+        MSO_CONNECTOR_TYPE.STRAIGHT, unit, unit, 2 * unit, 2 * unit
+    )
+    connector_id = connector.shape_id
+    picture = Image.new("RGB", (300, 150), (200, 60, 60))
+    picture_bytes = io.BytesIO()
+    picture.save(picture_bytes, format="PNG")
+    image_data = picture_bytes.getvalue()
+    deck.slides[1].shapes.add_picture(io.BytesIO(image_data), unit, 3 * unit, width=unit)
+    picture_id = deck.slides[1].shapes[-1].shape_id
+    next(shape for shape in deck.slides[1].shapes if shape.shape_id == picture_id).replace_image(
+        io.BytesIO(image_data)
+    )
+
+    deck.slides[2].notes_text = "Edited note."
+    deck.slides[3].hidden = True
+    deck.slides.move(1, 2)
+    deck.slides.add_slide(deck.slide_layouts[1])
+    deck.slides.remove(deck.slides[-1])
+    assert len(deck.slides) == 7
+    deck.slides.duplicate(deck.slides[1])
+    assert len(deck.slides) == 8
+    assert deck.replace_text("edited", "EDITED") >= 1
+    card = next(shape for shape in deck.slides[3].shapes if shape.shape_id == card_id)
+    card.shadow.color.rgb = RGBColor(0x12, 0x34, 0x56)
+    card.shadow.alpha = 0.5
+    card.shadow.blur_radius = rpptx.Pt(6)
+    card.shadow.distance = rpptx.Pt(4)
+    card.shadow.direction = 45.0
+    connector = next(shape for shape in deck.slides[3].shapes
+                     if shape.shape_id == connector_id)
+    connector.theme_effect_index = 0
+    connector.line.tail_end.type = MSO_ARROWHEAD_STYLE.TRIANGLE
+    connector.line.tail_end.width = MSO_ARROWHEAD_WIDTH.WIDE
+    connector.line.tail_end.length = MSO_ARROWHEAD_LENGTH.LONG
+    preset = deck.slides[3].shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 5 * unit, 5 * unit, 2 * unit, unit // 2
+    )
+    preset_id = preset.shape_id
+    next(shape for shape in deck.slides[3].shapes
+         if shape.shape_id == preset_id).auto_shape_type = MSO_SHAPE.CHEVRON
+    next(shape for shape in deck.slides[3].shapes
+         if shape.shape_id == card_id).text = "Fixture TOKEN\nSecond line\vsoft break"
+    assert next(shape for shape in deck.slides[3].shapes if shape.shape_id == card_id
+                ).text_frame.try_replace_text("TOKEN", "ready", expect=1) == 1
+    import_deck = rpptx.Presentation()
+    imported_source = import_deck.slides.add_slide(import_deck.slide_layouts[6])
+    imported_source.shapes.add_textbox(unit, unit, 3 * unit, unit).text = "Imported TOKEN"
+    import_deck.slides[0].shapes.add_picture(
+        io.BytesIO(_tiny_png(0x22, 0x88, 0xCC)), 5 * unit, unit, unit, unit
+    )
+    import_deck.slides[0].notes_text = "Imported fixture note"
+    deck.slides.import_slide(import_deck.slides[0], index=8)
+    assert deck.slides[8].try_replace_text("TOKEN", "ready", expect=1, notes=False) == 1
+    assert len(deck.slides) == 9
+    author_id = "{11111111-1111-1111-1111-111111111158}"
+    comment_id = "{22222222-2222-2222-2222-222222222158}"
+    deck.add_comment_author(
+        id=author_id, name="Fixture reviewer", user_id="reviewer@example.test",
+        provider_id="local",
+    )
+    deck.slides[1].add_comment(
+        id=comment_id, author_id=author_id, created="2026-10-02T10:00:00Z",
+        text="Reviewed fixture workflow",
+    )
+    deck.slides[1].resolve_comment(comment_id)
+    assert deck.slides[1].comments[0].status == "resolved"
+    assert isinstance(deck.text_layout(), tuple)
+
+    output = tmp_path / "issue-158-edited.pptx"
+    deck.save(output)
+    subprocess.run(
+        ["cargo", "run", "--quiet", "-p", "rpptx-cli", "--", "validate", str(output)],
+        cwd=root, check=True, capture_output=True, text=True,
+    )
+    saved = _package_parts(output.read_bytes())
+    assert gradient in saved["ppt/slides/slide7.xml"]
+    assert body_property in saved["ppt/slides/slide7.xml"]
+    assert [hashlib.sha256(data).hexdigest() for name, data in parts.items()
+            if name.startswith("ppt/media/")] == [
+        hashlib.sha256(saved[name]).hexdigest() for name in parts
+        if name.startswith("ppt/media/")
+    ]
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            base = "" if name == "_rels/.rels" else name.rsplit("/_rels/", 1)[0]
+            for relationship in ET.fromstring(archive.read(name)):
+                if relationship.get("TargetMode") == "External":
+                    continue
+                target = relationship.attrib["Target"]
+                resolved = target.lstrip("/") if target.startswith("/") else posixpath.normpath(
+                    posixpath.join(base, target)
+                )
+                assert resolved in names, (name, resolved)
+
+    reopened = rpptx.Presentation(output)
+    oracle = pptx.Presentation(output)
+    assert reopened.validate() == ()
+    assert len(reopened.slides) == len(oracle.slides) == 9
+    assert [slide.notes_text for slide in reopened.slides] == [
+        slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else None
+        for slide in oracle.slides
+    ]
+    assert reopened.slides[1].comments[0].status == "resolved"
+    assert sum(slide.hidden for slide in reopened.slides) == 1
+    assert reopened.slides[3].shapes[-1].auto_shape_type == MSO_SHAPE.CHEVRON
+    assert next(shape for shape in reopened.slides[3].shapes
+                if shape.shape_id == card_id).shadow.color.rgb == RGBColor(0x12, 0x34, 0x56)
+    assert next(shape for shape in reopened.slides[3].shapes
+                if shape.shape_id == connector_id).line.tail_end.type == MSO_ARROWHEAD_STYLE.TRIANGLE
+    assert reopened.slides[8].notes_text == "Imported fixture note"
+    assert reopened.slides[8].shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+    oracle_card = next(shape for shape in oracle.slides[3].shapes
+                       if shape.shape_id == card_id)
+    oracle_connector = next(shape for shape in oracle.slides[3].shapes
+                            if shape.shape_id == connector_id)
+    assert oracle_card.text == "Fixture ready\nSecond line\vsoft break"
+    assert oracle_card._element.xpath("./p:spPr/a:effectLst/a:outerShdw/@blurRad") == ["76200"]
+    assert oracle_connector._element.xpath("./p:style/a:effectRef/@idx") == ["0"]
+    assert oracle_connector._element.xpath("./p:spPr/a:ln/a:tailEnd/@type") == ["triangle"]
+    assert oracle.slides[3].shapes[-1].auto_shape_type == pptx.enum.shapes.MSO_SHAPE.CHEVRON
+    assert oracle.slides[8].notes_slide.notes_text_frame.text == "Imported fixture note"
+    assert any(shape.image.blob == image_data for slide in oracle.slides
+               for shape in slide.shapes if shape.shape_type == 13)
+    assert any("EDITED" in shape.text for slide in oracle.slides for shape in slide.shapes
+               if shape.has_text_frame)
+
+    soffice = os.environ.get("RPPTX_PINNED_SOFFICE") or shutil.which("soffice")
+    assert soffice, "pinned LibreOffice viewer oracle is required for Issue 158"
+    assert "LibreOffice 26.2.5.2" in subprocess.check_output([soffice, "--version"], text=True)
+    viewer_dir = tmp_path / "viewer"
+    viewer_dir.mkdir()
+    subprocess.run([
+        soffice, "-env:UserInstallation=" + (tmp_path / "lo-profile").as_uri(),
+        "--headless", "--convert-to", "pdf", "--outdir", str(viewer_dir), str(output),
+    ], check=True, capture_output=True, text=True)
+    pdf = viewer_dir / "issue-158-edited.pdf"
+    assert pdf.is_file()
+    # Impress omits the hidden slide from its PDF. These windows cover the
+    # imported source images, the edited slide, and the omitted-angle gradient.
+    # Picture resampling permits 90 percent close pixels and 4.5 mean error.
+    # The other windows permit text antialiasing within 3 RGB levels on average.
+    windows = (
+        (2, 3, "source images", (430, 100, 600, 465), 0.90, 4.5),
+        (3, 4, "edited slide", (0, 0, 720, 540), 0.96, 3.0),
+        (7, 7, "gradient background", (0, 350, 720, 540), 0.99, 1.0),
+    )
+    for slide_index, page_number, label, box, min_close, max_mean in windows:
+        subprocess.run([
+            "pdftoppm", "-f", str(page_number), "-l", str(page_number),
+            "-r", "72", "-png", "-singlefile", str(pdf),
+            str(viewer_dir / f"slide{slide_index + 1}"),
+        ], check=True, capture_output=True)
+        native = Image.open(io.BytesIO(reopened.render_slide_to_png(slide_index, dpi=72.0))).convert("RGB")
+        viewer = Image.open(viewer_dir / f"slide{slide_index + 1}.png").convert("RGB")
+        assert abs(native.width - viewer.width) <= 1 and native.height == viewer.height
+        native_bytes = native.crop(box).tobytes()
+        viewer_bytes = viewer.crop(box).tobytes()
+        errors = [abs(left - right) for left, right in zip(native_bytes, viewer_bytes)]
+        close = sum(max(errors[offset:offset + 3]) <= 24 for offset in range(0, len(errors), 3))
+        assert close / (len(errors) / 3) >= min_close, label
+        assert sum(errors) / len(errors) <= max_mean, label

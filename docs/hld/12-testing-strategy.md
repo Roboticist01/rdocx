@@ -2837,6 +2837,29 @@ or a displaced image. There is no unsupported operation in this six-item
 chain. PowerPoint 16.104 remains an unobserved viewer, so the pinned
 LibreOffice render and python-pptx structure are the repeatable fallback.
 
+The Issue 158 fixture gate fetches the reporter's seven-slide 4:3 deck from
+the public attachment into ignored `corpus/issue-158` storage and verifies
+SHA-256 `8b703c862792470d3732c6eea07d280d3023525f8653cee4c12d9fc9d14c464a`.
+`RPPTX_ISSUE_158_FIXTURE` can supply the same pinned bytes offline. The gate
+edits runs, paragraph and frame properties, geometry, shapes, pictures, notes,
+slide order, visibility, comments, and replacement counts in that package. It
+also exercises the Issue 217 outer shadow, connector effect and line end,
+preset replacement, scoped replacement, line feeds and soft breaks, and
+media-bearing slide import. After save it checks
+package relationships, source media digests, notes and modelled structure
+against python-pptx 1.0.2, then runs `rpptx validate`. Injected omitted-angle
+gradient and unmodelled text body child sentinels stay byte-identical
+through the same save.
+The gate compares pinned LibreOffice 26.2.5.2 and deterministic rpptx render
+at 72 DPI. Because
+LibreOffice omits the hidden slide from its PDF, viewer page numbers are mapped
+to source slides. Picture resampling permits at least 90 percent of image-window
+pixels within 24 RGB levels and mean channel error at most 4.5. The edited
+slide window requires 96 percent and mean error at most 3.0. The gradient's
+empty lower window requires 99 percent and mean error at most 1.0. These
+windows isolate image filtering, saved edits and the background fill while
+allowing viewer antialiasing.
+
 | Issue 217 item | Focused evidence before the combined gate |
 |---|---|
 | Outer shadow | `test_shadow_parameters_write_the_outer_shadow_on_every_kind_python_pptx_shadows` |

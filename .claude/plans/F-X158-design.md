@@ -1,6 +1,6 @@
 # F-X158, Presentation fixture and workflow acceptance gate
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S82
 **Size**: L
 **Depends on**: F-X140, F-X148, F-X154, F-X157
@@ -52,10 +52,10 @@ Expected unchanged. An observed delta blocks completion until separately declare
 
 ## Implementation checklist
 
-- [ ] Bind the reporter deck fixture and record its digest.
-- [ ] Exercise the complete saved deck chain for Issues 169, 170, 215, 216 and 217.
-- [ ] Assert package integrity, structural reopen, validation and pinned cross-viewer output.
-- [ ] Run focused differential checks, scoped verification and microscope to zero findings.
+- [x] Bind the reporter deck fixture and record its digest.
+- [x] Exercise the complete saved deck chain for Issues 169, 170, 215, 216 and 217.
+- [x] Assert package integrity, structural reopen, validation and pinned cross-viewer output.
+- [x] Run focused differential checks, scoped verification and microscope to zero findings.
 
 ## Open questions
 
