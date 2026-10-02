@@ -16814,3 +16814,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the integrated S80 result.
 
 **Notes for future sessions.** Issue 217 remains open for F-X156 slide import and scoped replacement, then F-X157's complete deck-chain acceptance. The authored deck SHA-256 is `5a612c739359ea8f56ff18f797b9df38f56440fedaf64f756d31760516b91344`.
+
+### F-X156, Presentation slide and table contribution
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reconciled PRs 231, 235 and 238 on the reviewed F-X155 prefix. Native and Python APIs now import one slide from another presentation with checked layout selection, relationship remapping, shared equal media, notes and bounded SmartArt copying. Counted replacement can target one slide or one text frame. The 74 built-in table styles now expose table background paint through the model, resolver and renderer.
+
+**Non-obvious choices.** Import refuses unsupported internal relationship graphs before publishing a change and documents rebuilding the slide in the destination deck as a fallback. The table resolver preserves the S77 built-in default GUID fallback when no package definition exists. The integration review caught that fallback's omission in the initial handoff, and a focused regression plus microscope pass 2 established the repair.
+
+**Deviations from the design plan.** None. The imported deck render comparison used a declared 99 percent channel threshold and mean absolute channel error limit of 1 to account for font antialiasing.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, `docs/hld/05-drawingml-model.md`, `docs/hld/06-presentationml-model.md`, `docs/hld/07-inheritance-and-resolution.md`, `docs/hld/08-rendering-spec.md` and `docs/hld/10-bindings-spec.md`.
+
+**Tests.** The worker passed 145 `oxml-drawing`, 140 `rpptx-layout`, 105 `rpptx-render`, 84 `rpptx` unit and 282 `rpptx` integration tests, plus 73 Presentation Python examples, strict mypy and stubtest. The scoped formatting, Clippy, WASM, prose, adapter, README, policy and patched 22-crate publish dry-run checks passed, with every archive below 10 MiB. Python-pptx 1.0.2 reopened the imported deck with notes, and `rpptx validate` passed. At 150 DPI, the deterministic native render and LibreOffice 26.2.5.2 matched on 99.43 percent of RGB channels within 12, with mean absolute channel error 0.56. Microscope pass 2 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
+
+**Notes for future sessions.** F-X148 audits the complete Issue 169 Python production chain on this prefix. F-X157 completes the six-item Issue 217 deck chain after F-X148.
