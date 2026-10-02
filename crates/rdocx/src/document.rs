@@ -3435,6 +3435,11 @@ pub(crate) struct DocumentIdentifiers {
     bookmark_ids: HashSet<i32>,
     comment_ids: HashSet<i32>,
     drawing_ids: HashSet<u32>,
+    /// Per part, the `wp:docPr/@id` values the opened XML repeats, with
+    /// their occurrence count. Producers repeat them and consumers renumber
+    /// or ignore them, so a scan accepts them. A staged edit keeps the counts
+    /// of the opened document and may not exceed them.
+    repeated_drawing_ids: HashMap<String, HashMap<u32, usize>>,
     abstract_numbering_ids: HashSet<u32>,
     numbering_instance_ids: HashSet<u32>,
     part_names: HashSet<String>,
@@ -3467,6 +3472,7 @@ impl DocumentIdentifiers {
             bookmark_ids: HashSet::new(),
             comment_ids: HashSet::new(),
             drawing_ids: HashSet::new(),
+            repeated_drawing_ids: HashMap::new(),
             abstract_numbering_ids: HashSet::new(),
             numbering_instance_ids: HashSet::new(),
             part_names: package
@@ -3576,7 +3582,7 @@ impl DocumentIdentifiers {
             if let Some(categories) = identity_parts.get(&part_name_identity(part_name))
                 && identifier_xml_is_well_formed(bytes)
             {
-                let mut part_drawing_ids = HashSet::new();
+                let mut part_drawing_ids = HashMap::new();
                 identifiers
                     .scan_xml_definitions(bytes, categories, &mut part_drawing_ids)
                     .map_err(|error| {
@@ -3584,7 +3590,17 @@ impl DocumentIdentifiers {
                             "cannot scan identifiers in XML part {part_name}: {error}"
                         ))
                     })?;
-                identifiers.drawing_ids.extend(part_drawing_ids);
+                let repeated = part_drawing_ids
+                    .iter()
+                    .filter(|(_, count)| **count > 1)
+                    .map(|(id, count)| (*id, *count))
+                    .collect::<HashMap<_, _>>();
+                if !repeated.is_empty() {
+                    identifiers
+                        .repeated_drawing_ids
+                        .insert(part_name_identity(part_name), repeated);
+                }
+                identifiers.drawing_ids.extend(part_drawing_ids.into_keys());
             }
         }
         identifiers.preserved_relationship_ids = identifiers.relationship_ids.clone();
@@ -3630,7 +3646,7 @@ impl DocumentIdentifiers {
         &mut self,
         xml: &[u8],
         categories: &HashSet<IdentifierXmlCategory>,
-        part_drawing_ids: &mut HashSet<u32>,
+        part_drawing_ids: &mut HashMap<u32, usize>,
     ) -> Result<()> {
         let mut reader = NsReader::from_reader(xml);
         let mut buffer = Vec::new();
@@ -3681,7 +3697,7 @@ impl DocumentIdentifiers {
         reader: &NsReader<&[u8]>,
         element: &BytesStart<'_>,
         category: IdentifierXmlCategory,
-        part_drawing_ids: &mut HashSet<u32>,
+        part_drawing_ids: &mut HashMap<u32, usize>,
     ) -> Result<()> {
         for attribute in element.attributes() {
             let attribute = attribute.map_err(|error| Error::Other(error.to_string()))?;
@@ -3714,7 +3730,7 @@ impl DocumentIdentifiers {
                     let value = value
                         .parse::<u32>()
                         .map_err(|_| Error::Other(format!("invalid drawing id {value}")))?;
-                    Self::insert_unique(part_drawing_ids, value, "drawing")?;
+                    *part_drawing_ids.entry(value).or_default() += 1;
                 }
                 IdentifierXmlCategory::Bookmark => {
                     let value = value
@@ -3752,6 +3768,33 @@ impl DocumentIdentifiers {
             break;
         }
         Ok(())
+    }
+
+    /// Refuse a `wp:docPr/@id` occurrence that a staged edit added to an id
+    /// its part already uses. Repetitions the source document had are kept.
+    fn reject_new_repeated_drawing_ids(&self, source: &Self) -> Result<()> {
+        let mut added = self
+            .repeated_drawing_ids
+            .iter()
+            .flat_map(|(part_name, repeated)| {
+                repeated.iter().filter_map(move |(id, count)| {
+                    let kept = source
+                        .repeated_drawing_ids
+                        .get(part_name)
+                        .and_then(|repeated| repeated.get(id))
+                        .copied()
+                        .unwrap_or(1);
+                    (*count > kept).then_some((part_name, *id))
+                })
+            })
+            .collect::<Vec<_>>();
+        added.sort_unstable();
+        match added.first() {
+            Some((part_name, id)) => Err(Error::Other(format!(
+                "duplicate drawing id {id} in authored XML of part {part_name}"
+            ))),
+            None => Ok(()),
+        }
     }
 
     fn insert_unique<T: std::hash::Hash + Eq + std::fmt::Display + Copy>(
@@ -4200,6 +4243,8 @@ impl DocumentIdentifiers {
     }
 
     fn reconcile_provenance(&mut self, source: &Self) {
+        self.repeated_drawing_ids
+            .clone_from(&source.repeated_drawing_ids);
         self.preserved_relationship_ids = intersect_relationship_registry(
             &source.preserved_relationship_ids,
             &self.relationship_ids,
@@ -13265,6 +13310,9 @@ impl Document {
         let mut output = std::io::Cursor::new(Vec::new());
         self.package.write_to(&mut output)?;
         let mut reopened = Self::from_bytes_with_limits(output.get_ref(), limits)?;
+        reopened
+            .identifiers
+            .reject_new_repeated_drawing_ids(&provenance)?;
         reopened.identifiers.reconcile_provenance(&provenance);
         reopened.custom_properties_owned = custom_properties_owned;
         reopened.settings_owned = settings_owned;
@@ -18925,7 +18973,9 @@ impl Document {
     /// paragraph-style link are published together. Existing links must either
     /// match this exact tuple or the operation fails without changing the
     /// document. A style `w:numPr` holding a `w:ilvl` and no `w:numId` is not
-    /// a link, and the new link replaces its level.
+    /// a link, and the new link replaces its level. A repeated style ID
+    /// resolves to its first definition, and the style graph is validated as
+    /// in [`Document::add_style`].
     pub fn link_style_to_numbering(
         &mut self,
         style_id: &str,
@@ -18933,7 +18983,6 @@ impl Document {
         level: u32,
     ) -> Result<()> {
         let mut candidate = self.clone_for_staging();
-        style::validate_style_graph(&candidate.styles)?;
         candidate.validate_numbering_graph()?;
         candidate.reserve_styles_bundle()?;
         candidate.reserve_numbering_bundle()?;
@@ -19053,7 +19102,7 @@ impl Document {
                 Some(style_id.to_owned());
         }
 
-        style::validate_style_graph(&candidate.styles)?;
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.validate_numbering_graph()?;
         candidate.flush_to_package()?;
         candidate.invalidate_layout();
@@ -19068,7 +19117,9 @@ impl Document {
     /// back. A style that holds only a `w:ilvl`, takes its instance from its
     /// `basedOn` chain and is named back by the level loses only that name
     /// and keeps its level. A style holding only a `w:ilvl` that no level
-    /// names is not linked, and unlinking it changes nothing.
+    /// names is not linked, and unlinking it changes nothing. A repeated
+    /// style ID resolves to its first definition, and the style graph is
+    /// validated as in [`Document::add_style`].
     pub fn unlink_style_from_numbering(
         &mut self,
         style_id: &str,
@@ -19076,7 +19127,6 @@ impl Document {
         level: u32,
     ) -> Result<()> {
         let mut candidate = self.clone_for_staging();
-        style::validate_style_graph(&candidate.styles)?;
         candidate.validate_numbering_graph()?;
 
         let style_index = candidate
@@ -19171,7 +19221,7 @@ impl Document {
             numbering.abstract_nums[definition_index].levels[definition_level_index].p_style = None;
         }
 
-        style::validate_style_graph(&candidate.styles)?;
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.validate_numbering_graph()?;
         candidate.flush_to_package()?;
         candidate.invalidate_layout();
@@ -19197,7 +19247,13 @@ impl Document {
 
     // ---- Style manipulation ----
 
-    /// Add a custom style after validating the complete style graph.
+    /// Add a custom style after validating the change to the style graph.
+    ///
+    /// A defect the styles part already has, such as a style ID a producer
+    /// repeated, is retained, and [`Document::validate_style_graph`] still
+    /// reports it. Only a defect the change introduces rejects it, and an ID
+    /// that already exists is refused. The style mutations resolve a repeated
+    /// ID to its first definition, as layout and TOC rebuilding do.
     pub fn add_style(&mut self, builder: StyleBuilder) -> Result<()> {
         let mut candidate = self.clone_for_staging();
         candidate.reserve_styles_bundle()?;
@@ -19227,13 +19283,16 @@ impl Document {
             None,
             linked_style.as_deref(),
         );
-        style::validate_style_graph(&candidate.styles)?;
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.invalidate_layout();
         self.commit_staged_mutation(candidate);
         Ok(())
     }
 
-    /// Replace an existing style after validating the complete style graph.
+    /// Replace an existing style after validating the change to the style graph.
+    ///
+    /// A repeated style ID updates its first definition. Validation retains
+    /// existing defects as in [`Document::add_style`].
     pub fn set_style(&mut self, builder: StyleBuilder) -> Result<()> {
         let mut candidate = self.clone_for_staging();
         candidate.reserve_styles_bundle()?;
@@ -19280,20 +19339,26 @@ impl Document {
             old_link.as_deref(),
             new_link.as_deref(),
         );
-        style::validate_style_graph(&candidate.styles)?;
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.invalidate_layout();
         self.commit_staged_mutation(candidate);
         Ok(())
     }
 
     /// Select the sole default style for one style type.
+    ///
+    /// A repeated style ID makes its first definition the default. Validation
+    /// retains existing defects as in [`Document::add_style`].
     pub fn set_default_style(&mut self, style_type: StyleType, style_id: &str) -> Result<()> {
         let mut candidate = self.clone_for_staging();
         candidate.reserve_styles_bundle()?;
-        let target = candidate
+        let index = candidate
             .styles
-            .get_by_id(style_id)
+            .styles
+            .iter()
+            .position(|style| style.style_id == style_id)
             .ok_or_else(|| Error::Other(format!("style '{style_id}' does not exist")))?;
+        let target = &candidate.styles.styles[index];
         if target.style_type != style_type {
             return Err(Error::Other(format!(
                 "style '{style_id}' has type '{}', not '{}'",
@@ -19301,27 +19366,26 @@ impl Document {
                 style_type.to_str()
             )));
         }
-        for style in &mut candidate.styles.styles {
+        for (position, style) in candidate.styles.styles.iter_mut().enumerate() {
             if style.style_type == style_type {
-                style.is_default = style.style_id == style_id;
+                style.is_default = position == index;
             }
         }
-        style::validate_style_graph(&candidate.styles)?;
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.invalidate_layout();
         self.commit_staged_mutation(candidate);
         Ok(())
     }
 
     /// Remove an unreferenced style, returning whether it existed.
+    ///
+    /// Every definition of a repeated style ID is removed, so no later one takes
+    /// over the ID. Validation retains existing defects as in
+    /// [`Document::add_style`].
     pub fn remove_style(&mut self, style_id: &str) -> Result<bool> {
-        let Some(index) = self
-            .styles
-            .styles
-            .iter()
-            .position(|style| style.style_id == style_id)
-        else {
+        if self.styles.get_by_id(style_id).is_none() {
             return Ok(false);
-        };
+        }
         if let Some(owner) = self.styles.styles.iter().find(|style| {
             style.style_id != style_id
                 && (style.based_on.as_deref() == Some(style_id)
@@ -19360,8 +19424,11 @@ impl Document {
 
         let mut candidate = self.clone_for_staging();
         candidate.reserve_styles_bundle()?;
-        candidate.styles.styles.remove(index);
-        style::validate_style_graph(&candidate.styles)?;
+        candidate
+            .styles
+            .styles
+            .retain(|style| style.style_id != style_id);
+        style::validate_style_graph_change(&self.styles, &candidate.styles)?;
         candidate.invalidate_layout();
         self.commit_staged_mutation(candidate);
         Ok(true)
@@ -22398,13 +22465,17 @@ impl Document {
     }
 
     /// Merge styles from another document, avoiding duplicates.
+    ///
+    /// A defect the destination styles already have is retained. Only a
+    /// defect the merged styles introduce rejects the merge.
     fn merge_styles(&mut self, other: &Document) -> Result<()> {
+        let source = self.styles.clone();
         for style in &other.styles.styles {
             if self.styles.get_by_id(&style.style_id).is_none() {
                 self.styles.styles.push(style.clone());
             }
         }
-        style::validate_style_graph(&self.styles)
+        style::validate_style_graph_change(&source, &self.styles).map(|_| ())
     }
 
     pub(crate) fn equivalent_numbering_dependency_id(
@@ -26688,7 +26759,7 @@ mod tests {
     }
 
     #[test]
-    fn same_part_normalized_drawing_ids_remain_invalid() {
+    fn same_part_normalized_drawing_ids_are_counted_not_refused() {
         let mut package =
             OpcPackage::with_main_part("word/document.xml", content_types::WORD_DOCUMENT);
         package.set_part(
@@ -26699,8 +26770,12 @@ mod tests {
             )
             .into_bytes(),
         );
-        let error = DocumentIdentifiers::scan(&package).unwrap_err();
-        assert!(error.to_string().contains("duplicate drawing id 1"));
+        let mut identifiers = DocumentIdentifiers::scan(&package).unwrap();
+        assert_eq!(
+            identifiers.repeated_drawing_ids,
+            HashMap::from([("/word/document.xml".to_owned(), HashMap::from([(1, 2)]))])
+        );
+        assert_eq!(identifiers.reserve_drawing_id().unwrap(), 2);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # F-X160, Tolerant style, drawing and measurement reads
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S83
 **Size**: L
 **Depends on**: F-X159, F-X147
@@ -78,11 +78,11 @@ reads or mutations of producer input outside the deterministic samples.
 
 ## Implementation checklist
 
-- [ ] Review PRs 248, 249 and 250 for scope, conflicts and missing coverage.
-- [ ] Run both Issue 243 fixtures through every affected style mutator.
-- [ ] Cover duplicate drawing IDs and decimal measurements through read, edit,
+- [x] Review PRs 248, 249 and 250 for scope, conflicts and missing coverage.
+- [x] Run both Issue 243 fixtures through every affected style mutator.
+- [x] Cover duplicate drawing IDs and decimal measurements through read, edit,
   save and reopen across native, CLI and Python paths.
-- [ ] Run focused tests, risk riders, scoped verify and microscope to zero.
+- [x] Run focused tests, risk riders, scoped verify and microscope to zero.
 
 ## Open questions
 

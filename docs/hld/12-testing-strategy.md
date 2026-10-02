@@ -561,8 +561,11 @@ for text, raw XML, image, and background-image setter families.
 Cross-part drawing coverage opens a package whose body and header reuse one
 normalized producer `wp:docPr` identity, preserves both drawing payloads,
 allocates a later authored drawing outside the package-wide occupied union, and
-reopens repeatedly. A same-part character-reference alias remains a duplicate,
-and a foreign same-local-name element remains outside the drawing scope.
+reopens repeatedly. A same-part character-reference alias remains a counted producer duplicate.
+It opens and survives a no-op save, while staged edits reject any increase in
+its occurrence count. A foreign same-local-name element remains outside the
+drawing scope. Native, CLI, and Python gates reopen a document after authoring
+a fresh ID.
 Current-graph relationship cases add an unreferenced theme edge after chart
 authoring and require chart `rId1` followed by theme `rId2`. A producer theme
 captured on package open keeps its original id, while unknown internal and
@@ -2796,6 +2799,12 @@ because the whole value proposition is compatibility:
   them. Aliased prefixes and sibling spacing attributes remain modeled, while
   equivalent fractional and integer documents render byte-identical pages in
   deterministic font mode.
+- Issue 243 binding coverage opens both repeated `Normal` and multiple table
+  default producer packages. Every style mutator retains old graph defects,
+  resolves repeated IDs to the first definition, and refuses new defects.
+- Issue 246 coverage checks exact decimal rounding and contextual errors at
+  modeled measurement sites through native and CLI reads and save/reopen.
+  Untouched source bytes remain unchanged.
 - The same for `rpptx` and `python-pptx`.
 
 The rpptx binding gate executes the seven python-pptx 1.0.2 Getting Started

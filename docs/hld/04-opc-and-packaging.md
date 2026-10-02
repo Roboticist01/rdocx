@@ -201,9 +201,11 @@ namespace-aware XML on every canonicalization. Removing a paragraph retires a
 zero-use occurrence without deleting the relationship definition retained by
 its owned fragment. Same-owner clones keep a shared relationship definition
 and remap every live reference simultaneously. Each live authored picture
-occurrence receives its own global `wp:docPr` identity. Producer-owned raw
-references remain fixed occupants, and image part naming follows final
-serialized relationship order.
+occurrence receives its own global `wp:docPr` identity. A producer may repeat
+a drawing ID within one part. Its occurrence count is retained, and a staged
+mutation rejects an increase in that count. Fresh authored IDs avoid the
+package-wide occupied union. Producer-owned raw references remain fixed
+occupants, and image part naming follows final serialized relationship order.
 
 Theme and font authoring retain the relationship-resolved targets already in a
 package. A missing theme or font table receives one collision-safe part,
@@ -553,7 +555,7 @@ decimal `w:spacing/@w:line` value is normalized with exact decimal arithmetic
 to the nearest integer twip, with exact halves rounded away from zero.
 Exponent notation, malformed forms, non-finite spellings, and numeric values
 outside the signed 32-bit range remain errors. The modeled value serializes as
-one canonical integer without widening decimal acceptance to sibling measures.
+one canonical integer while other modeled integer measurements use the same exact rounding rule.
 
 Direct paragraph `m:oMath` and `m:oMathPara` children use that same owner and
 boundary discipline. The reader accepts any prefix bound to the Transitional
@@ -1105,11 +1107,11 @@ external slide layouts reject before any destination part or relationship is
 published.
 
 Word table widths, cell widths, table indents, and default cell margins share
-one exact signed-integer projection. The parser accepts integer lexical forms
-and decimals only when the nonempty fractional portion contains zeroes. It
-checked-parses the integer portion into `i32` without floating point. Fractional
-values, exponent forms, empty fractions, overflow, percentages, universal
-measures, and malformed input fail explicitly instead of becoming zero. Missing
+one exact signed-integer projection. Modeled integer measurements accept decimal
+lexical values and round to the nearest integer, with exact halves away from
+zero. The unrounded value must fit the target type. Exponent forms, empty
+fractions, overflow, percentages, universal measures, and malformed input fail
+with an element and attribute diagnostic instead of becoming zero. Missing
 widths retain their existing default. Attributes are selected by the bound
 WordprocessingML namespace, and serialization writes the canonical integer with
 fixed `w` attributes in schema order while unmodelled table content retains its
@@ -1512,8 +1514,12 @@ defect the source view already has is one that open, save, layout, and text
 replacement accept, so the rebuild retains it and reports it once in check
 order. A defect only the staged view has was introduced by the rebuild, such
 as a new canonical style completing a dangling producer link into a one-way
-link, and it rejects the rebuild. Public style mutation retains strict
-whole-graph validation.
+link, and it rejects the rebuild. Public style mutation also compares counted graph defects before and after
+staging. Existing repeated style IDs and multiple defaults remain in their
+source order. An edit by repeated ID changes its first definition, while
+removal deletes every definition with that ID. A newly introduced defect, or
+an additional occurrence of an existing defect, rejects the candidate. Strict
+whole-graph validation remains available to report producer defects.
 Old-result exclusion adds a total nested-run order within each accepted
 revision or content-control owner, so fields on opposite sides of a marker in
 one wrapper remain distinguishable. The outer coordinate is the typed

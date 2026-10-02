@@ -3906,6 +3906,154 @@ fn part_local_drawing_identity_scope_survives_story_round_trip() {
     }
 }
 
+/// Two body pictures whose `wp:docPr/@id` both read `id`, as some producers
+/// write them. With `one_paragraph` both pictures share one paragraph,
+/// otherwise each follows its own caption paragraph.
+fn repeated_drawing_id_package(id: &str, one_paragraph: bool) -> Vec<u8> {
+    let mut document = Document::new();
+    for name in ["A", "B"] {
+        if !one_paragraph {
+            document.add_paragraph(&format!("Picture {name}"));
+        }
+        document.add_picture(
+            format!("image {name}").as_bytes(),
+            &format!("{name}.png"),
+            Length::pt(1.0),
+            Length::pt(1.0),
+        );
+    }
+    let mut package =
+        oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap()))
+            .unwrap();
+    let mut xml =
+        String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();
+    if one_paragraph {
+        let first_run_end = xml.find("</w:drawing>").unwrap();
+        let first_run_end = first_run_end + xml[first_run_end..].find("</w:r>").unwrap() + 6;
+        let second_run = first_run_end + xml[first_run_end..].find("<w:r>").unwrap();
+        assert!(xml[first_run_end..second_run].contains("</w:p>"), "{xml}");
+        xml.replace_range(first_run_end..second_run, "");
+    }
+    let mut pieces = xml.split(r#"<wp:docPr id=""#);
+    let mut repeated = pieces.next().unwrap().to_owned();
+    for piece in pieces {
+        let (_, rest) = piece.split_once('"').unwrap();
+        repeated.push_str(&format!(r#"<wp:docPr id="{id}""#));
+        repeated.push_str(rest);
+    }
+    assert_eq!(repeated_drawing_ids(&repeated), [id, id], "{repeated}");
+    package.set_part("/word/document.xml", repeated.into_bytes());
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut bytes).unwrap();
+    bytes.into_inner()
+}
+
+fn repeated_drawing_ids(xml: &str) -> Vec<String> {
+    xml.split("<wp:docPr")
+        .skip(1)
+        .filter_map(|suffix| f255_xml_attribute(suffix, "id"))
+        .collect()
+}
+
+fn saved_body_drawing_ids(document: &mut Document) -> Vec<String> {
+    let bytes = document.to_bytes().unwrap();
+    let package = oxml_opc::OpcPackage::from_reader(std::io::Cursor::new(bytes)).unwrap();
+    repeated_drawing_ids(
+        std::str::from_utf8(package.get_part("/word/document.xml").unwrap()).unwrap(),
+    )
+}
+
+#[test]
+fn repeated_drawing_ids_in_one_part_do_not_block_document_open() {
+    for repeated in ["0", "7"] {
+        let bytes = repeated_drawing_id_package(repeated, false);
+        let mut document = Document::from_bytes(&bytes).unwrap();
+        let text = document.text();
+        assert!(
+            text.contains("Picture A") && text.contains("Picture B"),
+            "{text}"
+        );
+        assert_eq!(document.to_bytes().unwrap(), bytes);
+
+        document.add_picture(
+            b"authored image",
+            "authored.png",
+            Length::pt(1.0),
+            Length::pt(1.0),
+        );
+        let ids = saved_body_drawing_ids(&mut document);
+        assert_eq!(ids.len(), 3, "{ids:?}");
+        assert_eq!(ids[..2], [repeated, repeated]);
+        assert_ne!(ids[2], repeated);
+        Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn an_edit_may_not_add_an_occurrence_of_a_repeated_drawing_id() {
+    let mut document = Document::from_bytes(&repeated_drawing_id_package("7", false)).unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    let picture = document
+        .remove_content_at(&f254_item(&document, &body, 1))
+        .unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    document
+        .insert_content(&ContentLocation::end(body), picture.clone())
+        .unwrap();
+    assert_eq!(saved_body_drawing_ids(&mut document), ["7", "7"]);
+
+    let before = document.to_bytes().unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    let error = document
+        .insert_content(&ContentLocation::end(body), picture)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("duplicate drawing id 7"), "{error}");
+    assert_eq!(document.to_bytes().unwrap(), before);
+}
+
+#[test]
+fn copied_drawings_that_share_an_id_get_distinct_fresh_ids() {
+    let mut document = Document::from_bytes(&repeated_drawing_id_package("7", true)).unwrap();
+    let body = f254_story(&document, StoryKind::Body);
+    document
+        .clone_content(&f254_item(&document, &body, 0), &ContentLocation::end(body))
+        .unwrap();
+    let ids = saved_body_drawing_ids(&mut document);
+    assert_eq!(ids.len(), 4, "{ids:?}");
+    assert_eq!(ids[..2], ["7", "7"]);
+    assert!(
+        ids[2] != "7" && ids[3] != "7" && ids[2] != ids[3],
+        "{ids:?}"
+    );
+
+    let source = Document::from_bytes(&repeated_drawing_id_package("7", false)).unwrap();
+    let body = f254_story(&source, StoryKind::Body);
+    let fragment = DocumentFragment::from_range(
+        &source,
+        &f254_item(&source, &body, 0),
+        &ContentLocation::end(body),
+        false,
+    )
+    .unwrap();
+    let mut destination = Document::from_bytes(&repeated_drawing_id_package("7", false)).unwrap();
+    let body = f254_story(&destination, StoryKind::Body);
+    destination
+        .import_fragment(
+            &ContentLocation::end(body),
+            &fragment,
+            FragmentConflictPolicy::default(),
+        )
+        .unwrap();
+    let ids = saved_body_drawing_ids(&mut destination);
+    assert_eq!(ids.len(), 4, "{ids:?}");
+    assert_eq!(ids[..2], ["7", "7"]);
+    assert!(
+        ids[2] != "7" && ids[3] != "7" && ids[2] != ids[3],
+        "{ids:?}"
+    );
+}
+
 #[test]
 fn related_footnote_insertion_survives_later_typed_mutation() {
     let mut seed = Document::new();
@@ -10314,6 +10462,230 @@ fn toc_rebuild_rejects_a_defect_its_entry_style_introduces_behind_retained_ones(
         error.to_string(),
         "invalid style graph: linked styles 'TOC1Char' and 'TOC1' are not reciprocal"
     );
+    assert_eq!(document.to_bytes().unwrap(), before);
+}
+
+// Google Docs exports repeat style IDs and declare several defaults of one
+// type. Open, save and layout accept both, so the style mutations do too.
+const REPEATED_STYLE_IDS: &str = concat!(
+    r#"<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal Copy"/><w:pPr><w:jc w:val="center"/></w:pPr></w:style>"#,
+    r#"<w:style w:type="paragraph" w:styleId="Spare"><w:name w:val="Spare"/></w:style>"#,
+    r#"<w:style w:type="paragraph" w:styleId="Spare"><w:name w:val="Spare Copy"/></w:style>"#,
+    r#"<w:style w:type="table" w:default="1" w:styleId="TableNormalCopy"><w:name w:val="Normal Table Copy"/></w:style>"#,
+    r#"<w:style w:type="table" w:default="1" w:styleId="TableauNormal"><w:name w:val="Tableau Normal"/></w:style>"#,
+);
+
+fn definitions<'a>(document: &'a Document, style_id: &str) -> Vec<rdocx::Style<'a>> {
+    document
+        .styles()
+        .into_iter()
+        .filter(|style| style.style_id() == style_id)
+        .collect()
+}
+
+#[test]
+fn issue_243_both_reporter_style_packages_accept_every_style_mutator() {
+    let variants = [
+        (
+            "duplicate Normal",
+            r#"<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal Copy"/></w:style>"#,
+        ),
+        (
+            "second table default",
+            concat!(
+                r#"<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/></w:style>"#,
+                r#"<w:style w:type="table" w:default="1" w:styleId="TableauNormal"><w:name w:val="Tableau Normal"/></w:style>"#,
+            ),
+        ),
+    ];
+    for (label, extra_styles) in variants {
+        let mut document = document_with_producer_styles(ONE_HEADING_TOC_BODY, extra_styles);
+        let old_defect = document.validate_style_graph().unwrap_err().to_string();
+        document
+            .add_style(StyleBuilder::paragraph("Spare", "Spare"))
+            .unwrap();
+        document
+            .set_style(StyleBuilder::paragraph("Spare", "Updated spare").based_on("Normal"))
+            .unwrap();
+        document
+            .set_default_style(StyleType::Paragraph, "Spare")
+            .unwrap();
+        let definition = document
+            .add_numbering_definition(&[ListLevel::decimal()])
+            .unwrap();
+        let instance = document.add_numbering_instance(definition, &[]).unwrap();
+        document
+            .link_style_to_numbering("Spare", instance, 0)
+            .unwrap();
+        document
+            .unlink_style_from_numbering("Spare", instance, 0)
+            .unwrap();
+        document
+            .set_default_style(StyleType::Paragraph, "Normal")
+            .unwrap();
+        assert!(document.remove_style("Spare").unwrap(), "{label}");
+        assert_eq!(
+            document.validate_style_graph().unwrap_err().to_string(),
+            old_defect,
+            "{label}"
+        );
+        let saved = document.to_bytes().unwrap();
+        Document::from_bytes(&saved).unwrap();
+    }
+}
+
+#[test]
+fn style_mutations_retain_repeated_style_ids_and_edit_the_first_definition() {
+    let mut document = document_with_producer_styles(ONE_HEADING_TOC_BODY, REPEATED_STYLE_IDS);
+    let defect = "invalid style graph: duplicate style ID 'Normal'";
+    assert_eq!(
+        document.validate_style_graph().unwrap_err().to_string(),
+        defect
+    );
+
+    document
+        .add_style(StyleBuilder::paragraph("NoteBox", "Note box").based_on("Normal"))
+        .unwrap();
+    document
+        .set_style(StyleBuilder::paragraph("Normal", "Normal").priority(7))
+        .unwrap();
+    let priorities = definitions(&document, "Normal")
+        .iter()
+        .map(|style| style.priority())
+        .collect::<Vec<_>>();
+    assert_eq!(priorities, [Some(7), None]);
+
+    document
+        .set_default_style(StyleType::Paragraph, "Spare")
+        .unwrap();
+    let defaults = definitions(&document, "Spare")
+        .iter()
+        .map(|style| style.is_default())
+        .collect::<Vec<_>>();
+    assert_eq!(defaults, [true, false]);
+    document
+        .set_default_style(StyleType::Paragraph, "Normal")
+        .unwrap();
+    assert!(document.remove_style("Spare").unwrap());
+    assert!(definitions(&document, "Spare").is_empty());
+
+    let definition = document
+        .add_numbering_definition(&[ListLevel::decimal()])
+        .unwrap();
+    let instance = document.add_numbering_instance(definition, &[]).unwrap();
+    document
+        .link_style_to_numbering("NoteBox", instance, 0)
+        .unwrap();
+    document
+        .unlink_style_from_numbering("NoteBox", instance, 0)
+        .unwrap();
+
+    assert_eq!(
+        document.validate_style_graph().unwrap_err().to_string(),
+        defect
+    );
+    let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    assert_eq!(definitions(&reopened, "Normal").len(), 2);
+    assert!(reopened.style("NoteBox").is_some());
+}
+
+#[test]
+fn style_mutations_reject_a_defect_they_introduce_behind_repeated_style_ids() {
+    let mut document = document_with_producer_styles(ONE_HEADING_TOC_BODY, REPEATED_STYLE_IDS);
+    let before = document.to_bytes().unwrap();
+
+    assert_eq!(
+        document
+            .add_style(StyleBuilder::paragraph("Normal", "Another Normal"))
+            .unwrap_err()
+            .to_string(),
+        "style 'Normal' already exists"
+    );
+    assert_eq!(
+        document
+            .add_style(StyleBuilder::paragraph("Orphan", "Orphan").based_on("Missing"))
+            .unwrap_err()
+            .to_string(),
+        "invalid style graph: style 'Orphan' is based on missing style 'Missing'"
+    );
+    assert_eq!(
+        document
+            .set_style(StyleBuilder::paragraph("Normal", "Normal").next_style("Missing"))
+            .unwrap_err()
+            .to_string(),
+        "invalid style graph: style 'Normal' names missing next style 'Missing'"
+    );
+    assert_eq!(document.to_bytes().unwrap(), before);
+
+    // Defects are counted. The same defect on another definition, or on a
+    // new style inheriting an existing cycle, is still a new one.
+    let mut shadowed_orphan = document_with_producer_styles(
+        ONE_HEADING_TOC_BODY,
+        r#"<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal Copy"/><w:basedOn w:val="Missing"/></w:style>"#,
+    );
+    let before = shadowed_orphan.to_bytes().unwrap();
+    assert_eq!(
+        shadowed_orphan
+            .set_style(StyleBuilder::paragraph("Normal", "Normal").based_on("Missing"))
+            .unwrap_err()
+            .to_string(),
+        "invalid style graph: style 'Normal' is based on missing style 'Missing'"
+    );
+    assert_eq!(shadowed_orphan.to_bytes().unwrap(), before);
+
+    let mut cycle = document_with_producer_styles(
+        ONE_HEADING_TOC_BODY,
+        concat!(
+            r#"<w:style w:type="paragraph" w:styleId="CycleA"><w:name w:val="Cycle A"/><w:basedOn w:val="CycleB"/></w:style>"#,
+            r#"<w:style w:type="paragraph" w:styleId="CycleB"><w:name w:val="Cycle B"/><w:basedOn w:val="CycleA"/></w:style>"#,
+        ),
+    );
+    let before = cycle.to_bytes().unwrap();
+    assert_eq!(
+        cycle
+            .add_style(StyleBuilder::paragraph("CycleC", "Cycle C").based_on("CycleA"))
+            .unwrap_err()
+            .to_string(),
+        "invalid style graph: based-on cycle contains style 'CycleA'"
+    );
+    assert_eq!(cycle.to_bytes().unwrap(), before);
+}
+
+#[test]
+fn appending_into_repeated_style_ids_retains_them_and_rejects_a_new_defect() {
+    let mut imported = Document::new();
+    imported
+        .add_style(StyleBuilder::paragraph("Imported", "Imported").based_on("Normal"))
+        .unwrap();
+    imported.add_paragraph("imported").style("Imported");
+
+    let mut appended = document_with_producer_styles(ONE_HEADING_TOC_BODY, REPEATED_STYLE_IDS);
+    appended.append(&imported);
+    let mut inserted = document_with_producer_styles(ONE_HEADING_TOC_BODY, REPEATED_STYLE_IDS);
+    inserted.insert_document(0, &imported);
+    for document in [&appended, &inserted] {
+        assert!(document.style("Imported").is_some());
+        assert_eq!(definitions(document, "Normal").len(), 2);
+        assert_eq!(
+            document.validate_style_graph().unwrap_err().to_string(),
+            "invalid style graph: duplicate style ID 'Normal'"
+        );
+    }
+
+    // A second default paragraph style is new to the destination.
+    let mut conflicting = Document::new();
+    conflicting
+        .add_style(StyleBuilder::paragraph("SourceDefault", "Source Default"))
+        .unwrap();
+    conflicting
+        .set_default_style(StyleType::Paragraph, "SourceDefault")
+        .unwrap();
+    let mut document = document_with_producer_styles(ONE_HEADING_TOC_BODY, REPEATED_STYLE_IDS);
+    let before = document.to_bytes().unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        document.append(&conflicting);
+    }));
+    assert!(result.is_err());
     assert_eq!(document.to_bytes().unwrap(), before);
 }
 
@@ -35715,8 +36087,11 @@ fn imported_and_preserved_collisions_fail_before_mutation() {
     let collided = xml.replacen(r#"<wp:docPr id="2""#, r#"<wp:docPr id="1""#, 1);
     assert_ne!(xml, collided, "second drawing id must be present");
     package.set_part("/word/document.xml", collided.into_bytes());
-    let error = f249_open_error("drawing", package);
-    assert!(error.contains("duplicate drawing id 1"), "{error}");
+    let mut output = std::io::Cursor::new(Vec::new());
+    package.write_to(&mut output).unwrap();
+    // A producer may repeat a drawing id within one part. It opens, and
+    // `repeated_drawing_ids_in_one_part_do_not_block_document_open` covers it.
+    Document::from_bytes(&output.into_inner()).unwrap();
 
     let mut package = f249_package(&bytes);
     let xml = String::from_utf8(package.get_part("/word/document.xml").unwrap().to_vec()).unwrap();

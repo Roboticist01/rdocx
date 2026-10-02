@@ -339,8 +339,9 @@ removing a style that content or another style names, raise `RdocxError`.
 `set_style(style, **formatting)` resolves an existing style by ID or name and
 passes the supplied formatting, base style and next style through native
 `set_style`. Omitted properties keep their existing values. The staged native
-setter checks the complete style graph before publishing, and Python handles
-stay valid. Unknown or wrong-type style references fail before mutation.
+setter compares counted style-graph defects before publishing. Existing producer
+defects remain, while new defects reject the edit. A repeated style ID resolves
+to its first definition, and Python handles stay valid. Unknown or wrong-type style references fail before mutation.
 The update surface does not clear a theme font or theme colour inherited from
 an existing Word style. Its formatting changes are additive overrides.
 
