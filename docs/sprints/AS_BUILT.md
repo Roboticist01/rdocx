@@ -16994,3 +16994,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged, all 49 entries matched the worker's reviewed base.
 
 **Notes for future sessions.** Close no contribution or issue on this intake evidence alone. F-X161, F-X164 and F-X165 may now start. Keep `work/f-x169-codex` through sprint verification and review.
+
+### F-X161, Compact Word XML and namespace preservation
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reconciled PR 251 against the S83 and F-X169 prefix. Rewritten document, note, header, footer, comment, style and numbering parts now use compact XML. Retained root attributes omit a repeated canonical `w` binding while preserving aliases, foreign bindings and raw unknown subtrees. A 50-paragraph Issue 245 regression edits one word, keeps one `xmlns:w`, reopens and retains the other text and identities. The F-159 chart candidate and `rdocx` and `rdocx-oxml` archive measurements were re-pinned to the reviewed output.
+
+**Non-obvious choices.** The Word chart package digest changed only because of whitespace removal and its pinned PDF pixels still match the PowerPoint chart. The worker branch keeps distinct behavior and baseline commits. The integrated squash names the exact delta and the baseline was reviewed before F-X162.
+
+**Deviations from the design plan.** The README package measurements and their assertion carrier were added after the repository policy gate measured the serializer changes. The approved plan was clarified before completion.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, edited Word part serialization, and `docs/hld/09-charts-spec.md`, the updated Word chart artifact evidence.
+
+**Tests.** The 50-paragraph regression failed on the claimed base with 104 `xmlns:w` declarations and passed after the change. The worker passed 595 OXML tests, 486 Word unit, 333 integration, 719 regression and 11 Python producer-matrix cases with pinned Poppler 26.01.0 and LibreOffice 26.2.5.2. Scoped Clippy, formatting, archive inventory, repository policy, prose and generated-skill checks passed. Microscope pass 1 found zero defects and zero smells. The integrated prefix passed its focused regression and 49-entry hash check. Full sprint verification and sprint review remain due.
+
+**Hash harness.** Exactly 20 `word/document.xml`, `word/numbering.xml` and `word/styles.xml` digests changed across the samples. No PDF or PNG entry changed. All 49 entries match the reviewed baseline.
+
+**Notes for future sessions.** F-X162 may start on this completed baseline prefix. Issue 245 and the remaining Issue 160 serialization criteria stay open until the final integrated result reaches main. Keep `work/f-x161-codex` through sprint verification and review.

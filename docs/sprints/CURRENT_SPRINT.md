@@ -26,7 +26,7 @@ then run one full verification and sprint review over the combined result.
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
 | F-X169 | Reconcile live contributions and open issue contracts | L | done | - |
-| F-X161 | Compact Word XML and namespace preservation | L | in-progress | codex |
+| F-X161 | Compact Word XML and namespace preservation | L | done | - |
 | F-X162 | Per-paragraph section width and pagination | M | pending | - |
 | F-X163 | Plain-line trailing-space fit | M | pending | - |
 | F-X164 | Added shape theme style | M | in-progress | codex |
