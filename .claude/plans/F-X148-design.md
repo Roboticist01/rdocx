@@ -1,6 +1,6 @@
 # F-X148, Complete rpptx Python production checklist
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S81
 **Size**: L
 **Depends on**: F-X142, F-X156
@@ -54,11 +54,11 @@ Expected unchanged. Investigate any delta against the approved F-X156 behavior b
 
 ## Implementation checklist
 
-- [ ] Enumerate every Issue 169 operation and its evidence or explicit scope boundary.
-- [ ] Run the integrated Python production deck chain, package validation and reopen checks.
-- [ ] Compare deterministic rpptx output with the pinned external viewer.
-- [ ] Repair an in-scope integration gap if found and rerun its affected checks.
-- [ ] Run scoped verification and microscope to zero findings.
+- [x] Enumerate every Issue 169 operation and its evidence or explicit scope boundary.
+- [x] Run the integrated Python production deck chain, package validation and reopen checks.
+- [x] Compare deterministic rpptx output with the pinned external viewer.
+- [x] Repair an in-scope integration gap if found and rerun its affected checks. No product integration gap was found.
+- [x] Run scoped verification and microscope to zero findings.
 
 ## Open questions
 

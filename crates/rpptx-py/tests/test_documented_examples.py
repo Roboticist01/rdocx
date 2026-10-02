@@ -4066,3 +4066,169 @@ def test_issue_169_modern_comments_anchor_to_shape_and_text_range(tmp_path):
         "{22222222-2222-2222-2222-222222222222}",
         "{33333333-3333-3333-3333-333333333333}",
     ]
+
+
+def test_issue_169_complete_production_deck_chain(tmp_path):
+    """Issue 169's operations must coexist in one saved, readable deck."""
+    import os
+    import posixpath
+    import shutil
+    import subprocess
+    import xml.etree.ElementTree as ET
+
+    import pptx
+    import rpptx
+    from PIL import Image
+    from rpptx.enum.shapes import MSO_SHAPE
+
+    assert importlib.metadata.version("python-pptx") == "1.0.2"
+    emu = rpptx.Inches(1)
+    source = rpptx.Presentation()
+    source.slides.add_slide(source.slide_layouts[6])
+    source.slides[0].shapes.add_textbox(emu, emu, 3 * emu, emu).text = "Imported caption"
+    source.slides[0].notes_text = "Imported speaker note"
+    source.slides[0].shapes.add_picture(_tiny_png(), 5 * emu, emu, emu, emu)
+
+    deck = rpptx.Presentation()
+    deck.slides.add_slide(deck.slide_layouts[0])
+    title = deck.slides[0].shapes.title
+    assert title.left is None and title.effective_geometry()[2] > 0
+    title.left = int(title.effective_geometry()[0]) + 100
+    deck.slides[0].shapes.title.text = "Production checklist"
+    deck.slides[0].placeholders[1].text = "Issue 169"
+    deck.slides[0].notes_text = "Opening note"
+    deck.slides.add_slide(deck.slide_layouts[6])
+    deck.slides[1].shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, emu, emu, 3 * emu, emu)
+    shape = deck.slides[1].shapes[0]
+    shape.name = "Front card"
+    shape.text = "Replace this label"
+    shape = deck.slides[1].shapes[0]
+    shape.click_action.hyperlink.address = "https://example.com/checklist"
+    deck.slides[1].shapes.add_picture(_tiny_png(0xE0, 0x30, 0x30), emu, 3 * emu, 2 * emu, emu)
+    deck.slides[1].shapes[1].crop_left = 0.25
+    deck.slides[1].shapes.add_table(2, 2, 5 * emu, emu, 3 * emu, 2 * emu)
+    table = deck.slides[1].shapes[2].table
+    for row, values in enumerate((("Item", "State"), ("crop", "ready"))):
+        for column, value in enumerate(values):
+            table.cell(row, column).text = value
+    table.columns[0].width = emu
+    table.rows[1].height = emu
+    table.cell(1, 0).text = "image"
+    deck.slides[1].shapes.add_group_shape()
+    deck.slides[1].shapes[3].shapes.add_textbox(5 * emu, 4 * emu, 2 * emu, emu).text = "Grouped"
+    deck.slides[1].shapes.move(0, 2)
+    assert [shape.name for shape in deck.slides[1].shapes][2] == "Front card"
+    author_id = "{11111111-1111-1111-1111-111111111111}"
+    deck.add_comment_author(id=author_id, name="Ada", user_id="ada@example.test", provider_id="local")
+    card_id = deck.slides[1].shapes[2].shape_id
+    deck.slides[1].add_comment(
+        id="{22222222-2222-2222-2222-222222222222}", author_id=author_id,
+        created="2026-09-30T10:00:00Z", text="Review label",
+        shape_id=card_id, text_start=0, text_length=7,
+    )
+    before = deck.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError):
+        deck.slides[1].try_replace_text("Replace this label", "Reviewed label", expect=2)
+    assert deck.to_bytes() == before
+    assert deck.slides[1].try_replace_text("Replace this label", "Reviewed label", expect=1) == 1
+    assert deck.slides[1].shapes[2].text == "Reviewed label"
+    imported = deck.slides.import_slide(source.slides[0], index=1)
+    assert imported.notes_text == "Imported speaker note"
+    assert imported.shapes[1].image.blob == _tiny_png()
+    assert deck.validate() == ()
+
+    # The Python Table binding has no style selector. Set the built-in GUID
+    # through the documented ZIP/XML package fallback, then reopen in rpptx.
+    style_id = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"
+    parts = _package_parts(deck.to_bytes())
+    unchanged_parts = parts.copy()
+    styled_part = next(
+        name for name, data in parts.items()
+        if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+        and b"Reviewed label" in data
+    )
+    slide_xml = parts[styled_part]
+    original = b'<a:tblPr firstRow="1" bandRow="1"/>'
+    assert slide_xml.count(original) == 1
+    parts[styled_part] = slide_xml.replace(
+        original,
+        b'<a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>'
+        + style_id.encode() + b'</a:tableStyleId></a:tblPr>',
+    )
+    assert {name: data for name, data in parts.items() if name != styled_part} == {
+        name: data for name, data in unchanged_parts.items() if name != styled_part
+    }
+    output = tmp_path / "issue-169-production.pptx"
+    output.write_bytes(_package_bytes(parts))
+    assert _package_parts(output.read_bytes()) == parts
+    reopened = rpptx.Presentation(output)
+    assert reopened.validate() == ()
+    assert [slide.slide_layout.name for slide in reopened.slides] == [
+        "Title Slide", "Blank", "Blank",
+    ]
+    assert reopened.slides[0].shapes.title.text == "Production checklist"
+    assert reopened.slides[1].notes_text == "Imported speaker note"
+    assert reopened.slides[2].shapes[2].text == "Reviewed label"
+    assert reopened.slides[2].shapes[2].click_action.hyperlink.address == "https://example.com/checklist"
+    assert reopened.slides[2].shapes[0].crop_left == 0.25
+    assert reopened.slides[2].shapes[1].table.cell(1, 0).text == "image"
+    assert reopened.slides[2].shapes[3].shapes[0].text == "Grouped"
+    assert len(reopened.slides[2].comments) == 1
+    assert reopened.render_slide_to_png(2, dpi=72.0).startswith(b"\x89PNG")
+
+    # Every internal package target must resolve, including notes, media and comments.
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        assert "ppt/comments/comment1.xml" in names
+        assert any(name.startswith("ppt/media/") for name in names)
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            base = "" if name == "_rels/.rels" else name.rsplit("/_rels/", 1)[0]
+            for rel in ET.fromstring(archive.read(name)):
+                if rel.get("TargetMode") == "External":
+                    continue
+                target = posixpath.normpath(posixpath.join(base, rel.attrib["Target"].lstrip("/")))
+                if rel.attrib["Target"].startswith("/"):
+                    target = rel.attrib["Target"].lstrip("/")
+                assert target in names, (name, target)
+
+    oracle = pptx.Presentation(output)
+    assert len(oracle.slides) == 3
+    assert oracle.slides[0].shapes.title.text == "Production checklist"
+    assert oracle.slides[1].notes_slide.notes_text_frame.text == "Imported speaker note"
+    shapes = oracle.slides[2].shapes
+    assert [shape.name for shape in shapes][2] == "Front card"
+    assert shapes[0].crop_left == 0.25
+    assert shapes[1].table.cell(1, 0).text == "image"
+    assert shapes[2].click_action.hyperlink.address == "https://example.com/checklist"
+    assert shapes[3].shapes[0].text == "Grouped"
+    assert style_id.encode() in parts[styled_part]
+
+    soffice = os.environ.get("RPPTX_PINNED_SOFFICE") or shutil.which("soffice")
+    if soffice:
+        assert "LibreOffice 26.2.5.2" in subprocess.check_output([soffice, "--version"], text=True)
+        pdf_dir = tmp_path / "lo"
+        pdf_dir.mkdir()
+        subprocess.run([
+            soffice, "-env:UserInstallation=" + (tmp_path / "lo-profile").as_uri(),
+            "--headless", "--convert-to", "pdf", "--outdir", str(pdf_dir), str(output),
+        ], check=True, capture_output=True, text=True)
+        pdf = pdf_dir / (output.stem + ".pdf")
+        assert pdf.is_file()
+        subprocess.run([
+            "pdftoppm", "-f", "3", "-l", "3", "-r", "72", "-png", "-singlefile",
+            str(pdf), str(pdf_dir / "slide3"),
+        ], check=True, capture_output=True)
+        native = Image.open(io.BytesIO(reopened.render_slide_to_png(2, dpi=72.0))).convert("RGB")
+        native.save(pdf_dir / "native-slide3.png")
+        viewer = Image.open(pdf_dir / "slide3.png").convert("RGB")
+        assert abs(native.width - viewer.width) <= 1 and native.height == viewer.height
+        viewer = viewer.crop((0, 0, native.width, native.height))
+        assert native.getpixel((390, 95)) == viewer.getpixel((390, 95)) == (0x4F, 0x81, 0xBD)
+        native_bytes, viewer_bytes = native.tobytes(), viewer.tobytes()
+        errors = [abs(left - right) for left, right in zip(native_bytes, viewer_bytes)]
+        pixels = native.width * native.height
+        close = sum(max(errors[index:index + 3]) <= 24 for index in range(0, len(errors), 3))
+        mean_error = sum(errors) / len(errors)
+        assert close / pixels >= 0.97 and mean_error <= 2.0, (close / pixels, mean_error)

@@ -2792,6 +2792,34 @@ readers, and directly compares the normalized rpptx-authored and
 python-pptx-authored records. It never compares package bytes and the oracle is
 not a runtime dependency.
 
+The Issue 169 production gate builds one deck through the Python binding with
+layout placeholders, resolved geometry, grouped shapes, table mutations,
+picture crop, z-order, a shape hyperlink, an anchored comment, imported slide
+and notes, and counted slide replacement. It saves once and reopens through
+rpptx and pinned python-pptx 1.0.2, validates internal package relationships,
+and renders with bundled fonts against pinned LibreOffice 26.2.5.2. The
+Python table handle has no built-in style selector. This item is a reviewed
+scope boundary exercised by a single-slide XML replacement of the built-in
+style GUID, with every other decompressed package part held equal. The package
+fallback is followed by the same reopen, relationship and render gates. At 72
+DPI, the raster comparison permits the one-pixel PDF width expansion and
+requires at least 97 percent of pixels within 24 RGB levels plus mean absolute
+channel error at most 2.0. Both renders must show the built-in accent fill as
+`4F81BD` at an interior header pixel. These bounds allow viewer text
+antialiasing while rejecting a displaced or absent shape over the sparse slide.
+
+| Issue 169 item | Production chain or focused evidence |
+|---|---|
+| Slide and shape handles, ordering, import | `test_issue_169_complete_production_deck_chain`, `test_structural_append_invalidates_every_preexisting_path_handle`, `test_import_slide_carries_pictures_links_notes_and_background_from_another_deck` |
+| Layout and placeholders | Production chain, `test_slide_layout_assignment_retargets_the_slide_and_keeps_unplaced_placeholders` |
+| Table mutation | Production chain, `test_table_cells_merge_split_fill_and_margins_like_python_pptx`, `test_table_rows_and_columns_are_added_and_removed_like_python_pptx_add_tr` |
+| Built-in table style | Production chain package fallback, no Python table style setter |
+| Picture crop and shape z-order | Production chain, `test_picture_crop_matches_python_pptx_in_both_directions`, `test_shapes_move_changes_the_z_order_and_stales_handles_once` |
+| Shape and run hyperlinks | Production chain, `test_issue_169_shape_click_hyperlink_round_trips_and_python_pptx_reads_it`, `test_run_hyperlink_address_reads_writes_and_prunes_like_python_pptx` |
+| Shape and text-range comment anchors | Production chain text-range anchor, `test_issue_169_modern_comments_anchor_to_shape_and_text_range` |
+| Effective geometry and groups | Production chain, `test_issue_169_effective_geometry_materializes_missing_partners`, `test_group_shapes_add_members_and_the_group_fits_them` |
+| Counted and scoped replacement | Production chain, `test_issue_169_replace_text_alias_is_counted_and_atomic`, `test_try_replace_text_scoped_to_a_slide_or_a_text_frame` |
+
 The rpptx text-property gate `test_text_properties_agree_with_python_pptx_in_both_directions`
 writes text frame, paragraph, and run font values with each library and reads
 them back with the other. `test_text_enums_match_python_pptx_member_values_and_xml_tokens`

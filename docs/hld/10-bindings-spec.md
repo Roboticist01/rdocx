@@ -616,6 +616,14 @@ A negative index counts from the end, as in `list.insert`, and an index outside
 these edits advances the revision once, because row, column, and cell handles
 name indices, and the returned handle is captured after the change.
 
+The Presentation Python `Table` handle has no built-in table style selector.
+For a style GUID not exposed by the binding, the supported fallback is to save
+the deck, replace only the matching table's `a:tblPr/a:tableStyleId` in the
+slide XML inside the ZIP package, and reopen it. The writer must preserve all
+other decompressed parts and validate internal relationship targets after the
+edit. A style GUID supplied this way is a package-level edit, not a Python
+`Table` API operation.
+
 `TextFrame.autofit`
 reports `none`, `normal`, or `shape` when the body carries an explicit choice.
 `Run.font` reads the run's direct Latin name, size, and sRGB colour, while the
