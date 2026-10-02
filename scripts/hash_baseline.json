@@ -8,10 +8,10 @@
     "contract:word/numbering.xml": "01d6cb0aa0ecc30b3d2a77c4df062b1c727d70ff9cbc0824910f049daf878a26",
     "contract:word/styles.xml": "aba749376daca9d4b58b538b845ff13eeab3bfd06842aa7cc59caf1581775e19",
     "feature_showcase:page1.png": "e1d30437e2618cff6da70163038427c32e1cd6523b0b58c5cd6376594ee742eb",
-    "feature_showcase:pdf/bytes": "bbb518e95135bd9b1e4e4e85d1dbdde3066c9d5ee8bd8f8c3a5409f312358936",
-    "feature_showcase:pdf/pages": "e4eb0b8626073a5616c53ccf1326d5cbd7d8d9b2a558845dfcdd1734785e3b30",
+    "feature_showcase:pdf/bytes": "28dd17bc222ff6f5ac7dbeb3c2ed741b7f28ced9fe7b149103ae834c74f75d2f",
+    "feature_showcase:pdf/pages": "b30ae928913a3a205ffeeb9de6a9fdc3f87d0300131869828c258c1605d569d3",
     "feature_showcase:pdf/resources": "3573cc6e7183b5e912bfde97f11edea4ec44bb40e1b8f066eeb9b4e5e7726d62",
-    "feature_showcase:word/document.xml": "715da86d743d335c1c870301832256eeaa759452f464138943a97ddd72e83018",
+    "feature_showcase:word/document.xml": "5a3e5c2760e9bf4c107d49a982d7c0686d7fc81aa451cd25fc1a3751b6da841a",
     "feature_showcase:word/numbering.xml": "2aa0599486d98573be0b7febb04ec63c08d3dfc5341b0f722b93cae113803bbc",
     "feature_showcase:word/styles.xml": "35989309420a74f62cd30fffe3d719548c1c71083c3422ec925b92e4d80969c6",
     "invoice:page1.png": "d78bed48649fed8147249da820dde7c5f65499ba85e1493ebd04bd1de5265c4c",
@@ -50,5 +50,5 @@
     "report:word/numbering.xml": "2aa0599486d98573be0b7febb04ec63c08d3dfc5341b0f722b93cae113803bbc",
     "report:word/styles.xml": "aba749376daca9d4b58b538b845ff13eeab3bfd06842aa7cc59caf1581775e19"
   },
-  "reason": "F-X146 PR 237 list, tab, page-field, and TOC positions after the PR 225 baseline"
+  "reason": "F-X159 adds the required trailing paragraph after the feature showcase nested table, changing its Word XML and deterministic PDF pages and bytes"
 }

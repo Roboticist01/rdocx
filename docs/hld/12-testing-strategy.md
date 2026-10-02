@@ -1357,16 +1357,16 @@ Check mode reads the manifest without modifying it and reports added, removed,
 and changed entries. Baseline writes require `--update --reason <text>`, and an
 empty reason is rejected. Generated PNGs remain ignored under `samples/`.
 
-The current reviewed table-fidelity delta changes exactly
-`feature_showcase:pdf/pages` and `feature_showcase:pdf/bytes`. That sample's
-later PDF page contains a valid vertical merge and a bordered nested table, so
-correct merge-edge suppression and recursive grid painting change its page
-stream. Its PDF resources, page-one PNG, selected OOXML parts, every other
+The current reviewed Word-validity delta changes exactly
+`feature_showcase:word/document.xml`, `feature_showcase:pdf/pages`, and
+`feature_showcase:pdf/bytes`. `Cell::add_table` now leaves the trailing empty
+cell paragraph Word requires. That new paragraph changes the nested table's
+Word XML and a later PDF page. Its PDF resources, page-one PNG, every other
 sample entry, and the manifest cardinality remain unchanged.
 
-It exists because the extraction changes unit conversion and text-shaping input
-types, and both alter output **without failing to compile**. Structural
-round-trip tests cannot see that class of defect.
+The harness remains necessary because an output change can pass structural
+round-trip tests. The three-entry F-X159 delta was reviewed against the
+source-built package and deterministic render.
 
 Rules:
 

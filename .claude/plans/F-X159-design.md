@@ -1,6 +1,6 @@
 # F-X159, Word document validity baseline
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S83
 **Size**: M
 **Depends on**: F-X149
@@ -72,10 +72,10 @@ may change without a separate explanation and review.
 
 ## Implementation checklist
 
-- [ ] Review PR 240 against the approved scope and current code.
-- [ ] Implement AppVersion and nested-table fixes with exact XML regressions.
-- [ ] Run focused tests, oracle checks, scoped verify and microscope to zero.
-- [ ] Record and review only the declared deterministic hash delta.
+- [x] Review PR 240 against the approved scope and current code.
+- [x] Implement AppVersion and nested-table fixes with exact XML regressions.
+- [x] Run focused tests, oracle checks, scoped verify and microscope to zero.
+- [x] Record and review only the declared deterministic hash delta.
 
 ## Open questions
 
