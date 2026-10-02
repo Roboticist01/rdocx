@@ -25,7 +25,7 @@ delta has one owner.
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
 | F-X159 | Word document validity baseline | M | done | - |
-| F-X160 | Tolerant style, drawing and measurement reads | L | in-progress | codex |
+| F-X160 | Tolerant style, drawing and measurement reads | L | done | - |
 
 ## Sequencing note
 

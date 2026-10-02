@@ -530,6 +530,7 @@ defended.
 | F-X149 | S82 | L | 5 | 1 | 2026-10-02 | Ran the original report workflow and both matrices, and repaired replacement-image comparison with accepted and rejected media checks |
 | F-X150 | S82 | M | 3 | 1 | 2026-10-02 | Reconciled all 22 original issue criteria with 18 passing rows, four unresolved rows and post-main issue decisions |
 | F-X159 | S83 | M | 3 | 1 | 2026-10-02 | Corrected fresh Word AppVersion and nested-table validity, opened the showcase in Word and reviewed a three-entry deterministic hash delta |
+| F-X160 | S83 | L | 5 | 1 | 2026-10-02 | Accepted producer style, drawing ID and decimal measurement variants with unchanged 49-entry hash output |
 
 ## Velocity
 
