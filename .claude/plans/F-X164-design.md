@@ -1,6 +1,6 @@
 # F-X164, Added shape theme style
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-X155, F-X169
@@ -63,10 +63,10 @@ and record any intentional change in a separately labelled commit.
 
 ## Implementation checklist
 
-- [ ] Review PR 252 against the integrated presentation changes.
-- [ ] Add ordered style only for newly authored shapes.
-- [ ] Reopen and render in the required viewers.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Review PR 252 against the integrated presentation changes.
+- [x] Add ordered style only for newly authored shapes.
+- [x] Reopen and render in the required viewers.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 

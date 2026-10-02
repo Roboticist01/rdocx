@@ -90,7 +90,10 @@ programs into transient ordinary PresentationML groups before the shared
 resolver runs. Authoritative data-node text, layout-owned decorative shapes,
 quick styles, colours, connector paths, and the graphic-frame transform flow
 through the same text, paint, effect, geometry, group, and clipping machinery
-as ordinary shapes. The centred layouts set node alignment and line spacing as
+as ordinary shapes. A node's text colour comes from the colour definition's
+`dgm:txFillClrLst` entry. When the list is empty, the quick style's
+`a:fontRef` colour applies if present. Otherwise inherited text colour remains.
+The centred layouts set node alignment and line spacing as
 typed defaults that fill only what a data paragraph's own `a:pPr` leaves
 unset, so a node whose data says `algn="r"` renders right-aligned rather than
 as a labelled placeholder. An empty data paragraph takes no defaults. Static,
