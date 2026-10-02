@@ -703,3 +703,9 @@ was done about it. Empty is the expected state.
 ## S79 contribution reconciliation
 
 The five assigned PRs, 220, 222, 225, 236 and 237, are superseded by the reviewed F-X153, F-X146 and F-X152 integrations on `main`. Close each with contributor credit and a link to the integrated sprint merge. Close Issues 162 and 227 after their complete layout and diff reproducers pass. Close Issues 163 and 172 after their direct body coordinate and inline control comment entry point regressions pass. Keep Issue 226 open for the plain-line trailing-space fit in F-X163. Keep Issue 168 open for the remaining production checklist in F-X147 and tolerant reads in F-X160. Comment on both open issues with the completed S79 work and the remaining acceptance scope.
+
+## S80 contribution reconciliation
+
+PRs 218 and 223 were closed as superseded by F-X154. PRs 219, 221, 224, 230 and 234 were closed as superseded by F-X155. Each received an individual comment thanking hadim and linking the pushed S80 merge at `bc700efb`.
+
+Issues 215 and 216 were closed after their preservation and line-separator regressions passed. Issue 168 was closed after the complete Word Python chain passed and the reporter-accepted lxml package-write fallback was documented and exercised. Issue 217 remains open for F-X156 slide import and scoped replacement, followed by F-X157 complete deck-chain acceptance in S81. The accepted S80 LibreOffice and python-pptx evidence does not claim a PowerPoint 16.104 observation.
