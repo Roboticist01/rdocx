@@ -527,6 +527,7 @@ defended.
 | F-X157 | S81 | L | 5 | 1 | 2026-10-02 | Proved all six Issue 217 authoring items in one saved Python deck with pinned reader, validator and per-item viewer checks |
 | F-X158 | S82 | L | 5 | 1 | 2026-10-02 | Exercised the SHA-bound reporter deck through the complete Python workflow, package validation, pinned reader and 72 DPI viewer comparisons |
 | F-X149 | S82 | L | 5 | 1 | 2026-10-02 | Ran the original report workflow and both matrices, and repaired replacement-image comparison with accepted and rejected media checks |
+| F-X150 | S82 | M | 3 | 1 | 2026-10-02 | Reconciled all 22 original issue criteria with 18 passing rows, four unresolved rows and post-main issue decisions |
 
 ## Velocity
 

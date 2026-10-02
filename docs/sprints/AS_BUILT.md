@@ -16914,3 +16914,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged, all 49 entries matched on the worker and integrated prefix.
 
 **Notes for future sessions.** F-X150 must reconcile this report and matrix evidence against each criterion in the original 22-issue snapshot. Keep `work/f-x149-codex` until sprint closure.
+
+### F-X150, Reconcile issue closure evidence
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** The original 22-issue snapshot has a criterion-level ledger in `docs/hld/12-testing-strategy.md`. Eighteen rows have passing evidence and four remain unresolved. Six open issues have passing evidence and are candidates for closure after the integrated `main` push. Issue 158 remains open because child criteria are incomplete.
+
+**Non-obvious choices.** Issue 163 is already closed but lacks exact bookmark-after-table acceptance evidence. `/close-sprint` must establish that evidence on `main` or reopen the issue and assign a follow-up F-ID. Issues 160 and 226 retain their planned follow-up work. The six candidate closures are Issues 156, 164, 166, 169, 170 and 217. No GitHub issue state changed during `/run-sprint`.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md`, "S82 original issue closure ledger".
+
+**Tests.** The repository policy test `test_s82_original_issue_closure_ledger_has_resolvable_evidence` checks every row and decision. The integrated full gate passed 132 policy tests with two expected skips, the Rust workspace suite, 168 Word and 76 Presentation Python tests, formatting, Clippy, no-default layout, both WASM targets, rustdoc, README doctests, package dry run, archive sizes, dependency audit, prose and generated-adapter checks. Microscope pass 1 found zero defects and zero smells. Final sprint review remains due.
+
+**Hash harness.** Unchanged, all 49 entries matched on the integrated S82 result.
+
+**Notes for future sessions.** `/close-sprint` checks live issue state only after the verified integration reaches `main`. Keep `work/f-x150-codex` until sprint closure.

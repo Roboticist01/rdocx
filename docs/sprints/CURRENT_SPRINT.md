@@ -28,7 +28,7 @@ result. Keep an issue open when any criterion lacks evidence.
 |------|-------|------|--------|-------|
 | F-X149 | Word fixture and workflow acceptance gate | L | done | - |
 | F-X158 | Presentation fixture and workflow acceptance gate | L | done | - |
-| F-X150 | Reconcile issue closure evidence | M | in-progress | codex |
+| F-X150 | Reconcile issue closure evidence | M | done | - |
 
 ## Sequencing note
 
