@@ -8975,25 +8975,20 @@ Pedro Assumpcao and the rdocx maintainers.
         self.assertEqual({int(number) for number, *_ in rows}, expected)
         self.assertEqual(len(rows), len(expected), "duplicate or missing issue row")
 
-        unresolved = {158, 160, 163, 226}
-        candidates = {156, 164, 166, 169, 170, 217}
+        unresolved = {158, 160, 226}
+        closed_in_s82 = {156, 164, 166, 169, 170, 217}
         for number_text, result, state, decision in rows:
             number = int(number_text)
             with self.subTest(issue=number):
                 if number in unresolved:
                     self.assertTrue(result.startswith("Unresolved."))
-                    if number == 163:
-                        self.assertEqual((state, decision), ("closed", "Review reopen"))
-                        self.assertIn("bookmark-after-table", result)
-                        self.assertIn("follow-up F-ID", result)
-                    else:
-                        self.assertEqual((state, decision), ("open", "Keep open"))
-                        self.assertIn("F-X", result)
+                    self.assertEqual((state, decision), ("open", "Keep open"))
+                    self.assertIn("F-X", result)
                 else:
                     self.assertTrue(result.startswith("Pass."))
-                    expected_state = "open" if number in candidates else "closed"
+                    expected_state = "closed"
                     expected_decision = (
-                        "Candidate close" if number in candidates else "Retain closed"
+                        "Closed after S82" if number in closed_in_s82 else "Retain closed"
                     )
                     self.assertEqual((state, decision), (expected_state, expected_decision))
                 locators = re.findall(r"`([^`]+\.(?:rs|py))::(test_\w+|\w+)`", result)
@@ -9011,6 +9006,7 @@ Pedro Assumpcao and the rdocx maintainers.
             self.assertIn(gate, ledger)
         self.assertIn("full verification, sprint review", ledger)
         self.assertIn("integrated `main` push", ledger)
+        self.assertIn("bookmark_direct_range_reports_the_index_add_bookmark_took", ledger)
 
     def test_feature_completion_requires_scoped_verification(self) -> None:
         verify = (workflow.REPO / ".claude/commands/verify.md").read_text(
