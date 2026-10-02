@@ -537,6 +537,7 @@ defended.
 | F-X165 | S84 | M | 3 | 1 | 2026-10-02 | Integrated PR 256's Python and CLI accepted or tracked view selectors with pinned PDF text evidence and invalid-selector checks |
 | F-X162 | S84 | M | 3 | 1 | 2026-10-02 | Integrated PR 241's governing section layout with two reviewed feature showcase PDF hash changes |
 | F-X163 | S84 | M | 3 | 1 | 2026-10-02 | Integrated PR 242's plain line hanging-space fit with the complete Issue 226 width matrix and reviewed PDF and pixel baselines |
+| F-X164 | S84 | M | 3 | 1 | 2026-10-02 | Integrated PR 252's theme style for new shapes and SmartArt text colour precedence with pinned PowerPoint and LibreOffice checks |
 
 ## Velocity
 

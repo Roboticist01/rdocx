@@ -29,7 +29,7 @@ then run one full verification and sprint review over the combined result.
 | F-X161 | Compact Word XML and namespace preservation | L | done | - |
 | F-X162 | Per-paragraph section width and pagination | M | done | - |
 | F-X163 | Plain-line trailing-space fit | M | done | - |
-| F-X164 | Added shape theme style | M | in-progress | codex |
+| F-X164 | Added shape theme style | M | done | - |
 | F-X165 | Python and CLI tracked revision view | M | done | - |
 | F-X166 | Picture and final-block comparison revisions | L | in-progress | codex |
 | F-X167 | Accepted-view exporters and readers | L | pending | - |

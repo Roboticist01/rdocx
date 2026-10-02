@@ -17074,3 +17074,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Seven sample PDFs changed in `pdf/bytes` and `pdf/pages`, plus the contract and invoice page-one PNG entries. No Word XML entry moved. All 49 worker entries and seven pinned Poppler pixel buffers match their reviewed baselines. The combined S84 gate must rerun them.
 
 **Notes for future sessions.** Issue 226 remains open until the full S84 result reaches main and its complete issue matrix is checked. Keep `work/f-x163-codex` through sprint verification and review.
+
+### F-X164, Added shape theme style
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Reconciled PR 252 against the integrated presentation shape and SmartArt work. Newly authored shapes now carry the schema-ordered theme style references used by python-pptx 1.0.2. Imported shapes retain their raw XML and explicit formatting keeps precedence. SmartArt text colour uses its colour definition, then the quick style font colour, then inherited colour.
+
+**Non-obvious choices.** The worker's presentation package measurements were reconciled with the S84 Word and renderer measurements already on the sprint branch. An integration microscope pass reviewed this conflict. The direct PowerPoint 16.113.3 check opened the new shape deck without a repair prompt and showed white text on the blue theme shape.
+
+**Deviations from the design plan.** The worker also corrected SmartArt text colour inheritance and aligned the package inventory. The approved plan and HLD impact list include these changes.
+
+**Spec sections touched.** `docs/hld/06-presentationml-model.md`, new shape serialization, `docs/hld/07-inheritance-and-resolution.md`, theme style precedence, and `docs/hld/08-rendering-spec.md`, SmartArt text colour.
+
+**Tests.** The worker passed scoped Rust checks and 77 Python checks against pinned python-pptx 1.0.2, LibreOffice 26.2.5.2 conversion and PowerPoint 16.113.3 display. Clippy, formatting, prose, skill drift and repository policy gates passed. Microscope pass 2 and integration pass 1 found zero defects and zero smells. Full integrated verification and sprint review remain due.
+
+**Hash harness.** The worker's 49 Word entries matched. Presentation pins were re-recorded in a separate worker commit. The combined S84 gate must rerun all hashes and affected visual baselines.
+
+**Notes for future sessions.** Issue 244 remains open until the second-machine animation and final integrated evidence gate pass. Keep `work/f-x164-codex` through sprint verification and review.
