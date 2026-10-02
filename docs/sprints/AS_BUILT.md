@@ -17054,3 +17054,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Only `feature_showcase` `pdf/bytes` and `pdf/pages` changed. The worker baseline records these two reviewed entries and all 49 entries matched. The integrated result must rerun the hash harness at the final S84 gate.
 
 **Notes for future sessions.** F-X163 may start from this completed layout prefix. Keep `work/f-x162-codex` through sprint verification and review. Issues 160 and 245 remain open until the final integrated result reaches main.
+
+### F-X163, Plain-line trailing-space fit
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Reconciled PR 242's plain line-path increment with the already integrated rich-line and F-X162 section changes. Terminal U+0020 spaces now hang past the fit measure without losing glyphs or source spans. Word and PowerPoint alignment and decoration use ink width. Field and note placeholders, NBSP, tabs and right-to-left text retain their guarded behavior. An Issue 226 regression verifies 1.70 and 2.10 inch widths in plain and explicit `rtl=false` paths, including no leading space or punctuation.
+
+**Non-obvious choices.** The worker ported PR 242's incremental hunks into the current line-state implementation rather than replaying its already integrated PR 222 ancestors. An existing right-tab test now counts the hanging space as a separate item instead of an extra word. The behavior, 16-entry hash update and two golden pixel updates have separate worker commits.
+
+**Deviations from the design plan.** The four affected package README measurements and their assertion carrier were updated after measuring the final source and tests. No public type or feature flag was added.
+
+**Spec sections touched.** `docs/hld/08-rendering-spec.md`, the renderer's input and plain line fit behavior.
+
+**Tests.** The Issue 226 regression failed on the pre-fix branch with seven lines at 2.10 inches and passed with the expected six. The worker passed 122 `oxml-layout`, 486 Word unit, 333 Word integration, 722 Word regression, 302 `rdocx-layout` and 106 `rpptx-render` tests with pinned Poppler 26.01.0 and LibreOffice 26.2.5.2. Scoped Clippy, formatting, README inventory, repository policy, prose and generated-skill checks passed. Microscope pass 1 found zero defects and zero smells. Full integrated verification and sprint review remain due.
+
+**Hash harness.** Seven sample PDFs changed in `pdf/bytes` and `pdf/pages`, plus the contract and invoice page-one PNG entries. No Word XML entry moved. All 49 worker entries and seven pinned Poppler pixel buffers match their reviewed baselines. The combined S84 gate must rerun them.
+
+**Notes for future sessions.** Issue 226 remains open until the full S84 result reaches main and its complete issue matrix is checked. Keep `work/f-x163-codex` through sprint verification and review.

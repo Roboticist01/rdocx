@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)              | 179 | 169 | 3 | 3 |
-| **Total** | **504** | **431** | **3** | **66** |
+| X, Cross-cutting (opportunistic)              | 179 | 170 | 2 | 3 |
+| **Total** | **504** | **432** | **2** | **66** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -716,7 +716,7 @@ regenerated, never hand-edited.
 | F-X160 | Tolerant style, drawing and measurement reads | S83 | L | done |
 | F-X161 | Compact Word XML and namespace preservation | S84 | L | done |
 | F-X162 | Per-paragraph section width and pagination | S84 | M | done |
-| F-X163 | Plain-line trailing-space fit | S84 | M | in-progress |
+| F-X163 | Plain-line trailing-space fit | S84 | M | done |
 | F-X164 | Added shape theme style | S84 | M | in-progress |
 | F-X165 | Python and CLI tracked revision view | S84 | M | done |
 | F-X166 | Picture and final-block comparison revisions | S84 | L | in-progress |
