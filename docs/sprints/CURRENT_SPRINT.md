@@ -1,46 +1,57 @@
-# Current Sprint, S83
+# Current Sprint, S84
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: make newly authored Word documents open in Word and accept reported
-style, drawing ID and measurement variants from existing producers. Review the
-document-validity baseline change before the tolerance work so each output
-delta has one owner.
+**Goal**: finish the live contributor queue and all eight open issue contracts
+in one integrated repair sprint. Complete each F-ID's scoped checks and review,
+then run one full verification and sprint review over the combined result.
 
 ## Spec references
 
-- `docs/hld/04-opc-and-packaging.md`, for the fresh Word package graph,
-  content types, relationships and saved-package integrity.
-- `docs/hld/08-rendering-spec.md`, for deterministic Word output affected by
-  the document-validity baseline.
-- `docs/hld/10-bindings-spec.md`, for Python and CLI reads, style mutation and
-  drawing identity behavior.
-- `docs/hld/12-testing-strategy.md`, for source-built and reporter fixtures,
-  Word opening, round trips and the reviewed hash delta.
-- `docs/hld/14-development-backlog.md`, for the F-X159 and F-X160 contracts,
-  dependencies and test gates.
+- `docs/hld/03-architecture.md`, for accepted-view and comparison ownership.
+- `docs/hld/04-opc-and-packaging.md`, for the remaining Word package and
+  namespace acceptance criteria.
+- `docs/hld/06-presentationml-model.md`, for new-shape style serialization.
+- `docs/hld/07-inheritance-and-resolution.md`, for theme style resolution.
+- `docs/hld/08-rendering-spec.md`, for the pending deterministic line-fit and
+  tracked-view evidence.
+- `docs/hld/10-bindings-spec.md`, for Python and CLI acceptance surfaces.
+- `docs/hld/12-testing-strategy.md`, for the fixture matrices and combined
+  verification gate.
+- `docs/hld/14-development-backlog.md`, for all nine repair contracts and
+  their formal dependencies.
 
 ## The wave
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X159 | Word document validity baseline | M | done | - |
-| F-X160 | Tolerant style, drawing and measurement reads | L | done | - |
+| F-X169 | Reconcile live contributions and open issue contracts | L | pending | - |
+| F-X161 | Compact Word XML and namespace preservation | L | pending | - |
+| F-X162 | Per-paragraph section width and pagination | M | pending | - |
+| F-X163 | Plain-line trailing-space fit | M | pending | - |
+| F-X164 | Added shape theme style | M | pending | - |
+| F-X165 | Python and CLI tracked revision view | M | pending | - |
+| F-X166 | Picture and final-block comparison revisions | L | pending | - |
+| F-X167 | Accepted-view exporters and readers | L | pending | - |
+| F-X168 | Current issue and contribution closure evidence | M | pending | - |
 
 ## Sequencing note
 
-F-X159 reviews PR 240 first and owns the sprint's only hash baseline update.
-F-X160 depends on that integrated result and reviews PRs 248, 249 and 250.
-The two stories do not share a wave.
+F-X169 completes intake first. F-X161, F-X164 and F-X165 depend on it.
+F-X162 follows F-X161, then F-X163 follows F-X162. F-X166 follows F-X165,
+and F-X167 follows both F-X165 and F-X166. F-X168 checks all completed work
+last. Use scoped dependency-prefix checkpoints so consumers start only after
+their prerequisites complete. F-X161, F-X162 and F-X163 own three separate,
+sequential hash baseline changes. The final full gate runs once.
 
 ## Definition of done for this sprint
 
-- F-X159 makes a source-built document and nested table open in Word, with
-  only the declared deterministic hash changes.
-- F-X160 accepts both Issue 243 reporter fixtures through every affected style
-  mutator, and passes Issues 246 and 247 through read, edit, save and reopen
-  with the specified rounding and drawing identity behavior.
-- Word opening, exact XML, round-trip, CLI and Python checks accompany the
-  source-built and reporter cases.
-- The integrated result passes the hash harness, `/verify --full` and
-  `/sprint-review` before any issue closure.
+- Every open PR has a reviewed incremental disposition against integrated
+  main, including stacked commits and shared-file reconciliation.
+- Issues 158, 160, 226, 244, 245 and 253 through 255 meet every acceptance
+  criterion on the integrated result, with viewer evidence where required.
+- The three hash changes and the golden pixel update are individually labelled
+  and reviewed. The fixture workflows, producer and identity matrices, scoped
+  checks, final hash harness, `/verify --full` and `/sprint-review` pass.
+- After `/close-sprint` merges the reviewed result to main, all 31 open PRs
+  and eight open issues in the 2 October intake are closed with evidence links.
