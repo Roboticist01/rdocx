@@ -96,6 +96,7 @@ defended.
 | S79 | X | 3 | 3 | 0 | 11 | 1 | Integrated five reviewed contribution PRs across Word line geometry, full-story CLI diff and Python comment, numbering and run operations. Issue 162 and Issue 227 acceptance passed, while Issue 226's plain-line symptom remains in F-X163 and Issue 168's remaining checklist remains in F-X147 and F-X160. The full workspace gate, 164 Word Python tests, 49 matching hashes, seven golden buffers, 22-crate dry run and sprint review pass 1 passed. No stories carried |
 | S80 | X | 3 | 3 | 0 | 13 | 2 | Completed the Issue 168 Word Python chain with an accepted lxml fallback, repaired Issues 215 and 216, and integrated five Presentation drawing PRs. The full gate passed with 165 Word and 71 Presentation Python tests, pinned LibreOffice drawing evidence, 49 unchanged hashes, all 22 archives below 10 MiB and sprint review pass 1 clean. PowerPoint 16.104 remained unverified under the accepted scope decision. Issue 217 continues in S81. No stories carried |
 | S81 | X | 3 | 3 | 0 | 15 | 1 | Integrated slide import, scoped replacement and built-in table styles, then proved the complete Issue 169 and six-item Issue 217 Python deck chains. The full gate passed with 75 Presentation Python tests, pinned python-pptx and LibreOffice evidence, 49 unchanged hashes, all 22 archives below 10 MiB and sprint review pass 1 clean. Reporter fixture acceptance and issue closure evidence continue in S82. No stories carried |
+| S82 | X | 3 | 3 | 0 | 13 | 1 | Exercised the original Word report and Presentation deck, completed both matrices and workflows, repaired image comparison and reconciled the original 22 issue criteria. The full gate passed with 168 Word and 76 Presentation Python tests, 49 unchanged hashes, all 22 archives below 10 MiB and sprint review pass 1 clean. Issues 158, 160 and 226 retain follow-up criteria. No stories carried |
 
 ## Completed features
 
@@ -624,6 +625,7 @@ five working days.
 | S79 | 3 | 1 | 15.00 |
 | S80 | 3 | 2 | 7.50 |
 | S81 | 3 | 1 | 15.00 |
+| S82 | 3 | 1 | 15.00 |
 
 ## Escalation record
 
@@ -708,6 +710,7 @@ was done about it. Empty is the expected state.
 | 2026-10-01 | Sprint estimate variance exceeded 30 percent | S79 | Record 1 elapsed workday against 11 estimated for three completed contribution stories. Reviewed PR increments and existing geometry, story and binding gates reduced elapsed integration time while the full verification and sprint review remained explicit. The resulting 15.00 stories per week is not a sustainable forecast, so retain the dependency-defined S80 through S88 repair boundaries |
 | 2026-10-02 | Sprint estimate variance exceeded 30 percent | S80 | Record 2 elapsed workdays against 13 estimated for three completed contribution stories. Reviewed contributor increments, dependency-prefix integration and established binding and viewer gates reduced authoring time while the full verification and sprint review remained explicit. The resulting 7.50 stories per week is a short contribution-intake result, so retain the dependency-defined S81 through S88 repair boundaries |
 | 2026-10-02 | Sprint estimate variance exceeded 30 percent | S81 | Record 1 elapsed workday against 15 estimated for three completed dependency waves. Reviewed contributor increments and established Python, viewer and package gates compressed elapsed work while full integrated verification and sprint review remained explicit. The resulting 15.00 stories per week is a short contribution-intake result, so retain the dependency-defined S82 through S88 acceptance and repair boundaries |
+| 2026-10-02 | Sprint estimate variance exceeded 30 percent | S82 | Record 1 elapsed workday against 13 estimated for three completed acceptance and evidence stories. Existing test infrastructure and pinned fixture inputs reduced elapsed work while full integrated verification and sprint review remained explicit. The resulting 15.00 stories per week is a short acceptance-wave result, so retain the dependency-defined S83 through S88 repair boundaries |
 
 ## S79 contribution reconciliation
 
