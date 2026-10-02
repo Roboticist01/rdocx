@@ -991,7 +991,13 @@ impl Document {
         // A hyperlink that only the edited side targets arrives with the
         // edited content that holds it.
         let mut referenced_by_owner = HashMap::<String, HashSet<String>>::new();
-        for (owner, relationship) in carried_links {
+        let mut carried_image = false;
+        for carried in carried_links {
+            let CarriedRelationship {
+                owner,
+                relationship,
+                media,
+            } = carried;
             if !referenced_by_owner.contains_key(&owner) {
                 let ids = candidate
                     .package
@@ -1007,12 +1013,30 @@ impl Document {
                 .get(&owner)
                 .is_some_and(|ids| ids.contains(&relationship.id))
             {
+                if let Some(CarriedMedia {
+                    part_name,
+                    bytes,
+                    content_type,
+                }) = media
+                {
+                    carried_image = true;
+                    candidate.package.set_part(&part_name, bytes);
+                    candidate
+                        .package
+                        .content_types
+                        .add_override(&part_name, &content_type);
+                }
                 candidate
                     .package
                     .get_or_create_part_rels(&owner)
                     .items
                     .push(relationship);
             }
+        }
+        if carried_image {
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            candidate.package.write_to(&mut bytes)?;
+            candidate = Document::from_bytes(bytes.get_ref())?;
         }
         candidate = reopen_staged(candidate)?;
         #[cfg(test)]
@@ -1256,36 +1280,43 @@ fn story_xml<'a>(document: &'a Document, story: &StoryPart) -> Result<&'a [u8]> 
     })
 }
 
-/// Give each edited image and hyperlink relationship the id of its
-/// equivalent in the original. A hyperlink with no equivalent gets a fresh
-/// id, and is returned with the original owner it belongs to, for the
-/// redline to add when edited content carries it.
+struct CarriedMedia {
+    part_name: String,
+    bytes: Vec<u8>,
+    content_type: String,
+}
+
+struct CarriedRelationship {
+    owner: String,
+    relationship: Relationship,
+    media: Option<CarriedMedia>,
+}
+
+/// Give equivalent edited image and hyperlink relationships their original ids.
+/// Changed image payloads and new hyperlinks get distinct ids and are carried
+/// into the redline when its tracked content references them.
 fn remap_equivalent_story_relationships(
     original: &Document,
     edited: &mut Document,
     original_stories: &[StoryPart],
     edited_stories: &[StoryPart],
-) -> Result<Vec<(String, Relationship)>> {
+) -> Result<Vec<CarriedRelationship>> {
+    let mut reserved_media = HashSet::new();
     let mut carried = remap_equivalent_owner_relationships(
         original,
         edited,
         &original.doc_part_name,
         &edited.doc_part_name.clone(),
-    )?
-    .into_iter()
-    .map(|relationship| (original.doc_part_name.clone(), relationship))
-    .collect::<Vec<_>>();
+        &mut reserved_media,
+    )?;
     for (left, right) in original_stories.iter().zip(edited_stories) {
-        carried.extend(
-            remap_equivalent_owner_relationships(
-                original,
-                edited,
-                &left.part_name,
-                &right.part_name,
-            )?
-            .into_iter()
-            .map(|relationship| (left.part_name.clone(), relationship)),
-        );
+        carried.extend(remap_equivalent_owner_relationships(
+            original,
+            edited,
+            &left.part_name,
+            &right.part_name,
+            &mut reserved_media,
+        )?);
     }
     Ok(carried)
 }
@@ -1295,7 +1326,8 @@ fn remap_equivalent_owner_relationships(
     edited: &mut Document,
     original_owner: &str,
     edited_owner: &str,
-) -> Result<Vec<Relationship>> {
+    reserved_media: &mut HashSet<String>,
+) -> Result<Vec<CarriedRelationship>> {
     let original_relationships = original
         .package
         .get_part_rels(original_owner)
@@ -1309,6 +1341,7 @@ fn remap_equivalent_owner_relationships(
     let mut used = HashSet::new();
     let mut remap = HashMap::new();
     let mut unmatched_links = Vec::new();
+    let mut unmatched_images = Vec::new();
     for right in &edited_relationships.items {
         if right.rel_type != rel_types::IMAGE && right.rel_type != rel_types::HYPERLINK {
             continue;
@@ -1328,6 +1361,24 @@ fn remap_equivalent_owner_relationships(
         else {
             if right.rel_type == rel_types::HYPERLINK {
                 unmatched_links.push(right.clone());
+            } else if crate::document::relationship_is_internal(right) {
+                let target = OpcPackage::resolve_rel_target(edited_owner, &right.target);
+                let bytes = edited.package.get_part(&target).ok_or_else(|| {
+                    Error::Other(format!("comparison image target is missing: {target}"))
+                })?;
+                let content_type = edited
+                    .package
+                    .content_types
+                    .content_type_for(&target)
+                    .ok_or_else(|| {
+                        Error::Other(format!("comparison image has no content type: {target}"))
+                    })?;
+                unmatched_images.push((
+                    right.clone(),
+                    target,
+                    bytes.to_vec(),
+                    content_type.to_owned(),
+                ));
             }
             continue;
         };
@@ -1346,13 +1397,53 @@ fn remap_equivalent_owner_relationships(
     // The redline allocates a carried hyperlink's id the way the original's
     // relationships do, which is the id staging keeps when it reopens it.
     let mut allocator = original_relationships.clone();
-    let mut carried = Vec::with_capacity(unmatched_links.len());
+    let mut carried = Vec::with_capacity(unmatched_links.len() + unmatched_images.len());
     for mut link in unmatched_links {
         let fresh = allocator.add_external(&link.rel_type, &link.target);
         occupied.insert(fresh.clone());
         remap.insert(link.id.clone(), fresh.clone());
         link.id = fresh;
-        carried.push(link);
+        carried.push(CarriedRelationship {
+            owner: original_owner.to_owned(),
+            relationship: link,
+            media: None,
+        });
+    }
+    for (mut image, source_part, bytes, content_type) in unmatched_images {
+        let extension = source_part.rsplit('.').next().unwrap_or("bin");
+        let owner_dir = original_owner.rsplit_once('/').map_or("", |(dir, _)| dir);
+        let mut ordinal = 1;
+        let part_name = loop {
+            let part_name = format!("{owner_dir}/media/rdocxComparison{ordinal}.{extension}");
+            if !original.package.contains_part(&part_name)
+                && !edited.package.contains_part(&part_name)
+                && reserved_media.insert(part_name.clone())
+            {
+                break part_name;
+            }
+            ordinal += 1;
+        };
+        let target = format!("media/rdocxComparison{ordinal}.{extension}");
+        let mut id_ordinal = 1;
+        let fresh = loop {
+            let candidate = format!("rdocxComparisonImage{id_ordinal}");
+            if occupied.insert(candidate.clone()) {
+                break candidate;
+            }
+            id_ordinal += 1;
+        };
+        remap.insert(image.id.clone(), fresh.clone());
+        image.id = fresh;
+        image.target = target;
+        carried.push(CarriedRelationship {
+            owner: original_owner.to_owned(),
+            relationship: image,
+            media: Some(CarriedMedia {
+                part_name,
+                bytes,
+                content_type,
+            }),
+        });
     }
     if remap.is_empty() {
         return Ok(carried);
@@ -8227,6 +8318,8 @@ mod tests {
         complex_field_result, deleted_text_xml, story_document, word_fragments,
     };
     use crate::Document;
+    use crate::Length;
+    use oxml_opc::relationship::rel_types;
     use rdocx_oxml::document::BodyContent;
     use rdocx_oxml::namespace::W_NS;
     use rdocx_oxml::text::{BreakType, CT_R, CT_Text, RunContent};
@@ -8426,5 +8519,91 @@ mod tests {
         );
         assert!(!message.contains("CT_Drawing"));
         assert!(message.len() < 1_000);
+    }
+
+    #[test]
+    fn changed_image_payload_comparison_resolves_both_versions() {
+        let original_png: &[u8] = &[
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x9e, 0xdd, 0x22,
+            0x71, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+        let replacement_png: &[u8] = &[
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xe2, 0x21, 0xbc,
+            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+        let mut original = Document::new();
+        original.add_paragraph("unchanged");
+        original.add_picture(
+            original_png,
+            "first.png",
+            Length::pt(12.0),
+            Length::pt(12.0),
+        );
+        let mut source = Document::from_bytes(&original.to_bytes().unwrap()).unwrap();
+        let owner = source.doc_part_name.clone();
+        let image_id = source
+            .package
+            .get_part_rels(&owner)
+            .unwrap()
+            .items
+            .iter()
+            .find(|relationship| relationship.rel_type == rel_types::IMAGE)
+            .unwrap()
+            .id
+            .clone();
+        let settings = source
+            .package
+            .get_part("/word/settings.xml")
+            .unwrap()
+            .to_vec();
+        let mut edited = Document::from_bytes(&source.to_bytes().unwrap()).unwrap();
+        edited.replace_image(&image_id, replacement_png).unwrap();
+        assert_eq!(
+            edited.image_data(&image_id).as_deref(),
+            Some(replacement_png)
+        );
+
+        let mut redline = Document::from_bytes(&source.to_bytes().unwrap()).unwrap();
+        assert!(
+            redline
+                .compare(&edited, "Reviewer", "2026-09-27T12:00:00Z")
+                .unwrap()
+                .is_empty()
+        );
+        let redline = redline.to_bytes().unwrap();
+        let mut accepted = Document::from_bytes(&redline).unwrap();
+        let mut rejected = Document::from_bytes(&redline).unwrap();
+        accepted.accept_all().unwrap();
+        rejected.reject_all().unwrap();
+        for document in [&accepted, &rejected] {
+            assert_eq!(
+                document.package.get_part("/word/settings.xml"),
+                Some(settings.as_slice())
+            );
+        }
+        let accepted = Document::from_bytes(&accepted.to_bytes().unwrap()).unwrap();
+        let rejected = Document::from_bytes(&rejected.to_bytes().unwrap()).unwrap();
+        assert_eq!(
+            accepted.image_data("rdocxComparisonImage1").as_deref(),
+            Some(replacement_png)
+        );
+        assert_eq!(
+            rejected.image_data(&image_id).as_deref(),
+            Some(original_png)
+        );
+        assert_eq!(
+            accepted.package.get_part("/word/settings.xml"),
+            Some(settings.as_slice())
+        );
+        assert_eq!(
+            rejected.package.get_part("/word/settings.xml"),
+            Some(settings.as_slice())
+        );
     }
 }

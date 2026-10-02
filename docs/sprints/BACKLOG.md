@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)              | 178 | 160 | 0 | 14 |
-| **Total** | **503** | **422** | **0** | **77** |
+| X, Cross-cutting (opportunistic)              | 178 | 163 | 0 | 11 |
+| **Total** | **503** | **425** | **0** | **74** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -702,8 +702,8 @@ regenerated, never hand-edited.
 | F-X146 | Word line height and inline picture spacing | S79 | L | done |
 | F-X147 | Complete rdocx Python production checklist | S80 | L | done |
 | F-X148 | Complete rpptx Python production checklist | S81 | L | done |
-| F-X149 | Word fixture and workflow acceptance gate | S82 | L | pending |
-| F-X150 | Reconcile issue closure evidence | S82 | M | pending |
+| F-X149 | Word fixture and workflow acceptance gate | S82 | L | done |
+| F-X150 | Reconcile issue closure evidence | S82 | M | done |
 | F-X151 | Word preservation and comparison PR intake | S78 | L | done |
 | F-X152 | Full-story CLI diff and count repair | S79 | M | done |
 | F-X153 | Word Python supplemental contribution | S79 | M | done |
@@ -711,7 +711,7 @@ regenerated, never hand-edited.
 | F-X155 | Presentation drawing API contribution | S80 | L | done |
 | F-X156 | Presentation slide and table contribution | S81 | L | done |
 | F-X157 | Complete deck-chain authoring checklist | S81 | L | done |
-| F-X158 | Presentation fixture and workflow acceptance gate | S82 | L | pending |
+| F-X158 | Presentation fixture and workflow acceptance gate | S82 | L | done |
 | F-X159 | Word document validity baseline | S83 | M | pending |
 | F-X160 | Tolerant style, drawing and measurement reads | S83 | L | pending |
 | F-X161 | Compact Word XML and namespace preservation | S84 | L | pending |

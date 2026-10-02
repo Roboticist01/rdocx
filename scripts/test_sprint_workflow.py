@@ -8963,6 +8963,55 @@ Pedro Assumpcao and the rdocx maintainers.
             ],
         )
 
+    def test_s82_original_issue_closure_ledger_has_resolvable_evidence(self) -> None:
+        strategy = (workflow.REPO / "docs/hld/12-testing-strategy.md").read_text(
+            encoding="utf-8"
+        )
+        heading = "### S82 original issue closure ledger\n"
+        self.assertTrue(heading in strategy, "missing S82 closure ledger")
+        ledger = strategy.split(heading, 1)[1].split("\n## ", 1)[0]
+        rows = re.findall(r"^\| #(\d+) \| ([^\n]+) \| (open|closed) \| ([^\n]+) \|$", ledger, re.M)
+        expected = set(range(156, 173)) | {215, 216, 217, 226, 227}
+        self.assertEqual({int(number) for number, *_ in rows}, expected)
+        self.assertEqual(len(rows), len(expected), "duplicate or missing issue row")
+
+        unresolved = {158, 160, 163, 226}
+        candidates = {156, 164, 166, 169, 170, 217}
+        for number_text, result, state, decision in rows:
+            number = int(number_text)
+            with self.subTest(issue=number):
+                if number in unresolved:
+                    self.assertTrue(result.startswith("Unresolved."))
+                    if number == 163:
+                        self.assertEqual((state, decision), ("closed", "Review reopen"))
+                        self.assertIn("bookmark-after-table", result)
+                        self.assertIn("follow-up F-ID", result)
+                    else:
+                        self.assertEqual((state, decision), ("open", "Keep open"))
+                        self.assertIn("F-X", result)
+                else:
+                    self.assertTrue(result.startswith("Pass."))
+                    expected_state = "open" if number in candidates else "closed"
+                    expected_decision = (
+                        "Candidate close" if number in candidates else "Retain closed"
+                    )
+                    self.assertEqual((state, decision), (expected_state, expected_decision))
+                locators = re.findall(r"`([^`]+\.(?:rs|py))::(test_\w+|\w+)`", result)
+                if number not in unresolved:
+                    self.assertTrue(locators, "passing row has no executable evidence")
+                for path, test_name in locators:
+                    source = (workflow.REPO / path).read_text(encoding="utf-8")
+                    self.assertRegex(source, rf"(?m)^\s*(?:def|fn) {re.escape(test_name)}\(")
+
+        for gate in (
+            "test_issue_158_word_fixture_acceptance",
+            "test_issue_158_complete_word_workflow",
+            "test_issue_158_deck_fixture_acceptance",
+        ):
+            self.assertIn(gate, ledger)
+        self.assertIn("full verification, sprint review", ledger)
+        self.assertIn("integrated `main` push", ledger)
+
     def test_feature_completion_requires_scoped_verification(self) -> None:
         verify = (workflow.REPO / ".claude/commands/verify.md").read_text(
             encoding="utf-8"

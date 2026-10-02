@@ -16874,3 +16874,63 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the integrated S81 result.
 
 **Notes for future sessions.** The six-item deck chain is the durable Issue 217 acceptance test. The S80 accepted viewer scope does not claim a PowerPoint observation.
+
+### F-X158, Presentation fixture and workflow acceptance gate
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** The original seven-slide Issue 158 deck, SHA-256 `8b703c862792470d3732c6eea07d280d3023525f8653cee4c12d9fc9d14c464a`, now runs through a complete Python edit, save, reopen, validation and render gate. The test fetches its pinned bytes into ignored corpus storage when no local fixture path is supplied. It checks the Issue 169 and Issue 217 authoring operations alongside gradient, text-body, notes, media and relationship preservation.
+
+**Non-obvious choices.** The source deck's inherited placeholder geometry is resolved before moving it. An omitted-angle gradient and unmodelled text-body child are injected as preservation sentinels. The pinned LibreOffice 26.2.5.2 PDF omits a hidden slide, so the 72 DPI comparison maps viewer pages to source slide indexes and checks bounded windows for images, the edited slide and gradient background. Python-pptx 1.0.2 reopens the saved structure.
+
+**Deviations from the design plan.** None. The integration commit corrected two HLD wording errors without changing code or the acceptance gate.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md`, "Binding tests".
+
+**Tests.** The worker ran 76 Presentation Python tests, including the no-environment-variable attachment download and viewer comparison. `rpptx validate`, scoped formatting, `rpptx-py` Clippy, WASM, prose, generated-skill, workflow-policy and the 49-entry unchanged hash harness checks passed. Microscope pass 1 found zero defects and zero smells. The integration-only HLD correction passed prose and staged diff checks. Full sprint verification and sprint review remain due after the dependent stories integrate.
+
+**Hash harness.** Unchanged, all 49 entries matched in the worker. No product code changed during integration.
+
+**Notes for future sessions.** F-X150 must reconcile Issues 169, 170, 215, 216 and 217 against this fixture result and every other criterion in the original 22-issue snapshot. Keep `work/f-x158-codex` until sprint closure.
+
+### F-X149, Word fixture and workflow acceptance gate
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** The original Issue 158 report, SHA-256 `d05f9c753c00eb804c6e345126ef7a1f7a4fc635d2c9b653b829922030cd875e`, now runs through the reporter's complete 12-step workflow. The Python parity gate checks all 18 identity rows across seven operations and all 11 producer rows across eight operations. Comparison carries changed image bytes under a distinct media part and relationship, so accepting a redline retains the replacement and rejecting it retains the original.
+
+**Non-obvious choices.** The report and script archive are SHA-bound inputs in ignored test storage. The image fix stages a fresh relationship rather than changing the original payload in place. The `rdocx` package archive was remeasured in the README and its assertion carrier after the Rust change.
+
+**Deviations from the design plan.** The original report exposed the image comparison defect, so the approved plan was expanded to name the scoped repair, package-staging risk rider and `docs/hld/10-bindings-spec.md` impact before completion.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md`, "Native Word facade stability", and `docs/hld/12-testing-strategy.md`, "The Word corpus".
+
+**Tests.** The reporter workflow passed 12 of 12 steps. The isolated Python suite passed 168 tests. The Word crate passed 486 unit, 327 integration, 711 regression and two doctests with pinned LibreOffice 26.2.5.2 and Poppler 26.01.0. Scoped WASM, Clippy, formatting, repository policy, prose and generated-adapter checks passed. Microscope pass 2 found zero defects and zero smells. The integrated prefix passed the 49-entry hash harness, prose and staged diff checks. Final sprint verification and review remain due after F-X150.
+
+**Hash harness.** Unchanged, all 49 entries matched on the worker and integrated prefix.
+
+**Notes for future sessions.** F-X150 must reconcile this report and matrix evidence against each criterion in the original 22-issue snapshot. Keep `work/f-x149-codex` until sprint closure.
+
+### F-X150, Reconcile issue closure evidence
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** The original 22-issue snapshot has a criterion-level ledger in `docs/hld/12-testing-strategy.md`. Eighteen rows have passing evidence and four remain unresolved. Six open issues have passing evidence and are candidates for closure after the integrated `main` push. Issue 158 remains open because child criteria are incomplete.
+
+**Non-obvious choices.** Issue 163 is already closed but lacks exact bookmark-after-table acceptance evidence. `/close-sprint` must establish that evidence on `main` or reopen the issue and assign a follow-up F-ID. Issues 160 and 226 retain their planned follow-up work. The six candidate closures are Issues 156, 164, 166, 169, 170 and 217. No GitHub issue state changed during `/run-sprint`.
+
+**Deviations from the design plan.** None.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md`, "S82 original issue closure ledger".
+
+**Tests.** The repository policy test `test_s82_original_issue_closure_ledger_has_resolvable_evidence` checks every row and decision. The integrated full gate passed 132 policy tests with two expected skips, the Rust workspace suite, 168 Word and 76 Presentation Python tests, formatting, Clippy, no-default layout, both WASM targets, rustdoc, README doctests, package dry run, archive sizes, dependency audit, prose and generated-adapter checks. Microscope pass 1 found zero defects and zero smells. Final sprint review remains due.
+
+**Hash harness.** Unchanged, all 49 entries matched on the integrated S82 result.
+
+**Notes for future sessions.** `/close-sprint` checks live issue state only after the verified integration reaches `main`. Keep `work/f-x150-codex` until sprint closure.
