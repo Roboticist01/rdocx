@@ -715,3 +715,9 @@ The five assigned PRs, 220, 222, 225, 236 and 237, are superseded by the reviewe
 PRs 218 and 223 were closed as superseded by F-X154. PRs 219, 221, 224, 230 and 234 were closed as superseded by F-X155. Each received an individual comment thanking hadim and linking the pushed S80 merge at `bc700efb`.
 
 Issues 215 and 216 were closed after their preservation and line-separator regressions passed. Issue 168 was closed after the complete Word Python chain passed and the reporter-accepted lxml package-write fallback was documented and exercised. Issue 217 remains open for F-X156 slide import and scoped replacement, followed by F-X157 complete deck-chain acceptance in S81. The accepted S80 LibreOffice and python-pptx evidence does not claim a PowerPoint 16.104 observation.
+
+## S81 contribution reconciliation
+
+PRs [231](https://github.com/tensorbee/rdocx/pull/231#issuecomment-5950014500), [235](https://github.com/tensorbee/rdocx/pull/235#issuecomment-5950024422) and [238](https://github.com/tensorbee/rdocx/pull/238#issuecomment-5950035288) were closed as superseded by the pushed S81 merge at `58e41809`. Each received an individual note thanking hadim, naming the integrated result and explaining its remaining scope.
+
+Issues [169](https://github.com/tensorbee/rdocx/issues/169#issuecomment-5950044534) and [217](https://github.com/tensorbee/rdocx/issues/217#issuecomment-5950052508) remain open. Their S81 comments cite the production and six-item deck-chain evidence on `main`. F-X158 in S82 still owns the reporter's exported deck fixture and criterion-level closure check. The accepted viewer evidence uses pinned LibreOffice 26.2.5.2 and python-pptx 1.0.2 and does not claim a PowerPoint 16.104 observation.
