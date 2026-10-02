@@ -17034,3 +17034,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged from the F-X161 prefix, all 49 entries matched.
 
 **Notes for future sessions.** F-X166 may start. Issue 253 remains open until the accepted-view follow-ups and final integrated Python and CLI gate pass on main. Keep `work/f-x165-codex` through sprint verification and review.
+
+### F-X162, Per-paragraph section width and pagination
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Reconciled PR 241 on the F-X161 prefix. Each direct body paragraph, table and content control paragraph now lays out against its governing section. A paragraph section break applies to that paragraph and the preceding items since the prior break. The final body section applies to the remaining items. The 144, 252 and 360 pt deterministic regression failed on the old S84 code with the first section's right edge at 348.6 pt and passed after the fix.
+
+**Non-obvious choices.** The worker kept the behavior change and the two-entry PDF baseline in separate commits. It updated the `rdocx` and `rdocx-layout` archive measurements against the current S84 source. It did not change mirror-gutter or continuous-break pagination semantics, which are pre-existing follow-up scopes outside PR 241's section measure correction.
+
+**Deviations from the design plan.** The README archive rows and their assertion carrier were updated after measuring the changed packages. The integrated canonical hash compilation stalled under host load, so the combined result is deferred to the required sprint gate. The worker's 49-entry hash check passed.
+
+**Spec sections touched.** `docs/hld/08-rendering-spec.md`, Word section geometry and page numbering.
+
+**Tests.** The worker passed 302 `rdocx-layout` tests and the `rdocx` unit, integration and regression suites with pinned Poppler 26.01.0 and LibreOffice 26.2.5.2. Scoped Clippy, formatting, README inventory, repository policy, prose and generated-skill checks passed. Microscope pass 1 found zero defects and zero smells. The integrated full gate and sprint review remain due.
+
+**Hash harness.** Only `feature_showcase` `pdf/bytes` and `pdf/pages` changed. The worker baseline records these two reviewed entries and all 49 entries matched. The integrated result must rerun the hash harness at the final S84 gate.
+
+**Notes for future sessions.** F-X163 may start from this completed layout prefix. Keep `work/f-x162-codex` through sprint verification and review. Issues 160 and 245 remain open until the final integrated result reaches main.
