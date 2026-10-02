@@ -1712,6 +1712,85 @@ mod fresh_word_package_profile_tests {
     }
 
     #[test]
+    fn word_compatible_profiles_stamp_an_app_version_word_opens() {
+        // Word refuses a package whose AppVersion is not XX.YYYY (ECMA-376 Part 1, 22.2.2.3).
+        for class in all_classes() {
+            let package = package_from_profile(WordCreationProfile::WordCompatible(class));
+            let app = std::str::from_utf8(package.get_part("/docProps/app.xml").unwrap()).unwrap();
+            let version = app
+                .split_once("<AppVersion>")
+                .and_then(|(_, rest)| rest.split_once("</AppVersion>"))
+                .map(|(version, _)| version)
+                .expect("fresh app properties carry AppVersion");
+            let (major, minor) = version.split_once('.').expect("AppVersion has one dot");
+            assert!(
+                major.len() == 2
+                    && minor.len() == 4
+                    && major
+                        .bytes()
+                        .chain(minor.bytes())
+                        .all(|b| b.is_ascii_digit()),
+                "AppVersion {version:?} is not XX.YYYY"
+            );
+        }
+    }
+
+    #[test]
+    fn saving_repairs_only_an_app_version_word_refuses() {
+        fn app_xml(application: &str, version: &str) -> Vec<u8> {
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>{application}</Application><AppVersion>{version}</AppVersion></Properties>"#
+            )
+            .into_bytes()
+        }
+        fn resave(app: Vec<u8>) -> (OpcPackage, OpcPackage) {
+            let mut package = package_from_profile(WordCreationProfile::WordCompatible(
+                WordPackageClass::Document,
+            ));
+            package.set_part("/docProps/app.xml", app);
+            let bytes = package_bytes(&package);
+            let saved = Document::from_bytes(&bytes).unwrap().to_bytes().unwrap();
+            let saved = OpcPackage::from_reader(std::io::Cursor::new(saved)).unwrap();
+            (package, saved)
+        }
+        fn app_version(package: &OpcPackage) -> Option<String> {
+            let app = std::str::from_utf8(package.get_part("/docProps/app.xml").unwrap()).unwrap();
+            app.split_once("<AppVersion>")
+                .and_then(|(_, rest)| rest.split_once("</AppVersion>"))
+                .map(|(version, _)| version.to_owned())
+        }
+
+        // What rdocx 0.14.0 wrote: rewritten to the version rdocx stamps now.
+        let (_, saved) = resave(app_xml("rdocx", "0.14.0"));
+        let fresh = package_from_profile(WordCreationProfile::WordCompatible(
+            WordPackageClass::Document,
+        ));
+        assert_eq!(app_version(&saved), app_version(&fresh));
+        assert_ne!(app_version(&saved).as_deref(), Some("0.14.0"));
+
+        // Another producer's invalid value is dropped, its Application kept.
+        let extension =
+            r#"<ext:Producer xmlns:ext="urn:producer"><ext:Key value="a&amp;b"/></ext:Producer>"#;
+        let source = String::from_utf8(app_xml("Producer", "2.1")).unwrap();
+        let source = source.replace("</Properties>", &format!("{extension}</Properties>"));
+        let (_, saved) = resave(source.into_bytes());
+        assert_eq!(app_version(&saved), None);
+        let app = std::str::from_utf8(saved.get_part("/docProps/app.xml").unwrap()).unwrap();
+        assert!(app.contains("<Application>Producer</Application>"));
+        assert!(
+            app.contains(extension),
+            "unmodeled producer XML must survive repair"
+        );
+
+        // A valid foreign value keeps its part byte-identical.
+        let (original, saved) = resave(app_xml("Microsoft Office Word", "16.0000"));
+        assert_eq!(
+            saved.get_part("/docProps/app.xml"),
+            original.get_part("/docProps/app.xml")
+        );
+    }
+
+    #[test]
     fn document_new_uses_the_word_compatible_docx_profile() {
         let default = Document::new().to_bytes().unwrap();
         let compatible = Document::new_with_profile(WordCreationProfile::WordCompatible(
@@ -2453,7 +2532,7 @@ mod settings_and_properties_tests {
         application.pages = Some(7);
         application.words = Some(420);
         application.application = Some("rdocx test".to_owned());
-        application.application_version = Some("1.0".to_owned());
+        application.application_version = Some("01.0000".to_owned());
         document
             .set_application_properties(application.clone())
             .unwrap();
@@ -2739,6 +2818,30 @@ mod settings_and_properties_tests {
     }
 
     #[test]
+    fn application_version_outside_the_word_form_is_refused() {
+        let mut document = Document::new();
+        let before = document.to_bytes().unwrap();
+        for version in ["0.14.0", "1.0", "test", "1.0000", "01.000", "01.00a0", ""] {
+            let mut application = AppProperties::default();
+            application.application_version = Some(version.to_owned());
+            let error = document
+                .set_application_properties(application)
+                .expect_err(version);
+            assert!(error.to_string().contains("XX.YYYY"), "{error}");
+            assert_eq!(document.to_bytes().unwrap(), before);
+        }
+        let mut application = AppProperties::default();
+        application.application_version = Some("16.0000".to_owned());
+        document.set_application_properties(application).unwrap();
+        assert_eq!(
+            document
+                .application_properties()
+                .and_then(|properties| properties.application_version.as_deref()),
+            Some("16.0000")
+        );
+    }
+
+    #[test]
     fn fresh_property_output_has_no_clock_or_host_input() {
         fn authored() -> Vec<u8> {
             let mut document = Document::new_with_profile(WordCreationProfile::Minimal(
@@ -2752,7 +2855,7 @@ mod settings_and_properties_tests {
                 .unwrap();
             let mut application = AppProperties::default();
             application.application = Some("rdocx".to_owned());
-            application.application_version = Some("test".to_owned());
+            application.application_version = Some("00.0001".to_owned());
             document.set_application_properties(application).unwrap();
             document.to_bytes().unwrap()
         }
@@ -10303,13 +10406,18 @@ fn invalid_style_graph_never_publishes_a_partial_mutation() {
     package.write_to(&mut invalid_bytes).unwrap();
     let mut invalid = Document::from_bytes(invalid_bytes.get_ref()).unwrap();
     assert!(invalid.validate_style_graph().is_err());
+    // The source's own defect is retained. Only a defect the change adds rejects it.
     let invalid_before = invalid.to_bytes().unwrap();
     assert!(
         invalid
-            .add_style(StyleBuilder::paragraph("Rejected", "Rejected"))
+            .add_style(StyleBuilder::paragraph("Rejected", "Rejected").based_on("MissingStyle"))
             .is_err()
     );
     assert_eq!(invalid.to_bytes().unwrap(), invalid_before);
+    invalid
+        .add_style(StyleBuilder::paragraph("Accepted", "Accepted"))
+        .unwrap();
+    assert!(invalid.validate_style_graph().is_err());
 }
 
 #[test]
@@ -12135,9 +12243,28 @@ fn nested_table_round_trip() {
     assert_eq!(tbl2.cell(0, 1).unwrap().text(), "Outer A2");
     assert_eq!(tbl2.cell(1, 1).unwrap().text(), "Outer B2");
 
-    // Cell (1,0) should have paragraph text (nested table text excluded from text())
+    // Cell (1,0) should have paragraph text (nested table text excluded from text()),
+    // then the empty trailing paragraph that follows the nested table.
     let cell_b1_ref = tbl2.cell(1, 0).unwrap();
-    assert_eq!(cell_b1_ref.text(), "Before nested");
+    assert_eq!(cell_b1_ref.text(), "Before nested\n");
+}
+
+#[test]
+fn nested_table_keeps_the_trailing_cell_paragraph_word_requires() {
+    // Word refuses a package whose w:tc ends with a w:tbl.
+    let mut doc = Document::new();
+    let mut table = doc.add_table(1, 1);
+    let mut cell = table.cell(0, 0).unwrap();
+    cell.set_text("Nested table below:");
+    cell.add_table(1, 1).cell(0, 0).unwrap().set_text("Inner");
+    let package = OpcPackage::from_reader(std::io::Cursor::new(doc.to_bytes().unwrap())).unwrap();
+    let xml = std::str::from_utf8(package.get_part("/word/document.xml").unwrap()).unwrap();
+    let nested_end = xml.find("</w:tbl>").expect("nested table closes first") + "</w:tbl>".len();
+    let after_nested = xml[nested_end..].trim_start();
+    assert!(
+        after_nested.starts_with("<w:p>") || after_nested.starts_with("<w:p/>"),
+        "outer cell must end with a paragraph after the nested table: {after_nested:.40}"
+    );
 }
 
 #[test]
@@ -22108,5 +22235,209 @@ mod f266c_character_grid_and_vertical_text {
                 .text_direction(),
             Some("tbRl")
         );
+    }
+}
+
+/// Replace the first `old` in a package part, which must hold it.
+fn replace_in_part(package: &mut OpcPackage, part: &str, old: &str, new: &str) {
+    let xml = std::str::from_utf8(package.get_part(part).unwrap()).unwrap();
+    assert!(xml.contains(old), "{part} holds {old}");
+    let xml = xml.replacen(old, new, 1);
+    package.set_part(part, xml.into_bytes());
+}
+
+/// #246: Google Docs writes integer measurements with a decimal part, as in
+/// `w:gridCol w:w="2210.0000000000005"`, in the body, styles, numbering and
+/// headers alike.
+fn decimal_measurement_package() -> Vec<u8> {
+    let mut seed = Document::new();
+    seed.set_header("Header");
+    seed.add_numbered_list_item("Item", 0);
+    let mut package =
+        OpcPackage::from_reader(std::io::Cursor::new(seed.to_bytes().unwrap())).unwrap();
+    replace_in_part(
+        &mut package,
+        "/word/document.xml",
+        "<w:body>",
+        concat!(
+            r#"<w:body><w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="4.0" w:space="1.5"/></w:pBdr>"#,
+            r#"<w:tabs><w:tab w:val="left" w:pos="1440.0"/></w:tabs>"#,
+            r#"<w:spacing w:before="120.0" w:line="275.99999999999994" w:lineRule="auto"/>"#,
+            r#"<w:ind w:left="720.5" w:hanging="226.99999999999977"/></w:pPr><w:r><w:t>Indented paragraph</w:t></w:r></w:p>"#,
+            r#"<w:tbl><w:tblPr><w:tblW w:w="8639.999999999999" w:type="dxa"/></w:tblPr>"#,
+            r#"<w:tblGrid><w:gridCol w:w="4320.0"/><w:gridCol w:w="4319.999999999999"/></w:tblGrid>"#,
+            r#"<w:tr><w:trPr><w:trHeight w:val="535.0000000000182"/></w:trPr>"#,
+            r#"<w:tc><w:tcPr><w:tcW w:w="4319.999999999999" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell A</w:t></w:r></w:p></w:tc>"#,
+            r#"<w:tc><w:tcPr><w:tcW w:w="4320.0" w:type="dxa"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>"#,
+        ),
+    );
+    replace_in_part(
+        &mut package,
+        "/word/document.xml",
+        r#"<w:pgSz w:w="12240""#,
+        r#"<w:pgSz w:w="12240.0""#,
+    );
+    replace_in_part(
+        &mut package,
+        "/word/document.xml",
+        r#"w:top="1440""#,
+        r#"w:top="1440.0""#,
+    );
+    replace_in_part(
+        &mut package,
+        "/word/styles.xml",
+        r#"w:after="160""#,
+        r#"w:after="159.5""#,
+    );
+    replace_in_part(
+        &mut package,
+        "/word/styles.xml",
+        r#"<w:sz w:val="22"/>"#,
+        r#"<w:sz w:val="22.0"/>"#,
+    );
+    replace_in_part(
+        &mut package,
+        "/word/numbering.xml",
+        r#"w:left="720" w:hanging="360""#,
+        r#"w:left="720.0" w:hanging="359.99999999999994""#,
+    );
+    replace_in_part(
+        &mut package,
+        "/word/header1.xml",
+        "<w:p>",
+        r#"<w:p><w:pPr><w:ind w:left="360.0"/></w:pPr>"#,
+    );
+    let mut bytes = Vec::new();
+    package
+        .write_to(&mut std::io::Cursor::new(&mut bytes))
+        .unwrap();
+    bytes
+}
+
+#[test]
+fn decimal_integer_measurements_round_to_the_nearest_integer() {
+    let source = decimal_measurement_package();
+    let mut document = Document::from_bytes(&source).expect("decimal measurements open");
+
+    let text = document.text();
+    assert!(
+        text.contains("Indented paragraph") && text.contains("Cell A"),
+        "{text}"
+    );
+    assert_eq!(document.header_text().as_deref(), Some("Header"));
+    let paragraph = &document.paragraphs()[0];
+    assert_eq!(paragraph.indent_left(), Some(Length::twips(721)));
+    assert_eq!(paragraph.space_before(), Some(Length::twips(120)));
+    let table = &document.tables()[0];
+    assert_eq!(
+        table.grid_widths(),
+        vec![Length::twips(4320), Length::twips(4320)]
+    );
+    assert_eq!(table.width(), Some(Length::twips(8640)));
+    assert_eq!(
+        table.row(0).unwrap().height(),
+        Some(RowHeight::AtLeast(Length::twips(535)))
+    );
+    let section = document.sections().last().unwrap();
+    assert_eq!(
+        section.page_size(),
+        Some((Length::twips(12240), Length::twips(15840)))
+    );
+    assert_eq!(section.margins().unwrap().0, Length::twips(1440));
+
+    // An untouched part keeps its bytes, decimals included.
+    let untouched =
+        OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap())).unwrap();
+    let original = OpcPackage::from_reader(std::io::Cursor::new(&source)).unwrap();
+    for part in [
+        "/word/document.xml",
+        "/word/styles.xml",
+        "/word/numbering.xml",
+        "/word/header1.xml",
+    ] {
+        assert_eq!(untouched.get_part(part), original.get_part(part), "{part}");
+    }
+
+    // A re-serialized part writes the rounded integers.
+    document.add_paragraph("Edited");
+    let edited =
+        OpcPackage::from_reader(std::io::Cursor::new(document.to_bytes().unwrap())).unwrap();
+    let body = std::str::from_utf8(edited.get_part("/word/document.xml").unwrap()).unwrap();
+    for expected in [
+        r#"w:sz="4""#,
+        r#"w:space="2""#,
+        r#"w:pos="1440""#,
+        r#"w:before="120""#,
+        r#"w:line="276""#,
+        r#"w:left="721""#,
+        r#"w:hanging="227""#,
+        r#"<w:tblW w:w="8640" w:type="dxa"/>"#,
+        r#"<w:trHeight w:val="535"/>"#,
+        r#"<w:pgSz w:w="12240" w:h="15840"/>"#,
+        r#"w:top="1440""#,
+    ] {
+        assert!(body.contains(expected), "{expected} in {body}");
+    }
+    assert_eq!(body.matches(r#"<w:gridCol w:w="4320"/>"#).count(), 2);
+    assert_eq!(
+        body.matches(r#"<w:tcW w:w="4320" w:type="dxa"/>"#).count(),
+        2
+    );
+    let styles = rdocx_oxml::CT_Styles::from_xml(original.get_part("/word/styles.xml").unwrap())
+        .unwrap()
+        .to_xml()
+        .unwrap();
+    let styles = String::from_utf8(styles).unwrap();
+    assert!(styles.contains(r#"w:after="160""#), "{styles}");
+    assert!(styles.contains(r#"<w:sz w:val="22"/>"#), "{styles}");
+    let numbering =
+        rdocx_oxml::CT_Numbering::from_xml(original.get_part("/word/numbering.xml").unwrap())
+            .unwrap()
+            .to_xml()
+            .unwrap();
+    let numbering = String::from_utf8(numbering).unwrap();
+    assert!(
+        numbering.contains(r#"<w:ind w:left="720" w:hanging="360"/>"#),
+        "{numbering}"
+    );
+    let header = CT_HdrFtr::from_xml(original.get_part("/word/header1.xml").unwrap())
+        .unwrap()
+        .to_xml_header()
+        .unwrap();
+    let header = String::from_utf8(header).unwrap();
+    assert!(header.contains(r#"<w:ind w:left="360"/>"#), "{header}");
+}
+
+#[test]
+fn a_refused_measurement_names_its_element_attribute_and_value() {
+    let seed = Document::new().to_bytes().unwrap();
+    for (old, new, message) in [
+        (
+            r#"<w:pgSz w:w="12240""#,
+            r#"<w:pgSz w:w="1.224e4""#,
+            r#"w:pgSz/@w:w "1.224e4" is not an integer measurement"#,
+        ),
+        (
+            r#"w:top="1440""#,
+            r#"w:top="NaN""#,
+            r#"w:pgMar/@w:top "NaN" is not an integer measurement"#,
+        ),
+        (
+            r#"<w:pgSz w:w="12240""#,
+            r#"<w:pgSz w:w="2147483647.5""#,
+            r#"w:pgSz/@w:w "2147483647.5" is out of range"#,
+        ),
+    ] {
+        let mut package = OpcPackage::from_reader(std::io::Cursor::new(&seed)).unwrap();
+        replace_in_part(&mut package, "/word/document.xml", old, new);
+        let mut bytes = Vec::new();
+        package
+            .write_to(&mut std::io::Cursor::new(&mut bytes))
+            .unwrap();
+        let Err(error) = Document::from_bytes(&bytes) else {
+            panic!("{new} opened");
+        };
+        let error = error.to_string();
+        assert!(error.contains(message), "{error}");
     }
 }

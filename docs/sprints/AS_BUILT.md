@@ -16934,3 +16934,43 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged, all 49 entries matched on the integrated S82 result.
 
 **Notes for future sessions.** `/close-sprint` checks live issue state only after the verified integration reaches `main`. Keep `work/f-x150-codex` until sprint closure.
+
+### F-X159, Word document validity baseline
+
+**Sprint.** S83
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Fresh Word-compatible packages now stamp AppVersion in the `XX.YYYY` form that Word opens. Saving a loaded package repairs an invalid AppVersion, retaining an `rdocx` stamp or removing a foreign invalid value. `Cell::add_table` leaves the required trailing paragraph after an authored nested table.
+
+**Non-obvious choices.** A valid producer AppVersion keeps the application-properties part byte-identical. Repair retains an unmodeled extension subtree exactly. The `rdocx` archive footprint and its README assertion were remeasured from this source tree. The hash baseline moved only for the nested-table paragraph in the feature showcase.
+
+**Deviations from the design plan.** The README archive measurement and its assertion carrier changed after the repository policy gate measured the new package size. The plan anticipated that check but did not list these generated measurements as implementation files.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, "The package" and "Package integrity", and `docs/hld/12-testing-strategy.md`, "The hash harness".
+
+**Tests.** Microsoft Word 16.113.2 opened the source-built `feature_showcase.docx`, including its nested table, without a repair prompt. The worker passed 486 `rdocx` unit, 331 integration, 711 regression and two doc tests using pinned Poppler 26.01.0, LibreOffice 26.2.5.2 and an 8 MiB test-thread stack. Focused AppVersion, extension preservation and nested-table tests passed. Scoped formatting, Clippy, prose, generated-skill and workflow policy checks passed. Microscope pass 2 found zero defects and zero smells. The integrated prefix passed the focused nested-table regression and the 49-entry hash harness. Full sprint verification and sprint review remain due.
+
+**Hash harness.** Exactly `feature_showcase:word/document.xml`, `feature_showcase:pdf/pages` and `feature_showcase:pdf/bytes` changed because of the trailing cell paragraph. All 49 entries matched the reviewed baseline in the worker and integrated prefix.
+
+**Notes for future sessions.** F-X160 can now run against this completed validity prefix. Keep `work/f-x159-codex` through sprint verification and review.
+
+### F-X160, Tolerant style, drawing and measurement reads
+
+**Sprint.** S83
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Style mutations now resolve a repeated style ID to its first definition, retain existing counted style-graph defects and reject new ones. Removing a repeated ID deletes every definition. Documents with repeated drawing IDs in one part open and save, while authored pictures receive fresh IDs and staged edits cannot increase the repeated count. Modeled decimal integer measurements round exactly, with halves away from zero and contextual errors for malformed or out-of-range values.
+
+**Non-obvious choices.** Both Issue 243 reporter packages exercise every affected style mutator. Untouched producer XML remains byte-identical. Drawing provenance is counted per part. The `rdocx`, `rdocx-cli` and `rdocx-oxml` archive footprints and README assertions were remeasured from the reviewed source.
+
+**Deviations from the design plan.** The README archive rows and their assertion carrier changed after the repository policy gate measured the source growth. The approved plan required the archive size check but did not list these measurement files.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, package integrity and style graph, `docs/hld/10-bindings-spec.md`, native Word facade stability, and `docs/hld/12-testing-strategy.md`, binding and drawing tests.
+
+**Tests.** The worker passed 592 `rdocx-oxml` unit tests, 54 CLI integration tests, 486 `rdocx` unit, 333 integration, 718 regression and two doc tests with pinned Poppler 26.01.0 and LibreOffice 26.2.5.2. The isolated Python suite passed 169 tests. Three old-behavior regressions failed before the implementation and passed after it. Scoped Clippy, formatting, WASM, archive dry run, README inventory and policy checks passed. Microscope pass 1 found zero defects and zero smells. The integrated full gate passed workspace tests, Clippy, no-default layout, both WASM targets, Rustdoc, README examples, publish dry run, archive sizes, dependency audit, policy tests and 169 Python tests. Sprint review remains due.
+
+**Hash harness.** Unchanged relative to the completed F-X159 prefix. All 49 entries matched in the worker and integrated result. The only S83 baseline movement remains F-X159's declared three feature-showcase entries.
+
+**Notes for future sessions.** Keep `work/f-x160-codex` through sprint review and closure. Issues 243, 246 and 247 have implementation evidence in the S83 result. Issue state changes belong after the sprint reaches `main`.

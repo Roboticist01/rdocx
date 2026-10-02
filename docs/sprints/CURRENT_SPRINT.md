@@ -1,51 +1,46 @@
-# Current Sprint, S82
+# Current Sprint, S83
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: turn the reporter's Word and Presentation fixtures into repeatable
-acceptance checks. Run the complete DOCX and deck workflows against pinned
-references, then reconcile each open issue criterion against the integrated
-result. Keep an issue open when any criterion lacks evidence.
+**Goal**: make newly authored Word documents open in Word and accept reported
+style, drawing ID and measurement variants from existing producers. Review the
+document-validity baseline change before the tolerance work so each output
+delta has one owner.
 
 ## Spec references
 
-- `docs/hld/04-opc-and-packaging.md`, for saved-package integrity and related
-  parts in the reporter's Word and Presentation fixtures.
-- `docs/hld/06-presentationml-model.md`, for slide, notes and relationship
-  preservation in the deck workflow.
-- `docs/hld/08-rendering-spec.md`, for deterministic output and pinned viewer
-  comparison in both fixture gates.
-- `docs/hld/10-bindings-spec.md`, for Python authoring and reopen behavior in
-  the complete DOCX and deck workflows.
+- `docs/hld/04-opc-and-packaging.md`, for the fresh Word package graph,
+  content types, relationships and saved-package integrity.
+- `docs/hld/08-rendering-spec.md`, for deterministic Word output affected by
+  the document-validity baseline.
+- `docs/hld/10-bindings-spec.md`, for Python and CLI reads, style mutation and
+  drawing identity behavior.
 - `docs/hld/12-testing-strategy.md`, for source-built and reporter fixtures,
-  matrix coverage, oracle tolerances and criterion-level evidence.
-- `docs/hld/14-development-backlog.md`, for the F-X149, F-X158 and F-X150
-  acceptance contracts and dependencies.
+  Word opening, round trips and the reviewed hash delta.
+- `docs/hld/14-development-backlog.md`, for the F-X159 and F-X160 contracts,
+  dependencies and test gates.
 
 ## The wave
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X149 | Word fixture and workflow acceptance gate | L | done | - |
-| F-X158 | Presentation fixture and workflow acceptance gate | L | done | - |
-| F-X150 | Reconcile issue closure evidence | M | done | - |
+| F-X159 | Word document validity baseline | M | done | - |
+| F-X160 | Tolerant style, drawing and measurement reads | L | done | - |
 
 ## Sequencing note
 
-F-X149 and F-X158 are independent fixture gates and may proceed in separate
-worktrees. F-X150 follows both, audits every criterion in the original 22-issue
-snapshot and closes Issue 158 last. New issues and contributions from 1 October
-remain in their planned later sprints.
+F-X159 reviews PR 240 first and owns the sprint's only hash baseline update.
+F-X160 depends on that integrated result and reviews PRs 248, 249 and 250.
+The two stories do not share a wave.
 
 ## Definition of done for this sprint
 
-- F-X149 turns the reporter's DOCX fixture, 18 by 7 identity matrix, 11 by 8
-  producer matrix and complete Word workflow into repeatable acceptance checks
-  against pinned references with deterministic fonts.
-- F-X158 turns the reporter's deck workflow into repeatable round-trip,
-  validation and cross-viewer acceptance for Issues 169, 170, 215, 216 and 217.
-- F-X150 records passing evidence or an explicit unresolved result for every
-  criterion in its 22-issue snapshot. No issue closes solely because a PR
-  merged, and Issue 158 closes only after both fixture gates pass.
+- F-X159 makes a source-built document and nested table open in Word, with
+  only the declared deterministic hash changes.
+- F-X160 accepts both Issue 243 reporter fixtures through every affected style
+  mutator, and passes Issues 246 and 247 through read, edit, save and reopen
+  with the specified rounding and drawing identity behavior.
+- Word opening, exact XML, round-trip, CLI and Python checks accompany the
+  source-built and reporter cases.
 - The integrated result passes the hash harness, `/verify --full` and
-  `/sprint-review` before sprint closure.
+  `/sprint-review` before any issue closure.

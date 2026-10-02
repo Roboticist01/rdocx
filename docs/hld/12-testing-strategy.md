@@ -561,8 +561,11 @@ for text, raw XML, image, and background-image setter families.
 Cross-part drawing coverage opens a package whose body and header reuse one
 normalized producer `wp:docPr` identity, preserves both drawing payloads,
 allocates a later authored drawing outside the package-wide occupied union, and
-reopens repeatedly. A same-part character-reference alias remains a duplicate,
-and a foreign same-local-name element remains outside the drawing scope.
+reopens repeatedly. A same-part character-reference alias remains a counted producer duplicate.
+It opens and survives a no-op save, while staged edits reject any increase in
+its occurrence count. A foreign same-local-name element remains outside the
+drawing scope. Native, CLI, and Python gates reopen a document after authoring
+a fresh ID.
 Current-graph relationship cases add an unreferenced theme edge after chart
 authoring and require chart `rId1` followed by theme `rId2`. A producer theme
 captured on package open keeps its original id, while unknown internal and
@@ -1357,16 +1360,16 @@ Check mode reads the manifest without modifying it and reports added, removed,
 and changed entries. Baseline writes require `--update --reason <text>`, and an
 empty reason is rejected. Generated PNGs remain ignored under `samples/`.
 
-The current reviewed table-fidelity delta changes exactly
-`feature_showcase:pdf/pages` and `feature_showcase:pdf/bytes`. That sample's
-later PDF page contains a valid vertical merge and a bordered nested table, so
-correct merge-edge suppression and recursive grid painting change its page
-stream. Its PDF resources, page-one PNG, selected OOXML parts, every other
+The current reviewed Word-validity delta changes exactly
+`feature_showcase:word/document.xml`, `feature_showcase:pdf/pages`, and
+`feature_showcase:pdf/bytes`. `Cell::add_table` now leaves the trailing empty
+cell paragraph Word requires. That new paragraph changes the nested table's
+Word XML and a later PDF page. Its PDF resources, page-one PNG, every other
 sample entry, and the manifest cardinality remain unchanged.
 
-It exists because the extraction changes unit conversion and text-shaping input
-types, and both alter output **without failing to compile**. Structural
-round-trip tests cannot see that class of defect.
+The harness remains necessary because an output change can pass structural
+round-trip tests. The three-entry F-X159 delta was reviewed against the
+source-built package and deterministic render.
 
 Rules:
 
@@ -2796,6 +2799,12 @@ because the whole value proposition is compatibility:
   them. Aliased prefixes and sibling spacing attributes remain modeled, while
   equivalent fractional and integer documents render byte-identical pages in
   deterministic font mode.
+- Issue 243 binding coverage opens both repeated `Normal` and multiple table
+  default producer packages. Every style mutator retains old graph defects,
+  resolves repeated IDs to the first definition, and refuses new defects.
+- Issue 246 coverage checks exact decimal rounding and contextual errors at
+  modeled measurement sites through native and CLI reads and save/reopen.
+  Untouched source bytes remain unchanged.
 - The same for `rpptx` and `python-pptx`.
 
 The rpptx binding gate executes the seven python-pptx 1.0.2 Getting Started
