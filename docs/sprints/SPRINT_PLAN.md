@@ -1779,11 +1779,24 @@ with overlapping source files, not every possible conflict.
 | [#262](https://github.com/tensorbee/rdocx/pull/262) | `main` | `fix/accepted-view-drops-deleted-paragraphs` / `32a12735ac` | green | none | conflict | #259 | #193 (`crates/rdocx/src/document.rs`) | F-X167 | [253](https://github.com/tensorbee/rdocx/issues/253) (follow-up) |
 | [#263](https://github.com/tensorbee/rdocx/pull/263) | `main` | `fix/accepted-view-drops-deleted-rows` / `6252b10a8d` | green | none | conflict | - | #259 (`crates/rdocx-html/src/lib.rs`) | F-X167 | [253](https://github.com/tensorbee/rdocx/issues/253) (follow-up) |
 
-The 19 older open heads, #174 through #211 in the table, map to completed
-F-X137 through F-X153 work. Confirm patch equivalence to integrated main and
-record contributor disposition before closing a PR. Replaying those complete
-branches would duplicate or reverse later fixes. If any incremental commit is
-missing, reconcile it under a new approved F-ID and rerun its integrated gate.
+The 19 older open heads, #174 through #211 in the table, predate the
+completed S76 integration commits. The S76 AS_BUILT entries explicitly list
+every one of these PRs and say that unique behavior commits were replayed while
+measurement-only tails and duplicate ancestors were omitted. The integration
+commits below are ancestors of the current sprint branch, and GitHub reports no
+later revision to these PR heads. This is behavioral adoption, not identical
+patch text. Their final disposition is superseded by the integrated work after
+the combined S84 gates pass. Do not replay their stale branches.
+
+| Older PRs | Current disposition | Integrated evidence | Final check |
+|---|---|---|---|
+| #174, #178, #182, #185, #197 | Behavior integrated, archive measurement tails omitted | `26b3f880`, F-X137 in `AS_BUILT.md` | CLI, package and save regressions on final main |
+| #177, #179, #180, #191, #195, #202, #210, #211 | Behavior integrated, duplicate ancestors and measurement tails omitted | `c8975fb4`, F-X138 in `AS_BUILT.md` | Word story, replacement and Issue 160 matrix on final main |
+| #183, #184, #190, #193, #198, #205 | Behavior integrated, measurement tails omitted | `992930ce`, F-X139 in `AS_BUILT.md` | Identity, comparison and CLI regressions on final main |
+
+If a final gate exposes an omitted behavior, reconcile it under an approved
+F-ID and revise this disposition before any PR closes. Contributor closure
+comments must name the adopted integration commit and the final test evidence.
 
 For pending work, review and replay #251 first, then #241, then #242, with
 separate hash baseline commits and deterministic render evidence. #242 includes
