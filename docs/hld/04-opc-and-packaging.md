@@ -963,6 +963,11 @@ numbered part after the greatest occupied suffix. The sniffed canonical
 extension and content type are registered with the package. Each source slide
 creates or reuses its own internal image relationship to that shared part, with
 a relative target resolved from the slide part name.
+Cross-presentation slide import uses the same byte equality check for images,
+audio, and video, including media stored outside `/ppt/media/`. The import
+stages the destination package and remaps each copied part's relationship ids
+once. An unsupported internal relationship graph fails before the destination
+changes, while external targets retain their target mode and address.
 
 The presentation HTML importer accepts image bytes only through
 `HtmlImageResource`. The HTML source string is an exact lookup key. Missing

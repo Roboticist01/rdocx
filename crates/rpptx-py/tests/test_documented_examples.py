@@ -3569,6 +3569,181 @@ def test_validate_returns_the_issues_the_cli_prints_as_frozen_snapshots(tmp_path
         issue.kind = "other"
 
 
+def test_try_replace_text_scoped_to_a_slide_or_a_text_frame(tmp_path):
+    import rpptx
+
+    prs = _textbox_presentation(rpptx)
+    prs.slides[0].shapes[0].text = "Same text"
+    table = prs.slides[0].shapes.add_table(1, 1, 0, 0, 100, 100).table
+    table.cell(0, 0).text = "Same text"
+    prs.slides[0].shapes.add_textbox(0, 0, 100, 100).text = "Same text"
+    prs.slides[0].notes_text = "Same text in the notes"
+    prs.slides.add_slide(prs.slide_layouts[6])
+    prs.slides[1].shapes.add_textbox(0, 0, 100, 100).text = "Same text"
+    prs.slides[1].notes_text = "Same text in the notes"
+    before = prs.to_bytes()
+
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        prs.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 6'
+    held = prs.slides[0]
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        held.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 4'
+    assert (raised.value.expected, raised.value.found) == (1, 4)
+    with pytest.raises(rpptx.ReplacementCountError, match="found 3"):
+        held.try_replace_text("Same text", "Other text", expect=1, notes=False)
+    with pytest.raises(rpptx.RpptxError, match="placeholder must not be empty"):
+        held.try_replace_text("", "x")
+    assert held.try_replace_text("MISSING", "x") == 0
+    assert held.try_replace_text("MISSING", "x", expect=0) == 0
+    assert prs.to_bytes() == before
+
+    assert held.try_replace_text("Same text", "Other text", expect=3, notes=False) == 3
+    _assert_stale_after_exactly_one_bump(rpptx, lambda: held.shapes)
+    first = prs.slides[0]
+    shapes = first.shapes
+    assert shapes[0].text == "Other text"
+    assert shapes[1].table.cell(0, 0).text == "Other text"
+    assert shapes[2].text == "Other text"
+    assert first.notes_text == "Same text in the notes"
+    assert first.try_replace_text("Same text", "Other text") == 1
+    assert prs.slides[0].notes_text == "Other text in the notes"
+    assert prs.slides[1].shapes[0].text == "Same text"
+    assert prs.slides[1].notes_text == "Same text in the notes"
+
+    frame = prs.slides[1].shapes[0].text_frame
+    frame.text = "Same text and Same text"
+    frame = prs.slides[1].shapes[0].text_frame
+    snapshot = prs.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        frame.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 2'
+    with pytest.raises(rpptx.RpptxError, match="placeholder must not be empty"):
+        frame.try_replace_text("", "x")
+    assert frame.try_replace_text("MISSING", "x") == 0
+    assert prs.to_bytes() == snapshot
+    assert frame.try_replace_text("Same text", "Other text", expect=2) == 2
+    _assert_stale_after_exactly_one_bump(rpptx, lambda: frame.text)
+    assert prs.slides[1].shapes[0].text == "Other text and Other text"
+    assert prs.slides[1].notes_text == "Same text in the notes"
+    assert prs.slides[1].shapes[0].text_frame.try_replace_text("Other", "New") == 2
+
+    if importlib.util.find_spec("pptx") is None:
+        return
+    from pptx import Presentation as OraclePresentation
+
+    # rpptx cannot add group children, so python-pptx builds a group whose
+    # text box splits the match across a bold run and a plain one.
+    source = tmp_path / "grouped.pptx"
+    oracle = OraclePresentation()
+    slide = oracle.slides.add_slide(oracle.slide_layouts[6])
+    group = slide.shapes.add_group_shape()
+    paragraph = group.shapes.add_textbox(0, 0, 100, 100).text_frame.paragraphs[0]
+    bold = paragraph.add_run()
+    bold.text = "Same te"
+    bold.font.bold = True
+    paragraph.add_run().text = "xt in a group"
+    slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = "Same text"
+    oracle.save(source)
+
+    prs = rpptx.Presentation(source)
+    frame = prs.slides[0].shapes[0].shapes[0].text_frame
+    with pytest.raises(rpptx.ReplacementCountError, match="found 1"):
+        frame.try_replace_text("Same text", "Other", expect=2)
+    assert frame.try_replace_text("Same text", "Other", expect=1) == 1
+    runs = prs.slides[0].shapes[0].shapes[0].text_frame.paragraphs[0].runs
+    assert [run.text for run in runs] == ["Other", " in a group"]
+    assert runs[0].font.bold is True
+    assert prs.slides[0].shapes[1].text == "Same text"
+    prs.slides[0].shapes[0].shapes[0].text_frame.text = "Same text in a group"
+    assert prs.slides[0].try_replace_text("Same text", "Other", expect=2) == 2
+    assert prs.slides[0].shapes[0].shapes[0].text == "Other in a group"
+
+
+def test_import_slide_carries_pictures_links_notes_and_background_from_another_deck(tmp_path):
+    import rpptx
+
+    red, blue = _tiny_png(0xDD, 0x20, 0x20), _tiny_png(0x20, 0x20, 0xDD)
+
+    def build_source(deck):
+        from pptx.chart.data import CategoryChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.oxml import parse_xml
+        from pptx.util import Inches
+
+        slide = deck.slides.add_slide(deck.slide_layouts[1])
+        slide.shapes.title.text = "Imported title"
+        slide.placeholders[1].text = "Body bullet"
+        slide.shapes.add_picture(io.BytesIO(red), Inches(6), Inches(4))
+        run = slide.shapes.add_textbox(Inches(1), Inches(5), Inches(4), Inches(1)).text_frame.paragraphs[0].add_run()
+        run.text = "Visit"
+        run.hyperlink.address = "https://example.com/import"
+        slide.notes_slide.notes_text_frame.text = "Speaker notes"
+        _, background = slide.part.get_or_add_image_part(io.BytesIO(blue))
+        slide._element.cSld.insert(0, parse_xml(
+            '<p:bg xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+            ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'<p:bgPr><a:blipFill><a:blip r:embed="{background}"/></a:blipFill><a:effectLst/></p:bgPr></p:bg>'
+        ))
+        chart = deck.slides.add_slide(deck.slide_layouts[5])
+        data = CategoryChartData()
+        data.categories = ["a", "b"]
+        data.add_series("s", (1, 2))
+        chart.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, 0, 0, Inches(4), Inches(3), data)
+
+    def build_target(deck):
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        slide.shapes.add_picture(io.BytesIO(red), 0, 0)
+
+    source = rpptx.Presentation(_python_pptx_deck(tmp_path / "source.pptx", build_source))
+    prs = rpptx.Presentation(_python_pptx_deck(tmp_path / "target.pptx", build_target))
+    before = prs.to_bytes()
+    with pytest.raises(rpptx.RpptxError, match="has a chart, which is not carried"):
+        prs.slides.import_slide(source.slides[1])
+    assert prs.to_bytes() == before
+    with pytest.raises(ValueError, match="layout is not a layout of this presentation"):
+        prs.slides.import_slide(source.slides[0], layout=source.slide_layouts[1])
+    with pytest.raises(IndexError):
+        prs.slides.import_slide(source.slides[0], index=2)
+
+    held = prs.slides[0]
+    imported = prs.slides.import_slide(source.slides[0], index=0)
+    with pytest.raises(rpptx.StaleElementError):
+        _ = held.shapes
+    assert [shape.name for shape in imported.shapes] == [
+        "Title 1", "Content Placeholder 2", "Picture 3", "TextBox 4",
+    ]
+    assert imported.shapes[2].image.blob == red
+    assert imported.notes_text == "Speaker notes"
+    again = prs.slides.import_slide(prs.slides[0], layout=prs.slide_layouts[6], index=-1)
+    assert again.shapes[0].text == "Imported title"
+    same = prs.slides.import_slide(prs.slides[0])
+    assert same.slide_layout == prs.slide_layouts[1]
+    output = tmp_path / "imported.pptx"
+    prs.save(output)
+    media = [name for name in _package_parts(output.read_bytes()) if name.startswith("ppt/media/")]
+    assert len(media) == 2
+
+    pptx = pytest.importorskip("pptx", reason="python-pptx is the differential oracle")
+    oracle = pptx.Presentation(output)
+    assert [slide.slide_layout.name for slide in oracle.slides] == [
+        "Title and Content", "Blank", "Blank", "Title and Content",
+    ]
+    slide = oracle.slides[0]
+    assert [shape.text_frame.text for shape in slide.shapes if shape.has_text_frame] == [
+        "Imported title", "Body bullet", "Visit",
+    ]
+    assert slide.shapes[2].image.blob == red
+    assert slide.shapes[3].text_frame.paragraphs[0].runs[0].hyperlink.address == "https://example.com/import"
+    assert slide.notes_slide.notes_text_frame.text == "Speaker notes"
+    blip = slide._element.cSld.bg.xpath(".//a:blip")[0]
+    embed = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
+    assert slide.part.related_part(embed).blob == blue
+
+
+
 def test_add_shape_accepts_preset_names_and_every_mso_shape_member(tmp_path):
     import rpptx
     from rpptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_CONNECTOR, MSO_CONNECTOR_TYPE, MSO_SHAPE, MSO_SHAPE_TYPE

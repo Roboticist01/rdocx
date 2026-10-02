@@ -1,6 +1,6 @@
 # F-X156, Presentation slide and table contribution
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S81
 **Size**: L
 **Depends on**: F-X142, F-X155
@@ -65,11 +65,11 @@ Expected unchanged. Any intentional output delta requires its own labelled behav
 
 ## Implementation checklist
 
-- [ ] Review PRs 231, 235 and 238 against their incremental parents and current F-X155 code.
-- [ ] Add failing import, scoped replacement and table style cases in existing test entrypoints.
-- [ ] Reconcile facade, OXML, resolver, renderer, Python bindings, stubs and documentation.
-- [ ] Save, reopen, validate and render imported and edited decks with pinned external oracles.
-- [ ] Run focused checks, risk riders, scoped verification and microscope to zero findings.
+- [x] Review PRs 231, 235 and 238 against their incremental parents and current F-X155 code.
+- [x] Add failing import, scoped replacement and table style cases in existing test entrypoints.
+- [x] Reconcile facade, OXML, resolver, renderer, Python bindings, stubs and documentation.
+- [x] Save, reopen, validate and render imported and edited decks with pinned external oracles.
+- [x] Run focused checks, risk riders, scoped verification and microscope to zero findings.
 
 ## Open questions
 
