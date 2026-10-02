@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use oxml_opc::OpcPackage;
 use oxml_opc::relationship::rel_types;
-use rdocx::{Document, WordPackageClass};
+use rdocx::{Document, RenderOptions, RevisionView, WordPackageClass};
 use serde_json::{Value, json};
 
 static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -2105,6 +2105,97 @@ fn render_uses_the_bundled_font_deterministic_path() {
     assert_eq!(all_bytes, expected);
 
     assert_eq!(fs::read(selected_png).unwrap(), fs::read(all_png).unwrap());
+}
+
+#[test]
+fn issue_253_cli_revision_view_selects_tracked_output() {
+    let temp = TempWorkspace::new("issue-253-view");
+    let input = temp.path.join("redline.docx");
+    let mut document = fixture_document(&["Keep OLDWORD here."]);
+    document
+        .compare(
+            &fixture_document(&["Keep NEWWORD here."]),
+            "Reviewer",
+            "2026-09-30T12:00:00Z",
+        )
+        .unwrap();
+    document.save(&input).unwrap();
+    let opened = Document::open(&input).unwrap();
+    let accepted_pdf = opened.to_pdf().unwrap();
+    let tracked_pdf = opened
+        .to_pdf_with_options(RenderOptions {
+            revision_view: RevisionView::Tracked,
+        })
+        .unwrap();
+    assert_ne!(accepted_pdf, tracked_pdf);
+    for (view, expected) in [("accepted", accepted_pdf), ("tracked", tracked_pdf)] {
+        let output = temp.path.join(format!("{view}.pdf"));
+        let result = cli(&[
+            "convert",
+            path_text(&input),
+            "--to",
+            "pdf",
+            "-o",
+            path_text(&output),
+            "--revision-view",
+            view,
+        ]);
+        assert_success(&result, view);
+        assert_eq!(fs::read(&output).unwrap(), expected);
+    }
+    let invalid = temp.path.join("invalid.pdf");
+    let result = cli(&[
+        "convert",
+        path_text(&input),
+        "--to",
+        "pdf",
+        "-o",
+        path_text(&invalid),
+        "--revision-view",
+        "final",
+    ]);
+    assert_eq!(result.status.code(), Some(2));
+    assert!(!invalid.exists());
+    let html = temp.path.join("tracked.html");
+    let result = cli(&[
+        "convert",
+        path_text(&input),
+        "--to",
+        "html",
+        "-o",
+        path_text(&html),
+        "--revision-view",
+        "tracked",
+    ]);
+    assert_eq!(result.status.code(), Some(1));
+    assert!(!html.exists());
+
+    let tracked_png = opened
+        .render_page_to_png_deterministic_with_options(
+            0,
+            24.0,
+            RenderOptions {
+                revision_view: RevisionView::Tracked,
+            },
+        )
+        .unwrap()
+        .unwrap();
+    let rendered = temp.path.join("rendered");
+    let result = cli(&[
+        "render",
+        path_text(&input),
+        "--dpi",
+        "24",
+        "--output-dir",
+        path_text(&rendered),
+        "--revision-view",
+        "tracked",
+    ]);
+    assert_success(&result, "tracked render");
+    assert_eq!(
+        fs::read(rendered.join("redline_page1.png")).unwrap(),
+        tracked_png
+    );
 }
 
 #[test]

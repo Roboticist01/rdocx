@@ -1975,9 +1975,15 @@ Native Word rendering exposes `rdocx::RevisionView` and the concrete
 `rdocx::RenderOptions`, whose default selects the accepted view. Additive
 option-taking counterparts cover PDF bytes and files, single-page and all-page
 raster output, page layout, deterministic rendering, and caller-supplied font
-paths. The existing methods keep their accepted default. Python, WASM, and CLI
-surfaces do not implicitly expose the selector and retain their existing
-rendering behavior.
+paths. The existing methods keep their accepted default. Python `to_pdf`,
+`render_page_to_png`, `render_all_pages`, and `render_pages` take a keyword-only
+`revision_view` of `"accepted"` or `"tracked"`, with `"accepted"` as the
+default. Any other value raises `ValueError`. CLI `convert` for PDF and image
+formats and `render` take `--revision-view accepted` or
+`--revision-view tracked`, with `accepted` as the default. An unknown value is
+a usage error.
+HTML and Markdown conversion refuse tracked view before creating output. WASM
+retains its existing rendering behavior.
 Native selected-image rendering adds zero-based page-list entry points that
 share `rdocx::RasterFormat`, `rdocx::RasterOptions` and
 `rdocx::RasterOutput` with `oxml-pdf`. The existing PNG methods remain
@@ -1986,11 +1992,12 @@ keyword-only `render_pages` arguments, keeps zero-based page indices, releases
 the GIL for rendering, returns `list[bytes]` for PNG or JPEG, and returns one
 `bytes` value for TIFF.
 
-Python `Document.to_pdf(*, fonts=None, font_dir=None)` keeps the plain call on
-`Document::to_pdf`. With `fonts`, a sequence of `(family, bytes)` pairs, or
-`font_dir`, a directory whose `.ttf`, `.otf`, and `.ttc` files
+Python `Document.to_pdf(*, fonts=None, font_dir=None, revision_view="accepted")`
+uses `Document::to_pdf_with_options` when no fonts are supplied. With `fonts`,
+a sequence of `(family, bytes)` pairs, or `font_dir`, a directory whose `.ttf`,
+`.otf`, and `.ttc` files
 `Document::load_fonts_from_dir` labels by file name, it calls
-`Document::to_pdf_with_fonts` with the given fonts first, as
+`Document::to_pdf_with_fonts_and_options` with the given fonts first, as
 `rdocx convert --font-dir` does. That call lays out with the caller fonts only,
 so a family they do not provide, even through the automatic label aliases and
 metric-compatible names, raises `LayoutError`. The native loader reads a

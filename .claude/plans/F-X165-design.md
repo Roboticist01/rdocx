@@ -1,6 +1,6 @@
 # F-X165, Python and CLI tracked revision view
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-X143, F-X150, F-X169
@@ -64,10 +64,10 @@ selected-view fixture outside the default harness.
 
 ## Implementation checklist
 
-- [ ] Review PR 256 increment and the existing native selector.
-- [ ] Wire Python and CLI selection with explicit errors.
-- [ ] Run Issue 253 accepted and tracked cases plus defaults.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Review PR 256 increment and the existing native selector.
+- [x] Wire Python and CLI selection with explicit errors.
+- [x] Run Issue 253 accepted and tracked cases plus defaults.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 

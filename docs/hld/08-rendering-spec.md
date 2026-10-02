@@ -1438,6 +1438,13 @@ therefore equal without moving rendered output.
 
 ### Word revision views
 
+The native render options, Python rendering methods, and CLI PDF and image
+commands select the same accepted or tracked view. Accepted is the default.
+The selected view determines pagination before page indices or ranges are
+validated, so tracked content can add pages. Unknown view names fail before
+output is created. HTML and Markdown conversion do not accept the tracked
+rendering selector.
+
 `LayoutInput::revision_view` selects the accepted or tracked projection before
 Word text shaping. One ordered projection combines ordinary runs and typed
 revision wrappers at their preserved boundaries, including nested wrappers and

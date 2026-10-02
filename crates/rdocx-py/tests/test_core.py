@@ -2,6 +2,7 @@ import io
 import posixpath
 import re
 import struct
+import subprocess
 import time
 import zipfile
 import zlib
@@ -55,6 +56,80 @@ def _tracked_document():
     document = rdocx.Document.from_bytes(original.to_bytes())
     document.compare(edited, "Ada", "2026-01-02T03:04:05Z")
     return document
+
+
+def test_issue_253_python_render_views():
+    from pathlib import Path
+
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("Keep OLDWORD here.")
+    edited = rdocx.Document()
+    edited.add_paragraph("Keep NEWWORD here.")
+    original.compare(edited, "Reviewer", "2026-09-30T12:00:00Z")
+    accepted = original.to_pdf()
+    assert accepted == original.to_pdf(revision_view="accepted")
+    assert accepted != original.to_pdf(revision_view="tracked")
+    fonts = Path(__file__).parents[2] / "oxml-layout" / "fonts"
+    assert original.to_pdf(font_dir=fonts) == original.to_pdf(
+        font_dir=fonts, revision_view="accepted"
+    )
+    assert original.to_pdf(font_dir=fonts) != original.to_pdf(
+        font_dir=fonts, revision_view="tracked"
+    )
+    for render in (
+        lambda **view: original.render_page_to_png(0, 24.0, **view),
+        lambda **view: original.render_all_pages(24.0, **view),
+        lambda **view: original.render_pages(dpi=24.0, **view),
+    ):
+        assert render() == render(revision_view="accepted")
+        assert render() != render(revision_view="tracked")
+        with pytest.raises(ValueError, match="unknown revision view"):
+            render(revision_view="final")
+    with pytest.raises(ValueError, match="unknown revision view"):
+        original.to_pdf(revision_view="final")
+
+
+def test_issue_253_selected_view_controls_page_count():
+    import rdocx
+
+    original = rdocx.Document()
+    original.add_paragraph("OLDWORD " * 1500)
+    edited = rdocx.Document()
+    edited.add_paragraph("NEWWORD " * 1500)
+    original.compare(edited, "Reviewer", "2026-09-30T12:00:00Z")
+    accepted = original.render_pages(dpi=24.0)
+    tracked = original.render_pages(dpi=24.0, revision_view="tracked")
+    assert len(tracked) > len(accepted)
+    assert tracked == original.render_all_pages(24.0, revision_view="tracked")
+
+
+def test_issue_253_pdf_text_view(tmp_path):
+    import rdocx
+
+    version = subprocess.run(
+        ["pdftotext", "-v"], capture_output=True, check=True, text=True
+    )
+    assert "pdftotext version 26.01.0" in version.stderr.splitlines()
+
+    original = rdocx.Document()
+    original.add_paragraph("Keep OLDWORD here.")
+    edited = rdocx.Document()
+    edited.add_paragraph("Keep NEWWORD here.")
+    original.compare(edited, "Reviewer", "2026-09-30T12:00:00Z")
+
+    def text(view):
+        path = tmp_path / "redline.pdf"
+        path.write_bytes(original.to_pdf(revision_view=view))
+        return subprocess.run(
+            ["pdftotext", str(path), "-"], capture_output=True, check=True, text=True
+        ).stdout
+
+    accepted = text("accepted")
+    tracked = text("tracked")
+    assert "NEWWORD" in accepted and "OLDWORD" not in accepted
+    assert "NEWWORD" in tracked and "OLDWORD" in tracked
 
 
 def test_revisions_are_snapshots_and_resolution_reports_counts():
