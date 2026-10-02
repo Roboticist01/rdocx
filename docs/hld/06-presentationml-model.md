@@ -268,6 +268,13 @@ relationship scope, and content-type override. An attached notes part and its
 scope are removed with the slide. Matching `p:sld` entries are spliced out of
 preserved `p:custShowLst` XML without changing its containers or unrelated
 bytes.
+On every other slide, each `a:hlinkClick`, `a:hlinkHover`, or
+`a:hlinkMouseOver` that names a relationship to the removed part, on a shape or
+on a text run, keeps its name with an empty `r:id` and the action
+`ppaction://noaction`, which is what PowerPoint writes when it deletes the
+target of a slide jump or hover. A relationship that only a released element
+named goes, a click sound included, and so does a media part nothing else
+reaches.
 
 Duplication also stages a complete graph. It allocates a new slide part,
 producer slide id, presentation relationship, and destination relationship
@@ -311,6 +318,7 @@ ShapeRef::fill(&self) -> Option<&Fill>;
 ShapeRef::line(&self) -> Option<&CT_LineProperties>;
 ShapeRef::crop(&self) -> Option<(Percent1000, Percent1000, Percent1000, Percent1000)>;
 ShapeRef::adjustments(&self) -> Result<Vec<(String, f64)>>;
+ShapeRef::auto_shape_type(&self) -> Option<&str>;
 ShapeRef::xml(&self) -> Result<Vec<u8>>;
 ```
 
@@ -329,7 +337,10 @@ python-pptx.
 shape properties of ordinary shapes, pictures, and connectors. `adjustments`
 returns the preset definition's defaults in definition order, each replaced by
 a literal `val` guide of the same name in the shape's own `a:avLst`. Only
-ordinary shapes with preset geometry have adjustments. `xml` serializes a
+ordinary shapes with preset geometry have adjustments. `auto_shape_type`
+returns the `a:prstGeom/@prst` name of an ordinary shape that is not a text
+box, and of a picture, where it names the mask. Custom geometry, inherited
+geometry and other shape kinds return `None`. `xml` serializes a
 typed child on its own with the prefixes it uses declared. Alternate content
 returns its preserved bytes, which may rely on prefixes only the slide root
 declares. `crop` reads a picture's `a:srcRect` insets in left, top, right,
@@ -343,13 +354,25 @@ children only. The selected `mc:Fallback` view remains read-only.
 Position, size, rotation, and name setters support ordinary shapes, pictures,
 graphic frames, groups, and connectors. Fill and line setters support ordinary
 shapes, pictures, and connectors because those kinds own typed shape
-properties. `ShapeMut::set_crop(left, top, right, bottom)` writes the
-`a:srcRect` of a picture between its blip and fill mode. It keeps the stored
-attribute of an unchanged edge, drops a changed edge of zero, and adds no
-element when a picture without one gets four zero insets. Adjustment mutation
-supports finite values on preset geometry.
-Unsupported shape kinds and unsupported geometry return concrete facade
-errors. Indexed access remains total and returns `Option`.
+properties. `rpptx` re-exports the line dash and line end types, so a caller
+edits a copy of `ShapeRef::line` and writes it back with `set_line`.
+`ShapeMut::set_crop(left, top, right, bottom)` writes a picture's `a:srcRect`
+while preserving unchanged attributes. Adjustment mutation supports finite
+values on preset geometry. `ShapeMut::set_auto_shape_type(preset)` replaces an
+ordinary shape's or picture's geometry in the same `a:spPr` slot, removes
+custom geometry, and resets adjustments to defaults. Text, fill, line,
+effects, identity, and z-order remain. Text boxes and unsupported kinds are
+refused.
+
+`ShapeRef::effects` reads and `ShapeMut::set_effects` replaces or removes the
+direct `a:effectLst` of shapes, pictures, connectors, and groups. Group
+`p:grpSpPr` models this list beside its transform. The list keeps root
+attributes, namespace declarations, and unmodelled effects. `None` removes
+the list so the theme effect applies again, and an empty list suppresses it.
+An `a:effectDag` excludes a list. A list that cannot be written is refused
+before the slide changes. It is written before 3-D and extension children.
+Unsupported shape kinds and geometry return concrete facade errors. Indexed
+access remains total and returns `Option`.
 
 Ordinary shapes expose text mutation through behavior-bearing borrowed
 handles:
@@ -362,7 +385,11 @@ TextFrame::add_paragraph(&mut self) -> TextParagraphMut<'_>;
 TextParagraphMut::add_run(&mut self, text: &str) -> TextRunMut<'_>;
 ```
 
-`TextFrame` also reads and replaces whole-frame text. Paragraph handles replace
+`TextFrame` also reads and replaces whole-frame text. Whole-frame text assigns
+one paragraph per line feed, and a vertical tab creates an `a:br`. This shared
+setter also serves shape, table cell, notes, comment, SmartArt, chart and
+imported text. The ODP importer maps `text:line-break` to a vertical tab so it
+remains a soft break. Paragraph handles replace
 text, paragraph properties, and bullets. Replaced text keeps the formatting of
 the paragraph's first regular run. A paragraph without one formats the new run
 with its `a:endParaRPr`, without hyperlinks, as PowerPoint formats text typed
@@ -647,6 +674,32 @@ reads, adds, retargets, and removes the `a:hlinkClick` in `p:cNvPr` while
 retaining other non-visual properties and unmodelled children. Insertion keeps
 the schema order of `p:cNvPr` children.
 
+Shape click actions also jump to other slides:
+
+```rust
+pub fn shape_target_slide(&self, slide_index: usize, shape_id: u32) -> Result<Option<usize>>;
+pub fn set_shape_target_slide(
+    &mut self,
+    slide_index: usize,
+    shape_id: u32,
+    target_slide_index: Option<usize>,
+) -> Result<()>;
+```
+
+Both find a shape, picture, connector, graphic frame, or group by its
+`p:cNvPr/@id`, inside groups too, as the shape hyperlink methods do.
+`set_shape_target_slide` writes the action `ppaction://hlinksldjump` and names
+the slide's internal relationship to the target slide part, reused when
+present. `set_shape_hyperlink` drops that action, so an address replaces a
+slide jump. Either write keeps the other attributes and children of an existing
+`a:hlinkClick`, such as a tooltip or a click sound. `shape_target_slide`
+resolves that jump, and the first, last, next, and previous jumps of
+`ppaction://hlinkshowjump`, counted from the slide that holds the shape. A jump
+off either end of the deck returns `None` where python-pptx raises. python-pptx
+refuses a click action on a group, but PowerPoint honours one, so rpptx writes
+it. Jumping to the current target changes nothing, and relationships only the
+old click action named are removed.
+
 An ordinary shape has canonical non-visual properties, a typed transform,
 preset geometry, and a minimal text body. `add_shape` keeps the string API but
 accepts only names in the generated table of all 187 ECMA preset shapes. An
@@ -667,6 +720,14 @@ carries the `p:style` python-pptx writes after its `p:spPr`: `a:lnRef idx="2"`,
 `a:fillRef idx="0"`, and `a:effectRef idx="1"` in `accent1`, and
 `a:fontRef idx="minor"` in `tx1`. PowerPoint draws no line for a connector with
 neither a style nor a direct `a:ln`, so the style gives it the theme's line.
+`ShapeMut::set_theme_effect_index` changes the `a:effectRef` index of an
+ordinary shape or a connector that has a typed style, and
+`ShapeRef::theme_effect_index` reads it. Index 0 removes the theme effect,
+which in the bundled theme is a soft shadow under the connector. PowerPoint,
+LibreOffice, and the renderer all draw no shadow for index 0, while an empty
+direct `a:effectLst` removes it in PowerPoint and the renderer but not in
+LibreOffice. A connector's style is rewritten from its typed view only when
+this index changes.
 
 A constructed table uses a canonical `p:graphicFrame` with deterministic name
 `Table {id}`, a typed transform, the DrawingML table URI, and a rectangular

@@ -1,55 +1,51 @@
-# Current Sprint, S79
+# Current Sprint, S80
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: finish the Word layout and CLI diff defects on the verified S78
-prefix, then close the remaining Word Python binding gaps before the production
-fixture gate. Reconcile the assigned contributions with the integrated result
-and prove the focused layout, story and binding cases before the full sprint gate.
+**Goal**: complete the Word Python production checklist against the integrated
+S79 prefix. Land the presentation text preservation and drawing contributions
+in dependency order, with package validation and cross-viewer evidence.
 
 ## Spec references
 
-- `docs/hld/03-architecture.md`, for the Word layout conversion boundary,
-  full-story comparison model and native comment and run ownership.
-- `docs/hld/08-rendering-spec.md`, for text line geometry and inline picture
-  placement in Word layout.
-- `docs/hld/10-bindings-spec.md`, for Python paragraph, comment and run mutation
-  behavior after save and reopen.
-- `docs/hld/12-testing-strategy.md`, for deterministic bundled-font fixtures,
-  full-story regressions and the integrated verification gate.
-- `docs/hld/14-development-backlog.md`, for the F-X146, F-X152 and F-X153
-  contracts, dependencies and test gates.
+- `docs/hld/03-architecture.md`, for source-preserving Word mutation and the
+  ownership boundary behind the remaining Python operations.
+- `docs/hld/05-drawingml-model.md`, for text body preservation, line feed
+  serialization and schema-ordered drawing children.
+- `docs/hld/06-presentationml-model.md`, for shape construction, click
+  hyperlinks, effects and presentation facade ownership.
+- `docs/hld/10-bindings-spec.md`, for Python lifetime, mutation and reopen
+  behavior across Word and Presentation APIs.
+- `docs/hld/12-testing-strategy.md`, for deterministic fonts, integration
+  fixtures, package validation and pinned cross-viewer comparisons.
+- `docs/hld/14-development-backlog.md`, for the F-X147, F-X154 and F-X155
+  acceptance contracts, prerequisites and test gates.
 
 ## The wave
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X146 | Word line height and inline picture spacing | L | done | - |
-| F-X152 | Full-story CLI diff and count repair | M | done | - |
-| F-X153 | Word Python supplemental contribution | M | done | - |
+| F-X147 | Complete rdocx Python production checklist | L | done | - |
+| F-X154 | Presentation text and preservation repair | M | done | - |
+| F-X155 | Presentation drawing API contribution | L | done | - |
 
 ## Sequencing note
 
-Rows are listed in dependency order, not F-ID order. All three stories have
-their prerequisite F-IDs on the completed prefix, so none blocks another.
-Review PRs 222, 225 and 237 for F-X146, PR 236 for F-X152 and PR 220 for
-F-X153 against that prefix. F-X146 covers Issue 162 and only the rich-line
-symptom of Issue 226. F-X163 follows later for its plain-line symptom. F-X152
-covers Issue 227. F-X153 reconciles PR 220 with F-X141 and contributes comment,
-numbering and run operations toward the remaining Issue 168 checklist.
-Run the Word fixture and focused layout oracles on the integrated result before
-`/verify --full` and `/sprint-review`.
+Rows are listed in dependency order, not F-ID order. F-X147 can proceed on
+its completed Word prerequisites while F-X154 reviews PRs 218 and 223.
+F-X155 starts after F-X154 so its five drawing PRs are reconciled against the
+reviewed presentation text and preservation prefix. PR 219 follows PR 189,
+and PR 234 follows PR 207. Their overlapping shape, line, effect and binding
+edits require manual reconciliation and a fresh integrated CI run.
 
 ## Definition of done for this sprint
 
-- PRs 222, 225, 237, 236 and 220 have reviewed incremental diffs against the
-  integrated prefix, with overlap reconciled and focused checks passing.
-- The four-family, two-size, two-spacing pitch matrix and the Word-exported
-  inline picture fixture meet pinned geometry for Issue 162 and Issue 226's
-  rich-line symptom.
-- The Issue 227 reproducer locates every changed story paragraph and counts
-  each once in the CLI diff report.
-- Python and CLI comment coordinates, numbering and run removal pass after
-  save and reopen, with the Issue 168 checklist recording the remaining work.
-- The combined result passes the hash harness, `/verify --full` and
+- Every Issue 168 checklist example runs from Python, or has a reviewed scope
+  decision and documented fallback accepted by the reporter's criteria.
+- Issues 215 and 216 pass their preservation and line-feed regressions after
+  PRs 218 and 223 are integrated.
+- PRs 219, 221, 224, 230 and 234 are reconciled in schema order. Authored
+  drawing effects and links reopen in python-pptx, validate and match the
+  pinned cross-viewer renders.
+- The integrated result passes the hash harness, `/verify --full` and
   `/sprint-review` before closure.

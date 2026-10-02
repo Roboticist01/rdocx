@@ -74,7 +74,13 @@ producer drawing payload while preventing destination identity collisions.
 parent is part of the contract. Emitting `a:ln` before `a:solidFill` inside
 `a:spPr` produces a repair prompt, not a warning. Every writer in this crate
 emits in schema order, and `OrderedRawChildren` keeps unmodelled siblings in
-their original slots rather than appending them at the end.
+their original slots rather than appending them at the end. An `a:extLst` read
+inside `a:ln` is held in the last slot, so a head or tail end added later is
+still written before it. A known sibling that the schema places after a
+modelled slot is recorded after that slot even when the slot was empty on read.
+An `a:scene3d` read from an `a:spPr` without an `a:effectLst` therefore still
+follows an effect list added later, and an `a:reflection` still follows an
+outer shadow added to its list.
 
 **`a:t` whitespace.** Leading and trailing whitespace is significant and needs
 `xml:space="preserve"`. Cheap to guard, and infuriating to diagnose later.
@@ -232,11 +238,17 @@ or `a:buSzPts`, and `a:buClr`.
 `CT_TextBody` maintains at least one paragraph. Its minimal constructor creates
 one empty paragraph, and whole-frame text replacement retains body properties,
 the optional list style, and the first paragraph's formatting and end
-properties while replacing the ordered text choices with one regular run.
-Clearing text therefore leaves one empty paragraph rather than an invalid empty
-body. Paragraph and run append operations preserve caller order. Fields and
-line breaks remain in place unless the caller explicitly replaces that
-paragraph's text.
+properties while replacing the ordered text choices with one regular run per
+line. Clearing text therefore leaves one empty paragraph rather than an invalid
+empty body. As in python-pptx, each line feed starts a paragraph and each
+vertical tab becomes an `a:br` carrying the run's formatting. Every new
+paragraph takes the first paragraph's properties, end properties and first run
+formatting, so each line looks as the replaced first line did, while preserved
+paragraph content stays with the first. The `rpptx` paragraph handle turns
+both a line feed and a vertical tab into an `a:br`, and run text stays literal.
+Paragraph and run append operations preserve caller order. Fields and line
+breaks remain in place unless the caller explicitly replaces that paragraph's
+text.
 
 Typed content transfer moves a non-empty body's paragraphs into another text
 body without flattening runs, fields, bullets, or formatting. The source keeps
@@ -274,7 +286,12 @@ than two lines of spacing opens. A typed `all_caps` replaces a preserved
 `cap="small"` on write, so a character-property element never carries two
 `cap` attributes. `CT_TextBodyProperties` writes a preserved `a:prstTxWarp`,
 `a:scene3d`, 3D, or extension child at its schema slot, so an autofit choice
-added after parsing still precedes a preserved scene or extension.
+added after parsing still precedes a preserved scene or extension. It types
+only the insets, `anchor`, `wrap`, `vert` and `spcFirstLastPara`, and keeps
+every other `a:bodyPr` attribute, such as `rot`, `numCol`, `spcCol` or
+`anchorCtr`, verbatim in source order after the typed ones. Editing any shape
+of a slide therefore leaves the columns and text rotation of every text body
+on it unchanged, although the renderer still draws one upright column.
 
 The presentation facade projects direct shape offset and extent, non-visual id
 and name, and the text body's explicit autofit choice through borrowed handles.

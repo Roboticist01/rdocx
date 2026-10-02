@@ -3300,6 +3300,15 @@ exact and cannot be satisfied by comments.
 
 The rdocx binding formatting gate sets and reopens paragraph style and
 numbering, run character style, named Word highlight, and independent shading.
+The Issue 168 integration gate composes table structure and formatting, style
+creation and mutation, numbering, section geometry, bookmark fields, a rich
+section footer, transactional three-pair replacement, paragraph and run edits,
+hyperlink edits, picture resizing, a text-anchored comment and an external
+lxml package edit. It saves and reopens the result, checks deterministic layout
+and PDF rendering with bundled fonts, and compares parsed structure through
+the pinned `python-docx==1.2.0` reader. The style update changes rendered
+pixels, while a failed style lookup and a mismatched replacement pair leave
+the package unchanged.
 Its mixed-content run includes text, a tab, a page break, a field, a drawing,
 a raw symbol, and trailing text, all of which retain their order after every
 formatting mutation. Invalid highlight names leave the run unchanged. The

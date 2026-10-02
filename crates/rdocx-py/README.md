@@ -52,7 +52,8 @@ with open("report.pdf", "wb") as output:
 - New documents with Word's usual styles, such as `Heading 2`, `Title`,
   `List Paragraph`, `Caption`, and `Table Grid`.
 - Style creation with a font, spacing, and indentation through
-  `Document.add_style`, plus style removal and default selection.
+  `Document.add_style`, checked updates through `Document.set_style`, plus
+  style removal and default selection.
 - Numbering definitions and instances built from `ListLevel` values, and
   paragraph styles linked to a numbering level.
 - Core document properties such as title, author, and revision, read and
@@ -101,6 +102,38 @@ document = Document("template.docx")
 document.add_paragraph("Approved")
 document.save("approved.docx")
 ```
+
+## Package XML escape hatch
+
+For an unmodelled package part, edit the DOCX ZIP with lxml, then reopen it
+with `rdocx`. Keep the original ZIP members and update package relationships
+and content types if an edit adds or removes a part. For example, to change
+an existing application property:
+
+```python
+from io import BytesIO
+from zipfile import ZipFile
+from lxml import etree
+from rdocx import Document
+
+source = Document("report.docx").to_bytes()
+output = BytesIO()
+with ZipFile(BytesIO(source)) as original, ZipFile(output, "w") as edited:
+    for member in original.infolist():
+        data = original.read(member.filename)
+        if member.filename == "docProps/app.xml":
+            root = etree.fromstring(data)
+            ns = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+            root.find(f"{{{ns}}}Application").text = "Report service"
+            data = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
+        edited.writestr(member, data)
+document = Document.from_bytes(output.getvalue())
+document.save("report-edited.docx")
+```
+
+The typed API handles style formatting, comments, fields, relationships and
+other modeled operations. `set_style` keeps properties not supplied in the
+call and cannot clear an existing theme font or theme colour.
 
 ## Type checking
 
