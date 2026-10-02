@@ -16894,3 +16894,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged, all 49 entries matched in the worker. No product code changed during integration.
 
 **Notes for future sessions.** F-X150 must reconcile Issues 169, 170, 215, 216 and 217 against this fixture result and every other criterion in the original 22-issue snapshot. Keep `work/f-x158-codex` until sprint closure.
+
+### F-X149, Word fixture and workflow acceptance gate
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** The original Issue 158 report, SHA-256 `d05f9c753c00eb804c6e345126ef7a1f7a4fc635d2c9b653b829922030cd875e`, now runs through the reporter's complete 12-step workflow. The Python parity gate checks all 18 identity rows across seven operations and all 11 producer rows across eight operations. Comparison carries changed image bytes under a distinct media part and relationship, so accepting a redline retains the replacement and rejecting it retains the original.
+
+**Non-obvious choices.** The report and script archive are SHA-bound inputs in ignored test storage. The image fix stages a fresh relationship rather than changing the original payload in place. The `rdocx` package archive was remeasured in the README and its assertion carrier after the Rust change.
+
+**Deviations from the design plan.** The original report exposed the image comparison defect, so the approved plan was expanded to name the scoped repair, package-staging risk rider and `docs/hld/10-bindings-spec.md` impact before completion.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md`, "Native Word facade stability", and `docs/hld/12-testing-strategy.md`, "The Word corpus".
+
+**Tests.** The reporter workflow passed 12 of 12 steps. The isolated Python suite passed 168 tests. The Word crate passed 486 unit, 327 integration, 711 regression and two doctests with pinned LibreOffice 26.2.5.2 and Poppler 26.01.0. Scoped WASM, Clippy, formatting, repository policy, prose and generated-adapter checks passed. Microscope pass 2 found zero defects and zero smells. The integrated prefix passed the 49-entry hash harness, prose and staged diff checks. Final sprint verification and review remain due after F-X150.
+
+**Hash harness.** Unchanged, all 49 entries matched on the worker and integrated prefix.
+
+**Notes for future sessions.** F-X150 must reconcile this report and matrix evidence against each criterion in the original 22-issue snapshot. Keep `work/f-x149-codex` until sprint closure.
