@@ -522,6 +522,7 @@ defended.
 | F-X147 | S80 | L | 5 | 1 | 2026-10-02 | Completed the Issue 168 Word Python editing chain with atomic counted replacement, rich footers and a documented lxml package-write fallback |
 | F-X155 | S80 | L | 5 | 1 | 2026-10-02 | Integrated five drawing PRs with slide jumps, line ends, shadows, preset geometry and theme effect control under schema-order and viewer checks |
 | F-X156 | S81 | L | 5 | 1 | 2026-10-02 | Integrated slide import, scoped counted replacement and built-in table backgrounds with relationship, Python and viewer checks |
+| F-X148 | S81 | L | 5 | 1 | 2026-10-02 | Completed the Issue 169 production deck chain with a pinned Python reader and LibreOffice viewer, and documented one table-style package fallback |
 
 ## Velocity
 

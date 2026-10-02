@@ -16834,3 +16834,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
 
 **Notes for future sessions.** F-X148 audits the complete Issue 169 Python production chain on this prefix. F-X157 completes the six-item Issue 217 deck chain after F-X148.
+
+### F-X148, Complete rpptx Python production checklist
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Added a source-built Issue 169 production deck chain through the Python binding. It combines slide and shape navigation, placeholder geometry, table editing, picture crop, z-order, grouping, a shape hyperlink, an anchored comment, cross-deck import with notes and media, and counted scoped replacement. HLD 12 maps the remaining checklist variants to exact existing focused tests.
+
+**Non-obvious choices.** Python `Table` has no built-in style selector. The reviewed scope boundary uses a single-slide ZIP/XML edit to assign a known built-in GUID, holds every other decompressed part equal, then runs the same reader, validator and render checks. HLD 10 documents this as a package fallback rather than a passing Python table-style API.
+
+**Deviations from the design plan.** No product integration gap required repair. The table-style scope boundary and fallback were recorded as the S81 definition of done permits.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** All 74 Presentation Python tests passed, including the new complete deck chain and pinned LibreOffice rider. `rpptx validate` passed, and python-pptx 1.0.2 reopened the source-built deck with notes. At 72 DPI, 99.501736 percent of native and LibreOffice 26.2.5.2 pixels were within 24 RGB levels, above the 97 percent threshold, and the mean channel error was 0.424113 against a limit of 2.0. The deck SHA-256 was `6a2e06785f57421fee09b39f4b8ca4111113b2c24bef9d736e6d50208d9ff465`. Scoped formatting, binding Clippy, strict mypy and stubtest, prose, adapter and workflow policy checks passed. Microscope pass 1 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
+
+**Notes for future sessions.** F-X157 now checks all six Issue 217 items together on this completed prefix. The built-in style selector remains a documented package fallback.
