@@ -32,7 +32,7 @@ explicit scope decision and fallback for any unsupported operation.
 |------|-------|------|--------|-------|
 | F-X156 | Presentation slide and table contribution | L | done | - |
 | F-X148 | Complete rpptx Python production checklist | L | done | - |
-| F-X157 | Complete deck-chain authoring checklist | L | in-progress | codex |
+| F-X157 | Complete deck-chain authoring checklist | L | done | - |
 
 ## Sequencing note
 

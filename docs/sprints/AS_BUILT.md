@@ -16854,3 +16854,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
 
 **Notes for future sessions.** F-X157 now checks all six Issue 217 items together on this completed prefix. The built-in style selector remains a documented package fallback.
+
+### F-X157, Complete deck-chain authoring checklist
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Added one source-built Python deck chain for all six Issue 217 operations: direct outer shadow, connector theme effect suppression, line end, preset geometry replacement, cross-deck slide import and counted replacement at slide and text-frame scope. The saved package retains imported media, notes and internal relationships.
+
+**Non-obvious choices.** A failed counted replacement leaves the deck bytes unchanged before the successful scoped edits. The chain checks each relationship target in the ZIP, reopens the deck with both rpptx and python-pptx 1.0.2, and runs `rpptx validate`. Pinned LibreOffice 26.2.5.2 is the accepted viewer boundary. The deck test names a window for every item and requires at least 97 percent of pixels within 24 RGB levels and mean channel error at most 3.0 against deterministic rendering.
+
+**Deviations from the design plan.** The combined chain exposed a missing Python preset geometry setter, which was added with a focused binding check. The unavailable PowerPoint 16.104 observation remains outside the accepted S81 viewer boundary.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md` and `docs/hld/14-development-backlog.md`.
+
+**Tests.** The integrated Presentation Python suite passed all 75 tests, including the six-item chain, with strict mypy and live stubtest. The full workspace suite passed with a 16 MiB Rust test-thread stack after one Word regression overflowed its default stack. Formatting, workspace Clippy, no-default layout tests, both WASM targets, strict rustdoc, README doctests, 131 workflow tests with two skips, `cargo deny check`, prose and generated-adapter checks passed. The patched 22-crate publish dry run passed with every archive below 10 MiB. Microscope pass 3 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S81 result.
+
+**Notes for future sessions.** The six-item deck chain is the durable Issue 217 acceptance test. The S80 accepted viewer scope does not claim a PowerPoint observation.

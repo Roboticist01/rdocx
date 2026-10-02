@@ -523,6 +523,7 @@ defended.
 | F-X155 | S80 | L | 5 | 1 | 2026-10-02 | Integrated five drawing PRs with slide jumps, line ends, shadows, preset geometry and theme effect control under schema-order and viewer checks |
 | F-X156 | S81 | L | 5 | 1 | 2026-10-02 | Integrated slide import, scoped counted replacement and built-in table backgrounds with relationship, Python and viewer checks |
 | F-X148 | S81 | L | 5 | 1 | 2026-10-02 | Completed the Issue 169 production deck chain with a pinned Python reader and LibreOffice viewer, and documented one table-style package fallback |
+| F-X157 | S81 | L | 5 | 1 | 2026-10-02 | Proved all six Issue 217 authoring items in one saved Python deck with pinned reader, validator and per-item viewer checks |
 
 ## Velocity
 
