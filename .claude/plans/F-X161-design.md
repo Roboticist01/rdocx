@@ -1,6 +1,6 @@
 # F-X161, Compact Word XML and namespace preservation
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: L
 **Depends on**: F-X144, F-X160, F-X169
@@ -27,7 +27,9 @@ Preserve alias and foreign bindings, raw unknown subtrees, producer attributes
 and root `mc:Ignorable`. Use compact writers for changed document, note,
 header, footer, style and numbering parts. Keep untouched package parts and
 regions byte-identical. Recheck the PR's stale candidate digest against the
-current prefix before recording any baseline change.
+current prefix before recording any baseline change. Remeasure the `rdocx` and
+`rdocx-oxml` archive inventories and update their README assertions after the
+serializer changes.
 
 ## Rejected alternatives
 
@@ -70,12 +72,13 @@ separately before F-X162 or F-X163 begins.
 
 ## Implementation checklist
 
-- [ ] Reconcile PR 251 against the integrated prefix and its stale digest.
-- [ ] Implement canonical binding and compact writer changes without losing
+- [x] Reconcile PR 251 against the integrated prefix and its stale digest.
+- [x] Implement canonical binding and compact writer changes without losing
   source attributes or raw subtrees.
-- [ ] Run the Issue 245 reproduction and full Issue 160 producer matrix.
-- [ ] Label and review each of the 20 hash changes.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Run the Issue 245 reproduction and full Issue 160 producer matrix.
+- [x] Label and review each of the 20 hash changes.
+- [x] Remeasure the two changed package archives and their README assertions.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 
