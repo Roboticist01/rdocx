@@ -1,6 +1,6 @@
 # F-X163, Plain-line trailing-space fit
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-X146, F-X162
@@ -61,11 +61,11 @@ its own labelled baseline commit.
 
 ## Implementation checklist
 
-- [ ] Review only PR 242's increment beyond integrated PR 222.
-- [ ] Correct plain fit and hyphenation while preserving hung source spaces.
-- [ ] Run both Issue 226 reproducers and guarded formatting cases.
-- [ ] Review the separate hash and golden pixel changes.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Review only PR 242's increment beyond integrated PR 222.
+- [x] Correct plain fit and hyphenation while preserving hung source spaces.
+- [x] Run both Issue 226 reproducers and guarded formatting cases.
+- [x] Review the separate hash and golden pixel changes.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 
