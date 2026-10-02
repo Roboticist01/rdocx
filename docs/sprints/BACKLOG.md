@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)              | 178 | 159 | 0 | 15 |
-| **Total** | **503** | **421** | **0** | **78** |
+| X, Cross-cutting (opportunistic)              | 178 | 159 | 1 | 14 |
+| **Total** | **503** | **421** | **1** | **77** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -710,7 +710,7 @@ regenerated, never hand-edited.
 | F-X154 | Presentation text and preservation repair | S80 | M | done |
 | F-X155 | Presentation drawing API contribution | S80 | L | done |
 | F-X156 | Presentation slide and table contribution | S81 | L | done |
-| F-X157 | Complete deck-chain authoring checklist | S81 | L | pending |
+| F-X157 | Complete deck-chain authoring checklist | S81 | L | in-progress |
 | F-X158 | Presentation fixture and workflow acceptance gate | S82 | L | pending |
 | F-X159 | Word document validity baseline | S83 | M | pending |
 | F-X160 | Tolerant style, drawing and measurement reads | S83 | L | pending |
