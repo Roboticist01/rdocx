@@ -16814,3 +16814,63 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the integrated S80 result.
 
 **Notes for future sessions.** Issue 217 remains open for F-X156 slide import and scoped replacement, then F-X157's complete deck-chain acceptance. The authored deck SHA-256 is `5a612c739359ea8f56ff18f797b9df38f56440fedaf64f756d31760516b91344`.
+
+### F-X156, Presentation slide and table contribution
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reconciled PRs 231, 235 and 238 on the reviewed F-X155 prefix. Native and Python APIs now import one slide from another presentation with checked layout selection, relationship remapping, shared equal media, notes and bounded SmartArt copying. Counted replacement can target one slide or one text frame. The 74 built-in table styles now expose table background paint through the model, resolver and renderer.
+
+**Non-obvious choices.** Import refuses unsupported internal relationship graphs before publishing a change and documents rebuilding the slide in the destination deck as a fallback. The table resolver preserves the S77 built-in default GUID fallback when no package definition exists. The integration review caught that fallback's omission in the initial handoff, and a focused regression plus microscope pass 2 established the repair.
+
+**Deviations from the design plan.** None. The imported deck render comparison used a declared 99 percent channel threshold and mean absolute channel error limit of 1 to account for font antialiasing.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, `docs/hld/05-drawingml-model.md`, `docs/hld/06-presentationml-model.md`, `docs/hld/07-inheritance-and-resolution.md`, `docs/hld/08-rendering-spec.md` and `docs/hld/10-bindings-spec.md`.
+
+**Tests.** The worker passed 145 `oxml-drawing`, 140 `rpptx-layout`, 105 `rpptx-render`, 84 `rpptx` unit and 282 `rpptx` integration tests, plus 73 Presentation Python examples, strict mypy and stubtest. The scoped formatting, Clippy, WASM, prose, adapter, README, policy and patched 22-crate publish dry-run checks passed, with every archive below 10 MiB. Python-pptx 1.0.2 reopened the imported deck with notes, and `rpptx validate` passed. At 150 DPI, the deterministic native render and LibreOffice 26.2.5.2 matched on 99.43 percent of RGB channels within 12, with mean absolute channel error 0.56. Microscope pass 2 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
+
+**Notes for future sessions.** F-X148 audits the complete Issue 169 Python production chain on this prefix. F-X157 completes the six-item Issue 217 deck chain after F-X148.
+
+### F-X148, Complete rpptx Python production checklist
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Added a source-built Issue 169 production deck chain through the Python binding. It combines slide and shape navigation, placeholder geometry, table editing, picture crop, z-order, grouping, a shape hyperlink, an anchored comment, cross-deck import with notes and media, and counted scoped replacement. HLD 12 maps the remaining checklist variants to exact existing focused tests.
+
+**Non-obvious choices.** Python `Table` has no built-in style selector. The reviewed scope boundary uses a single-slide ZIP/XML edit to assign a known built-in GUID, holds every other decompressed part equal, then runs the same reader, validator and render checks. HLD 10 documents this as a package fallback rather than a passing Python table-style API.
+
+**Deviations from the design plan.** No product integration gap required repair. The table-style scope boundary and fallback were recorded as the S81 definition of done permits.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** All 74 Presentation Python tests passed, including the new complete deck chain and pinned LibreOffice rider. `rpptx validate` passed, and python-pptx 1.0.2 reopened the source-built deck with notes. At 72 DPI, 99.501736 percent of native and LibreOffice 26.2.5.2 pixels were within 24 RGB levels, above the 97 percent threshold, and the mean channel error was 0.424113 against a limit of 2.0. The deck SHA-256 was `6a2e06785f57421fee09b39f4b8ca4111113b2c24bef9d736e6d50208d9ff465`. Scoped formatting, binding Clippy, strict mypy and stubtest, prose, adapter and workflow policy checks passed. Microscope pass 1 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the reviewed worker result, and the squash integration contained no semantic reconciliation.
+
+**Notes for future sessions.** F-X157 now checks all six Issue 217 items together on this completed prefix. The built-in style selector remains a documented package fallback.
+
+### F-X157, Complete deck-chain authoring checklist
+
+**Sprint.** S81
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Added one source-built Python deck chain for all six Issue 217 operations: direct outer shadow, connector theme effect suppression, line end, preset geometry replacement, cross-deck slide import and counted replacement at slide and text-frame scope. The saved package retains imported media, notes and internal relationships.
+
+**Non-obvious choices.** A failed counted replacement leaves the deck bytes unchanged before the successful scoped edits. The chain checks each relationship target in the ZIP, reopens the deck with both rpptx and python-pptx 1.0.2, and runs `rpptx validate`. Pinned LibreOffice 26.2.5.2 is the accepted viewer boundary. The deck test names a window for every item and requires at least 97 percent of pixels within 24 RGB levels and mean channel error at most 3.0 against deterministic rendering.
+
+**Deviations from the design plan.** The combined chain exposed a missing Python preset geometry setter, which was added with a focused binding check. The unavailable PowerPoint 16.104 observation remains outside the accepted S81 viewer boundary.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md` and `docs/hld/14-development-backlog.md`.
+
+**Tests.** The integrated Presentation Python suite passed all 75 tests, including the six-item chain, with strict mypy and live stubtest. The full workspace suite passed with a 16 MiB Rust test-thread stack after one Word regression overflowed its default stack. Formatting, workspace Clippy, no-default layout tests, both WASM targets, strict rustdoc, README doctests, 131 workflow tests with two skips, `cargo deny check`, prose and generated-adapter checks passed. The patched 22-crate publish dry run passed with every archive below 10 MiB. Microscope pass 3 reported zero defects and zero smells.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S81 result.
+
+**Notes for future sessions.** The six-item deck chain is the durable Issue 217 acceptance test. The S80 accepted viewer scope does not claim a PowerPoint observation.

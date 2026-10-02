@@ -3569,6 +3569,181 @@ def test_validate_returns_the_issues_the_cli_prints_as_frozen_snapshots(tmp_path
         issue.kind = "other"
 
 
+def test_try_replace_text_scoped_to_a_slide_or_a_text_frame(tmp_path):
+    import rpptx
+
+    prs = _textbox_presentation(rpptx)
+    prs.slides[0].shapes[0].text = "Same text"
+    table = prs.slides[0].shapes.add_table(1, 1, 0, 0, 100, 100).table
+    table.cell(0, 0).text = "Same text"
+    prs.slides[0].shapes.add_textbox(0, 0, 100, 100).text = "Same text"
+    prs.slides[0].notes_text = "Same text in the notes"
+    prs.slides.add_slide(prs.slide_layouts[6])
+    prs.slides[1].shapes.add_textbox(0, 0, 100, 100).text = "Same text"
+    prs.slides[1].notes_text = "Same text in the notes"
+    before = prs.to_bytes()
+
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        prs.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 6'
+    held = prs.slides[0]
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        held.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 4'
+    assert (raised.value.expected, raised.value.found) == (1, 4)
+    with pytest.raises(rpptx.ReplacementCountError, match="found 3"):
+        held.try_replace_text("Same text", "Other text", expect=1, notes=False)
+    with pytest.raises(rpptx.RpptxError, match="placeholder must not be empty"):
+        held.try_replace_text("", "x")
+    assert held.try_replace_text("MISSING", "x") == 0
+    assert held.try_replace_text("MISSING", "x", expect=0) == 0
+    assert prs.to_bytes() == before
+
+    assert held.try_replace_text("Same text", "Other text", expect=3, notes=False) == 3
+    _assert_stale_after_exactly_one_bump(rpptx, lambda: held.shapes)
+    first = prs.slides[0]
+    shapes = first.shapes
+    assert shapes[0].text == "Other text"
+    assert shapes[1].table.cell(0, 0).text == "Other text"
+    assert shapes[2].text == "Other text"
+    assert first.notes_text == "Same text in the notes"
+    assert first.try_replace_text("Same text", "Other text") == 1
+    assert prs.slides[0].notes_text == "Other text in the notes"
+    assert prs.slides[1].shapes[0].text == "Same text"
+    assert prs.slides[1].notes_text == "Same text in the notes"
+
+    frame = prs.slides[1].shapes[0].text_frame
+    frame.text = "Same text and Same text"
+    frame = prs.slides[1].shapes[0].text_frame
+    snapshot = prs.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError) as raised:
+        frame.try_replace_text("Same text", "Other text", expect=1)
+    assert str(raised.value) == 'expected 1 replacement(s) of "Same text", found 2'
+    with pytest.raises(rpptx.RpptxError, match="placeholder must not be empty"):
+        frame.try_replace_text("", "x")
+    assert frame.try_replace_text("MISSING", "x") == 0
+    assert prs.to_bytes() == snapshot
+    assert frame.try_replace_text("Same text", "Other text", expect=2) == 2
+    _assert_stale_after_exactly_one_bump(rpptx, lambda: frame.text)
+    assert prs.slides[1].shapes[0].text == "Other text and Other text"
+    assert prs.slides[1].notes_text == "Same text in the notes"
+    assert prs.slides[1].shapes[0].text_frame.try_replace_text("Other", "New") == 2
+
+    if importlib.util.find_spec("pptx") is None:
+        return
+    from pptx import Presentation as OraclePresentation
+
+    # rpptx cannot add group children, so python-pptx builds a group whose
+    # text box splits the match across a bold run and a plain one.
+    source = tmp_path / "grouped.pptx"
+    oracle = OraclePresentation()
+    slide = oracle.slides.add_slide(oracle.slide_layouts[6])
+    group = slide.shapes.add_group_shape()
+    paragraph = group.shapes.add_textbox(0, 0, 100, 100).text_frame.paragraphs[0]
+    bold = paragraph.add_run()
+    bold.text = "Same te"
+    bold.font.bold = True
+    paragraph.add_run().text = "xt in a group"
+    slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = "Same text"
+    oracle.save(source)
+
+    prs = rpptx.Presentation(source)
+    frame = prs.slides[0].shapes[0].shapes[0].text_frame
+    with pytest.raises(rpptx.ReplacementCountError, match="found 1"):
+        frame.try_replace_text("Same text", "Other", expect=2)
+    assert frame.try_replace_text("Same text", "Other", expect=1) == 1
+    runs = prs.slides[0].shapes[0].shapes[0].text_frame.paragraphs[0].runs
+    assert [run.text for run in runs] == ["Other", " in a group"]
+    assert runs[0].font.bold is True
+    assert prs.slides[0].shapes[1].text == "Same text"
+    prs.slides[0].shapes[0].shapes[0].text_frame.text = "Same text in a group"
+    assert prs.slides[0].try_replace_text("Same text", "Other", expect=2) == 2
+    assert prs.slides[0].shapes[0].shapes[0].text == "Other in a group"
+
+
+def test_import_slide_carries_pictures_links_notes_and_background_from_another_deck(tmp_path):
+    import rpptx
+
+    red, blue = _tiny_png(0xDD, 0x20, 0x20), _tiny_png(0x20, 0x20, 0xDD)
+
+    def build_source(deck):
+        from pptx.chart.data import CategoryChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.oxml import parse_xml
+        from pptx.util import Inches
+
+        slide = deck.slides.add_slide(deck.slide_layouts[1])
+        slide.shapes.title.text = "Imported title"
+        slide.placeholders[1].text = "Body bullet"
+        slide.shapes.add_picture(io.BytesIO(red), Inches(6), Inches(4))
+        run = slide.shapes.add_textbox(Inches(1), Inches(5), Inches(4), Inches(1)).text_frame.paragraphs[0].add_run()
+        run.text = "Visit"
+        run.hyperlink.address = "https://example.com/import"
+        slide.notes_slide.notes_text_frame.text = "Speaker notes"
+        _, background = slide.part.get_or_add_image_part(io.BytesIO(blue))
+        slide._element.cSld.insert(0, parse_xml(
+            '<p:bg xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+            ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+            ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'<p:bgPr><a:blipFill><a:blip r:embed="{background}"/></a:blipFill><a:effectLst/></p:bgPr></p:bg>'
+        ))
+        chart = deck.slides.add_slide(deck.slide_layouts[5])
+        data = CategoryChartData()
+        data.categories = ["a", "b"]
+        data.add_series("s", (1, 2))
+        chart.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, 0, 0, Inches(4), Inches(3), data)
+
+    def build_target(deck):
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        slide.shapes.add_picture(io.BytesIO(red), 0, 0)
+
+    source = rpptx.Presentation(_python_pptx_deck(tmp_path / "source.pptx", build_source))
+    prs = rpptx.Presentation(_python_pptx_deck(tmp_path / "target.pptx", build_target))
+    before = prs.to_bytes()
+    with pytest.raises(rpptx.RpptxError, match="has a chart, which is not carried"):
+        prs.slides.import_slide(source.slides[1])
+    assert prs.to_bytes() == before
+    with pytest.raises(ValueError, match="layout is not a layout of this presentation"):
+        prs.slides.import_slide(source.slides[0], layout=source.slide_layouts[1])
+    with pytest.raises(IndexError):
+        prs.slides.import_slide(source.slides[0], index=2)
+
+    held = prs.slides[0]
+    imported = prs.slides.import_slide(source.slides[0], index=0)
+    with pytest.raises(rpptx.StaleElementError):
+        _ = held.shapes
+    assert [shape.name for shape in imported.shapes] == [
+        "Title 1", "Content Placeholder 2", "Picture 3", "TextBox 4",
+    ]
+    assert imported.shapes[2].image.blob == red
+    assert imported.notes_text == "Speaker notes"
+    again = prs.slides.import_slide(prs.slides[0], layout=prs.slide_layouts[6], index=-1)
+    assert again.shapes[0].text == "Imported title"
+    same = prs.slides.import_slide(prs.slides[0])
+    assert same.slide_layout == prs.slide_layouts[1]
+    output = tmp_path / "imported.pptx"
+    prs.save(output)
+    media = [name for name in _package_parts(output.read_bytes()) if name.startswith("ppt/media/")]
+    assert len(media) == 2
+
+    pptx = pytest.importorskip("pptx", reason="python-pptx is the differential oracle")
+    oracle = pptx.Presentation(output)
+    assert [slide.slide_layout.name for slide in oracle.slides] == [
+        "Title and Content", "Blank", "Blank", "Title and Content",
+    ]
+    slide = oracle.slides[0]
+    assert [shape.text_frame.text for shape in slide.shapes if shape.has_text_frame] == [
+        "Imported title", "Body bullet", "Visit",
+    ]
+    assert slide.shapes[2].image.blob == red
+    assert slide.shapes[3].text_frame.paragraphs[0].runs[0].hyperlink.address == "https://example.com/import"
+    assert slide.notes_slide.notes_text_frame.text == "Speaker notes"
+    blip = slide._element.cSld.bg.xpath(".//a:blip")[0]
+    embed = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
+    assert slide.part.related_part(embed).blob == blue
+
+
+
 def test_add_shape_accepts_preset_names_and_every_mso_shape_member(tmp_path):
     import rpptx
     from rpptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_CONNECTOR, MSO_CONNECTOR_TYPE, MSO_SHAPE, MSO_SHAPE_TYPE
@@ -3891,3 +4066,316 @@ def test_issue_169_modern_comments_anchor_to_shape_and_text_range(tmp_path):
         "{22222222-2222-2222-2222-222222222222}",
         "{33333333-3333-3333-3333-333333333333}",
     ]
+
+
+def test_issue_169_complete_production_deck_chain(tmp_path):
+    """Issue 169's operations must coexist in one saved, readable deck."""
+    import os
+    import posixpath
+    import shutil
+    import subprocess
+    import xml.etree.ElementTree as ET
+
+    import pptx
+    import rpptx
+    from PIL import Image
+    from rpptx.enum.shapes import MSO_SHAPE
+
+    assert importlib.metadata.version("python-pptx") == "1.0.2"
+    emu = rpptx.Inches(1)
+    source = rpptx.Presentation()
+    source.slides.add_slide(source.slide_layouts[6])
+    source.slides[0].shapes.add_textbox(emu, emu, 3 * emu, emu).text = "Imported caption"
+    source.slides[0].notes_text = "Imported speaker note"
+    source.slides[0].shapes.add_picture(_tiny_png(), 5 * emu, emu, emu, emu)
+
+    deck = rpptx.Presentation()
+    deck.slides.add_slide(deck.slide_layouts[0])
+    title = deck.slides[0].shapes.title
+    assert title.left is None and title.effective_geometry()[2] > 0
+    title.left = int(title.effective_geometry()[0]) + 100
+    deck.slides[0].shapes.title.text = "Production checklist"
+    deck.slides[0].placeholders[1].text = "Issue 169"
+    deck.slides[0].notes_text = "Opening note"
+    deck.slides.add_slide(deck.slide_layouts[6])
+    deck.slides[1].shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, emu, emu, 3 * emu, emu)
+    shape = deck.slides[1].shapes[0]
+    shape.name = "Front card"
+    shape.text = "Replace this label"
+    shape = deck.slides[1].shapes[0]
+    shape.click_action.hyperlink.address = "https://example.com/checklist"
+    deck.slides[1].shapes.add_picture(_tiny_png(0xE0, 0x30, 0x30), emu, 3 * emu, 2 * emu, emu)
+    deck.slides[1].shapes[1].crop_left = 0.25
+    deck.slides[1].shapes.add_table(2, 2, 5 * emu, emu, 3 * emu, 2 * emu)
+    table = deck.slides[1].shapes[2].table
+    for row, values in enumerate((("Item", "State"), ("crop", "ready"))):
+        for column, value in enumerate(values):
+            table.cell(row, column).text = value
+    table.columns[0].width = emu
+    table.rows[1].height = emu
+    table.cell(1, 0).text = "image"
+    deck.slides[1].shapes.add_group_shape()
+    deck.slides[1].shapes[3].shapes.add_textbox(5 * emu, 4 * emu, 2 * emu, emu).text = "Grouped"
+    deck.slides[1].shapes.move(0, 2)
+    assert [shape.name for shape in deck.slides[1].shapes][2] == "Front card"
+    author_id = "{11111111-1111-1111-1111-111111111111}"
+    deck.add_comment_author(id=author_id, name="Ada", user_id="ada@example.test", provider_id="local")
+    card_id = deck.slides[1].shapes[2].shape_id
+    deck.slides[1].add_comment(
+        id="{22222222-2222-2222-2222-222222222222}", author_id=author_id,
+        created="2026-09-30T10:00:00Z", text="Review label",
+        shape_id=card_id, text_start=0, text_length=7,
+    )
+    before = deck.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError):
+        deck.slides[1].try_replace_text("Replace this label", "Reviewed label", expect=2)
+    assert deck.to_bytes() == before
+    assert deck.slides[1].try_replace_text("Replace this label", "Reviewed label", expect=1) == 1
+    assert deck.slides[1].shapes[2].text == "Reviewed label"
+    imported = deck.slides.import_slide(source.slides[0], index=1)
+    assert imported.notes_text == "Imported speaker note"
+    assert imported.shapes[1].image.blob == _tiny_png()
+    assert deck.validate() == ()
+
+    # The Python Table binding has no style selector. Set the built-in GUID
+    # through the documented ZIP/XML package fallback, then reopen in rpptx.
+    style_id = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"
+    parts = _package_parts(deck.to_bytes())
+    unchanged_parts = parts.copy()
+    styled_part = next(
+        name for name, data in parts.items()
+        if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+        and b"Reviewed label" in data
+    )
+    slide_xml = parts[styled_part]
+    original = b'<a:tblPr firstRow="1" bandRow="1"/>'
+    assert slide_xml.count(original) == 1
+    parts[styled_part] = slide_xml.replace(
+        original,
+        b'<a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>'
+        + style_id.encode() + b'</a:tableStyleId></a:tblPr>',
+    )
+    assert {name: data for name, data in parts.items() if name != styled_part} == {
+        name: data for name, data in unchanged_parts.items() if name != styled_part
+    }
+    output = tmp_path / "issue-169-production.pptx"
+    output.write_bytes(_package_bytes(parts))
+    assert _package_parts(output.read_bytes()) == parts
+    reopened = rpptx.Presentation(output)
+    assert reopened.validate() == ()
+    assert [slide.slide_layout.name for slide in reopened.slides] == [
+        "Title Slide", "Blank", "Blank",
+    ]
+    assert reopened.slides[0].shapes.title.text == "Production checklist"
+    assert reopened.slides[1].notes_text == "Imported speaker note"
+    assert reopened.slides[2].shapes[2].text == "Reviewed label"
+    assert reopened.slides[2].shapes[2].click_action.hyperlink.address == "https://example.com/checklist"
+    assert reopened.slides[2].shapes[0].crop_left == 0.25
+    assert reopened.slides[2].shapes[1].table.cell(1, 0).text == "image"
+    assert reopened.slides[2].shapes[3].shapes[0].text == "Grouped"
+    assert len(reopened.slides[2].comments) == 1
+    assert reopened.render_slide_to_png(2, dpi=72.0).startswith(b"\x89PNG")
+
+    # Every internal package target must resolve, including notes, media and comments.
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        assert "ppt/comments/comment1.xml" in names
+        assert any(name.startswith("ppt/media/") for name in names)
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            base = "" if name == "_rels/.rels" else name.rsplit("/_rels/", 1)[0]
+            for rel in ET.fromstring(archive.read(name)):
+                if rel.get("TargetMode") == "External":
+                    continue
+                target = posixpath.normpath(posixpath.join(base, rel.attrib["Target"].lstrip("/")))
+                if rel.attrib["Target"].startswith("/"):
+                    target = rel.attrib["Target"].lstrip("/")
+                assert target in names, (name, target)
+
+    oracle = pptx.Presentation(output)
+    assert len(oracle.slides) == 3
+    assert oracle.slides[0].shapes.title.text == "Production checklist"
+    assert oracle.slides[1].notes_slide.notes_text_frame.text == "Imported speaker note"
+    shapes = oracle.slides[2].shapes
+    assert [shape.name for shape in shapes][2] == "Front card"
+    assert shapes[0].crop_left == 0.25
+    assert shapes[1].table.cell(1, 0).text == "image"
+    assert shapes[2].click_action.hyperlink.address == "https://example.com/checklist"
+    assert shapes[3].shapes[0].text == "Grouped"
+    assert style_id.encode() in parts[styled_part]
+
+    soffice = os.environ.get("RPPTX_PINNED_SOFFICE") or shutil.which("soffice")
+    if soffice:
+        assert "LibreOffice 26.2.5.2" in subprocess.check_output([soffice, "--version"], text=True)
+        pdf_dir = tmp_path / "lo"
+        pdf_dir.mkdir()
+        subprocess.run([
+            soffice, "-env:UserInstallation=" + (tmp_path / "lo-profile").as_uri(),
+            "--headless", "--convert-to", "pdf", "--outdir", str(pdf_dir), str(output),
+        ], check=True, capture_output=True, text=True)
+        pdf = pdf_dir / (output.stem + ".pdf")
+        assert pdf.is_file()
+        subprocess.run([
+            "pdftoppm", "-f", "3", "-l", "3", "-r", "72", "-png", "-singlefile",
+            str(pdf), str(pdf_dir / "slide3"),
+        ], check=True, capture_output=True)
+        native = Image.open(io.BytesIO(reopened.render_slide_to_png(2, dpi=72.0))).convert("RGB")
+        native.save(pdf_dir / "native-slide3.png")
+        viewer = Image.open(pdf_dir / "slide3.png").convert("RGB")
+        assert abs(native.width - viewer.width) <= 1 and native.height == viewer.height
+        viewer = viewer.crop((0, 0, native.width, native.height))
+        assert native.getpixel((390, 95)) == viewer.getpixel((390, 95)) == (0x4F, 0x81, 0xBD)
+        native_bytes, viewer_bytes = native.tobytes(), viewer.tobytes()
+        errors = [abs(left - right) for left, right in zip(native_bytes, viewer_bytes)]
+        pixels = native.width * native.height
+        close = sum(max(errors[index:index + 3]) <= 24 for index in range(0, len(errors), 3))
+        mean_error = sum(errors) / len(errors)
+        assert close / pixels >= 0.97 and mean_error <= 2.0, (close / pixels, mean_error)
+
+
+def test_issue_217_complete_deck_chain(tmp_path):
+    """Issue 217's six authoring items survive one package and both readers."""
+    import hashlib
+    import os
+    import posixpath
+    import shutil
+    import subprocess
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    import pptx
+    import rpptx
+    from PIL import Image
+    from rpptx.dml.color import RGBColor
+    from rpptx.enum.dml import MSO_ARROWHEAD_LENGTH, MSO_ARROWHEAD_STYLE, MSO_ARROWHEAD_WIDTH
+    from rpptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+
+    assert importlib.metadata.version("python-pptx") == "1.0.2"
+    unit = rpptx.Inches(1)
+    source = rpptx.Presentation()
+    source.slides.add_slide(source.slide_layouts[6])
+    source.slides[0].shapes.add_textbox(unit, unit, 3 * unit, unit).text = "Imported TOKEN"
+    source.slides[0].shapes.add_picture(_tiny_png(0x22, 0x88, 0xCC), 5 * unit, unit, unit, unit)
+    source.slides[0].notes_text = "Imported notes"
+
+    deck = rpptx.Presentation()
+    deck.slides.add_slide(deck.slide_layouts[6])
+    deck.slides[0].shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, unit, unit, 2 * unit, unit)
+    card = deck.slides[0].shapes[0]
+    card.text = "Card TOKEN"
+    card = deck.slides[0].shapes[0]
+    card.shadow.color.rgb = RGBColor(0x12, 0x34, 0x56)
+    card.shadow.alpha = 0.5
+    card.shadow.blur_radius = rpptx.Pt(6)
+    card.shadow.distance = rpptx.Pt(4)
+    card.shadow.direction = 45.0
+    deck.slides[0].shapes.add_connector(MSO_CONNECTOR.STRAIGHT, 4 * unit, unit, 7 * unit, unit)
+    connector = deck.slides[0].shapes[1]
+    connector.theme_effect_index = 0
+    connector.line.tail_end.type = MSO_ARROWHEAD_STYLE.TRIANGLE
+    connector.line.tail_end.width = MSO_ARROWHEAD_WIDTH.WIDE
+    connector.line.tail_end.length = MSO_ARROWHEAD_LENGTH.LONG
+    deck.slides[0].shapes.add_shape(MSO_SHAPE.RECTANGLE, unit, 3 * unit, 2 * unit, unit)
+    deck.slides[0].shapes[2].auto_shape_type = MSO_SHAPE.CHEVRON
+    deck.slides[0].shapes[2].text = "Preset"
+    imported = deck.slides.import_slide(source.slides[0], index=1)
+    assert imported.notes_text == "Imported notes"
+    assert imported.shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+
+    before = deck.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError):
+        deck.slides[0].try_replace_text("TOKEN", "ready", expect=2)
+    assert deck.to_bytes() == before
+    assert deck.slides[0].shapes[0].text_frame.try_replace_text("TOKEN", "ready", expect=1) == 1
+    assert deck.slides[1].try_replace_text("TOKEN", "ready", expect=1, notes=False) == 1
+    output = tmp_path / "issue-217-chain.pptx"
+    deck.save(output)
+    parts = _package_parts(output.read_bytes())
+    media_parts = [data for name, data in parts.items() if name.startswith("ppt/media/")]
+    assert [hashlib.sha256(data).hexdigest() for data in media_parts] == [
+        hashlib.sha256(_tiny_png(0x22, 0x88, 0xCC)).hexdigest()
+    ]
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        assert any(name.startswith("ppt/media/") for name in names)
+        assert any(name.startswith("ppt/notesSlides/") for name in names)
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            base = "" if name == "_rels/.rels" else name.rsplit("/_rels/", 1)[0]
+            for rel in ET.fromstring(archive.read(name)):
+                if rel.get("TargetMode") == "External":
+                    continue
+                target = rel.attrib["Target"]
+                resolved = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join(base, target))
+                assert resolved in names, (name, resolved)
+
+    reopened = rpptx.Presentation(output)
+    assert reopened.validate() == ()
+    assert len(reopened.slides) == 2
+    assert reopened.slides[0].shapes[0].shadow.color.rgb == RGBColor(0x12, 0x34, 0x56)
+    assert reopened.slides[0].shapes[1].theme_effect_index == 0
+    assert reopened.slides[0].shapes[1].line.tail_end.type == MSO_ARROWHEAD_STYLE.TRIANGLE
+    assert reopened.slides[0].shapes[2].auto_shape_type == MSO_SHAPE.CHEVRON
+    assert reopened.slides[0].shapes[0].text == "Card ready"
+    assert reopened.slides[1].shapes[0].text == "Imported ready"
+    assert reopened.slides[1].notes_text == "Imported notes"
+    assert reopened.slides[1].shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+
+    oracle = pptx.Presentation(output)
+    assert len(oracle.slides) == 2
+    card, connector, preset = oracle.slides[0].shapes
+    assert card.shadow.inherit is False and card.text == "Card ready"
+    assert card._element.xpath("./p:spPr/a:effectLst/a:outerShdw/@blurRad") == ["76200"]
+    assert connector._element.xpath("./p:style/a:effectRef/@idx") == ["0"]
+    assert connector._element.xpath("./p:spPr/a:ln/a:tailEnd/@type") == ["triangle"]
+    assert preset.auto_shape_type == pptx.enum.shapes.MSO_SHAPE.CHEVRON
+    assert oracle.slides[1].shapes[0].text == "Imported ready"
+    assert oracle.slides[1].shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+    assert oracle.slides[1].notes_slide.notes_text_frame.text == "Imported notes"
+
+    root = Path(__file__).resolve().parents[3]
+    subprocess.run(["cargo", "run", "--quiet", "-p", "rpptx-cli", "--", "validate", str(output)],
+                   cwd=root, check=True, capture_output=True, text=True)
+    soffice = os.environ.get("RPPTX_PINNED_SOFFICE") or shutil.which("soffice")
+    if not soffice:
+        pytest.skip("pinned LibreOffice viewer oracle is unavailable")
+    assert "LibreOffice 26.2.5.2" in subprocess.check_output([soffice, "--version"], text=True)
+    pdf_dir = tmp_path / "lo"
+    pdf_dir.mkdir()
+    subprocess.run([
+        soffice, "-env:UserInstallation=" + (tmp_path / "lo-profile").as_uri(),
+        "--headless", "--convert-to", "pdf", "--outdir", str(pdf_dir), str(output),
+    ], check=True, capture_output=True, text=True)
+    pdf = pdf_dir / "issue-217-chain.pdf"
+    assert pdf.is_file()
+    # At 72 DPI these windows isolate the six checklist items. The card
+    # covers both shadow and frame replacement, the connector covers its
+    # effect reference and line end, and slide two covers import and slide
+    # replacement. Text antialiasing accounts for the 24-level allowance.
+    windows = (
+        (("outer shadow", (60, 60, 240, 170)),
+         ("connector theme effect", (275, 55, 525, 165)),
+         ("line end", (275, 55, 525, 165)),
+         ("preset geometry", (60, 200, 245, 310)),
+         ("text-frame replacement", (60, 60, 240, 170))),
+        (("cross-deck import", (350, 60, 450, 170)),
+         ("slide replacement", (60, 60, 300, 170))),
+    )
+    for index, slide_windows in enumerate(windows):
+        subprocess.run([
+            "pdftoppm", "-f", str(index + 1), "-l", str(index + 1), "-r", "72",
+            "-png", "-singlefile", str(pdf), str(pdf_dir / f"slide{index + 1}"),
+        ], check=True, capture_output=True)
+        native = Image.open(io.BytesIO(reopened.render_slide_to_png(index, dpi=72.0))).convert("RGB")
+        viewer = Image.open(pdf_dir / f"slide{index + 1}.png").convert("RGB")
+        assert abs(native.width - viewer.width) <= 1 and native.height == viewer.height
+        viewer = viewer.crop((0, 0, native.width, native.height))
+        for label, box in slide_windows:
+            native_bytes = native.crop(box).tobytes()
+            viewer_bytes = viewer.crop(box).tobytes()
+            errors = [abs(left - right) for left, right in zip(native_bytes, viewer_bytes)]
+            close = sum(max(errors[offset:offset + 3]) <= 24 for offset in range(0, len(errors), 3))
+            assert close / (len(errors) / 3) >= 0.97, label
+            assert sum(errors) / len(errors) <= 3.0, label

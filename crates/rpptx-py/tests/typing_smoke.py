@@ -174,6 +174,12 @@ def exercise_rpptx_types(path: Path) -> None:
         replaced = presentation.try_replace_text("checked", "typed", expect=2)
     except ReplacementCountError as error:
         replacement_counts = (error.expected, error.found)
+    slide_replaced: int = presentation.slides[0].try_replace_text(
+        "typed", "checked", expect=None, notes=False
+    )
+    frame_replaced: int = (
+        presentation.slides[0].shapes[0].text_frame.try_replace_text("typed", "checked", expect=0)
+    )
     issues: tuple[ValidationIssue, ...] = presentation.validate()
     issue_lines: list[tuple[str, str]] = [(issue.kind, issue.message) for issue in issues]
     pdf_bytes: bytes = presentation.to_pdf()
@@ -292,6 +298,9 @@ def exercise_rpptx_types(path: Path) -> None:
     presentation.slides[0].shapes.remove(group)
     duplicated: Slide = presentation.slides.duplicate(presentation.slides[0])
     presentation.slides.move(0, -1)
+    imported: Slide = presentation.slides.import_slide(
+        presentation.slides[0], layout=presentation.slide_layouts[0], index=0
+    )
     presentation.slides.remove(presentation.slides[0])
     presentation.save(path)
     (
@@ -357,6 +366,8 @@ def exercise_rpptx_types(path: Path) -> None:
         reopened,
         replaced,
         replacement_counts,
+        slide_replaced,
+        frame_replaced,
         issue_lines,
     )
 

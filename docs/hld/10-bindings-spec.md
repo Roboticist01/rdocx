@@ -448,6 +448,11 @@ live `FillFormat` over the direct background fill that never changes the slide
 when read, and `follow_master_background` reports and sets whether the slide
 has no `p:bg`. `SlideCollection.remove` and `SlideCollection.move(from_, to)`
 use the native staged slide operations and advance the revision once.
+`SlideCollection.import_slide(slide, layout=None, index=None)` wraps the native
+import. `layout` must be a layout of the destination. `index` is an insertion
+position counted from the end when negative, and one outside the collection is
+an `IndexError`. A slide of the same presentation is imported from a snapshot
+and keeps its own layout unless `layout` is given.
 `SlideCollection.duplicate(slide)` copies a slide of the same presentation,
 with its speaker notes, to the position right after it through the native
 staged `duplicate_slide`, advances the revision once, and returns the new slide
@@ -611,6 +616,14 @@ A negative index counts from the end, as in `list.insert`, and an index outside
 these edits advances the revision once, because row, column, and cell handles
 name indices, and the returned handle is captured after the change.
 
+The Presentation Python `Table` handle has no built-in table style selector.
+For a style GUID not exposed by the binding, the supported fallback is to save
+the deck, replace only the matching table's `a:tblPr/a:tableStyleId` in the
+slide XML inside the ZIP package, and reopen it. The writer must preserve all
+other decompressed parts and validate internal relationship targets after the
+edit. A style GUID supplied this way is a package-level edit, not a Python
+`Table` API operation.
+
 `TextFrame.autofit`
 reports `none`, `normal`, or `shape` when the body carries an explicit choice.
 `Run.font` reads the run's direct Latin name, size, and sRGB colour, while the
@@ -693,6 +706,20 @@ in an ordinary shape's UTF-16 text. Invalid targets, duplicate text contexts
 on one slide, and invalid ranges leave the presentation unchanged. Without
 these arguments, the comment uses the
 existing unknown-anchor form.
+
+`Slide.try_replace_text(placeholder, replacement, *, expect=None, notes=True)`
+and `TextFrame.try_replace_text(placeholder, replacement, *, expect=None)`
+keep that contract over a narrower scope. The slide form covers the slide's
+shapes, groups and table cells, plus its speaker notes unless `notes` is
+false, and leaves every other slide untouched. The text frame form covers that
+frame only. The count, the error and its message, the unchanged presentation
+and revision after a mismatch, and the single revision advance are those of
+the presentation form, so a replacement that changes something invalidates
+every held handle, including the slide or frame it was called on. Neither
+form clones the presentation. The slide form works on a copy of that slide
+and its notes and checks that they serialize. The frame form works on a copy
+of the text body when `expect` is given, in place otherwise, and serializes
+nothing, because replacing run text cannot make a body fail to serialize.
 
 `Presentation.validate()` runs the native `validate` with the GIL released and
 returns a tuple of frozen `ValidationIssue` snapshots in native order. Each
