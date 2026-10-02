@@ -1,6 +1,6 @@
 # F-X157, Complete deck-chain authoring checklist
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S81
 **Size**: L
 **Depends on**: F-X148, F-X155, F-X156
@@ -55,11 +55,11 @@ Expected unchanged. A newly observed output delta blocks completion until it is 
 
 ## Implementation checklist
 
-- [ ] Enumerate the six Issue 217 operations and their existing S80 evidence.
-- [ ] Execute the complete Python deck chain on the integrated F-X148 prefix.
-- [ ] Reopen in python-pptx, validate and compare pinned cross-viewer output per item.
-- [ ] Record reviewed scope boundaries and fallbacks for unsupported operations.
-- [ ] Run scoped verification and microscope to zero findings.
+- [x] Enumerate the six Issue 217 operations and their existing S80 evidence.
+- [x] Execute the complete Python deck chain on the integrated F-X148 prefix.
+- [x] Reopen in python-pptx, validate and compare pinned cross-viewer output per item.
+- [x] Record reviewed scope boundaries and fallbacks for unsupported operations.
+- [x] Run scoped verification and microscope to zero findings.
 
 ## Open questions
 

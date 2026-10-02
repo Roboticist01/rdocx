@@ -2820,6 +2820,32 @@ antialiasing while rejecting a displaced or absent shape over the sparse slide.
 | Effective geometry and groups | Production chain, `test_issue_169_effective_geometry_materializes_missing_partners`, `test_group_shapes_add_members_and_the_group_fits_them` |
 | Counted and scoped replacement | Production chain, `test_issue_169_replace_text_alias_is_counted_and_atomic`, `test_try_replace_text_scoped_to_a_slide_or_a_text_frame` |
 
+The Issue 217 deck gate `test_issue_217_complete_deck_chain` authors six
+operations in one package: an outer shadow, connector theme effect suppression,
+a triangle line end, preset replacement, cross-deck slide import, and counted
+replacement at text-frame and slide scope. The imported slide contains media
+and speaker notes. A failed replacement count leaves the package unchanged.
+The saved deck reopens in pinned python-pptx 1.0.2 and rpptx, passes `rpptx
+validate`, and has no dangling internal relationship targets. The imported
+image bytes match their source SHA-256 digest. Pinned LibreOffice 26.2.5.2
+renders both slides for comparison with rpptx at 72 DPI using bundled fonts.
+Each operation has an isolated raster window. The gate permits the one-pixel
+PDF width expansion and requires at least 97 percent of window pixels within
+24 RGB levels and mean absolute channel error at most 3.0. This tolerance
+allows text antialiasing and the shadow blur while rejecting missing geometry
+or a displaced image. There is no unsupported operation in this six-item
+chain. PowerPoint 16.104 remains an unobserved viewer, so the pinned
+LibreOffice render and python-pptx structure are the repeatable fallback.
+
+| Issue 217 item | Focused evidence before the combined gate |
+|---|---|
+| Outer shadow | `test_shadow_parameters_write_the_outer_shadow_on_every_kind_python_pptx_shadows` |
+| Connector theme effect suppression | `test_theme_effect_index_zero_drops_the_connector_theme_shadow` |
+| Line ends | `test_line_dash_style_and_ends_write_what_python_pptx_reads` |
+| Preset replacement | `test_auto_shape_type_reads_like_python_pptx_and_replaces_the_preset` |
+| Cross-deck import | `test_import_slide_carries_pictures_links_notes_and_background_from_another_deck` |
+| Counted slide and frame replacement | `test_try_replace_text_scoped_to_a_slide_or_a_text_frame` |
+
 The rpptx text-property gate `test_text_properties_agree_with_python_pptx_in_both_directions`
 writes text frame, paragraph, and run font values with each library and reads
 them back with the other. `test_text_enums_match_python_pptx_member_values_and_xml_tokens`

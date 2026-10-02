@@ -6258,6 +6258,14 @@ render without losing media, notes or relationships.
 Finish all six Issue 217 items after their PRs, including scope decisions
 where explicitly allowed. Check the complete chain in both Python APIs and
 independent viewers.
+The acceptance chain changes a shape's preset, sets its direct outer shadow,
+suppresses a connector's theme effect, and adds a line end before importing a
+slide with media and notes and replacing text at slide and frame scope. The
+saved package is read by python-pptx 1.0.2, validated by the rpptx CLI, and
+rendered by LibreOffice 26.2.5.2 and deterministic rpptx at 72 DPI. Each item
+has a scoped raster comparison with the tolerance in the testing strategy.
+No authoring operation needs a fallback. Pinned LibreOffice and structural
+reopen provide viewer evidence where PowerPoint 16.104 is unavailable.
 **Depends on**: F-X148, F-X155, F-X156.
 **Test gate**: differential. Each item passes python-pptx reopen, `rpptx
 validate` and LibreOffice versus rpptx rendering, or has a reviewed scope

@@ -4232,3 +4232,150 @@ def test_issue_169_complete_production_deck_chain(tmp_path):
         close = sum(max(errors[index:index + 3]) <= 24 for index in range(0, len(errors), 3))
         mean_error = sum(errors) / len(errors)
         assert close / pixels >= 0.97 and mean_error <= 2.0, (close / pixels, mean_error)
+
+
+def test_issue_217_complete_deck_chain(tmp_path):
+    """Issue 217's six authoring items survive one package and both readers."""
+    import hashlib
+    import os
+    import posixpath
+    import shutil
+    import subprocess
+    import xml.etree.ElementTree as ET
+    from pathlib import Path
+
+    import pptx
+    import rpptx
+    from PIL import Image
+    from rpptx.dml.color import RGBColor
+    from rpptx.enum.dml import MSO_ARROWHEAD_LENGTH, MSO_ARROWHEAD_STYLE, MSO_ARROWHEAD_WIDTH
+    from rpptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+
+    assert importlib.metadata.version("python-pptx") == "1.0.2"
+    unit = rpptx.Inches(1)
+    source = rpptx.Presentation()
+    source.slides.add_slide(source.slide_layouts[6])
+    source.slides[0].shapes.add_textbox(unit, unit, 3 * unit, unit).text = "Imported TOKEN"
+    source.slides[0].shapes.add_picture(_tiny_png(0x22, 0x88, 0xCC), 5 * unit, unit, unit, unit)
+    source.slides[0].notes_text = "Imported notes"
+
+    deck = rpptx.Presentation()
+    deck.slides.add_slide(deck.slide_layouts[6])
+    deck.slides[0].shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, unit, unit, 2 * unit, unit)
+    card = deck.slides[0].shapes[0]
+    card.text = "Card TOKEN"
+    card = deck.slides[0].shapes[0]
+    card.shadow.color.rgb = RGBColor(0x12, 0x34, 0x56)
+    card.shadow.alpha = 0.5
+    card.shadow.blur_radius = rpptx.Pt(6)
+    card.shadow.distance = rpptx.Pt(4)
+    card.shadow.direction = 45.0
+    deck.slides[0].shapes.add_connector(MSO_CONNECTOR.STRAIGHT, 4 * unit, unit, 7 * unit, unit)
+    connector = deck.slides[0].shapes[1]
+    connector.theme_effect_index = 0
+    connector.line.tail_end.type = MSO_ARROWHEAD_STYLE.TRIANGLE
+    connector.line.tail_end.width = MSO_ARROWHEAD_WIDTH.WIDE
+    connector.line.tail_end.length = MSO_ARROWHEAD_LENGTH.LONG
+    deck.slides[0].shapes.add_shape(MSO_SHAPE.RECTANGLE, unit, 3 * unit, 2 * unit, unit)
+    deck.slides[0].shapes[2].auto_shape_type = MSO_SHAPE.CHEVRON
+    deck.slides[0].shapes[2].text = "Preset"
+    imported = deck.slides.import_slide(source.slides[0], index=1)
+    assert imported.notes_text == "Imported notes"
+    assert imported.shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+
+    before = deck.to_bytes()
+    with pytest.raises(rpptx.ReplacementCountError):
+        deck.slides[0].try_replace_text("TOKEN", "ready", expect=2)
+    assert deck.to_bytes() == before
+    assert deck.slides[0].shapes[0].text_frame.try_replace_text("TOKEN", "ready", expect=1) == 1
+    assert deck.slides[1].try_replace_text("TOKEN", "ready", expect=1, notes=False) == 1
+    output = tmp_path / "issue-217-chain.pptx"
+    deck.save(output)
+    parts = _package_parts(output.read_bytes())
+    media_parts = [data for name, data in parts.items() if name.startswith("ppt/media/")]
+    assert [hashlib.sha256(data).hexdigest() for data in media_parts] == [
+        hashlib.sha256(_tiny_png(0x22, 0x88, 0xCC)).hexdigest()
+    ]
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        assert any(name.startswith("ppt/media/") for name in names)
+        assert any(name.startswith("ppt/notesSlides/") for name in names)
+        for name in names:
+            if not name.endswith(".rels"):
+                continue
+            base = "" if name == "_rels/.rels" else name.rsplit("/_rels/", 1)[0]
+            for rel in ET.fromstring(archive.read(name)):
+                if rel.get("TargetMode") == "External":
+                    continue
+                target = rel.attrib["Target"]
+                resolved = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join(base, target))
+                assert resolved in names, (name, resolved)
+
+    reopened = rpptx.Presentation(output)
+    assert reopened.validate() == ()
+    assert len(reopened.slides) == 2
+    assert reopened.slides[0].shapes[0].shadow.color.rgb == RGBColor(0x12, 0x34, 0x56)
+    assert reopened.slides[0].shapes[1].theme_effect_index == 0
+    assert reopened.slides[0].shapes[1].line.tail_end.type == MSO_ARROWHEAD_STYLE.TRIANGLE
+    assert reopened.slides[0].shapes[2].auto_shape_type == MSO_SHAPE.CHEVRON
+    assert reopened.slides[0].shapes[0].text == "Card ready"
+    assert reopened.slides[1].shapes[0].text == "Imported ready"
+    assert reopened.slides[1].notes_text == "Imported notes"
+    assert reopened.slides[1].shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+
+    oracle = pptx.Presentation(output)
+    assert len(oracle.slides) == 2
+    card, connector, preset = oracle.slides[0].shapes
+    assert card.shadow.inherit is False and card.text == "Card ready"
+    assert card._element.xpath("./p:spPr/a:effectLst/a:outerShdw/@blurRad") == ["76200"]
+    assert connector._element.xpath("./p:style/a:effectRef/@idx") == ["0"]
+    assert connector._element.xpath("./p:spPr/a:ln/a:tailEnd/@type") == ["triangle"]
+    assert preset.auto_shape_type == pptx.enum.shapes.MSO_SHAPE.CHEVRON
+    assert oracle.slides[1].shapes[0].text == "Imported ready"
+    assert oracle.slides[1].shapes[1].image.blob == _tiny_png(0x22, 0x88, 0xCC)
+    assert oracle.slides[1].notes_slide.notes_text_frame.text == "Imported notes"
+
+    root = Path(__file__).resolve().parents[3]
+    subprocess.run(["cargo", "run", "--quiet", "-p", "rpptx-cli", "--", "validate", str(output)],
+                   cwd=root, check=True, capture_output=True, text=True)
+    soffice = os.environ.get("RPPTX_PINNED_SOFFICE") or shutil.which("soffice")
+    if not soffice:
+        pytest.skip("pinned LibreOffice viewer oracle is unavailable")
+    assert "LibreOffice 26.2.5.2" in subprocess.check_output([soffice, "--version"], text=True)
+    pdf_dir = tmp_path / "lo"
+    pdf_dir.mkdir()
+    subprocess.run([
+        soffice, "-env:UserInstallation=" + (tmp_path / "lo-profile").as_uri(),
+        "--headless", "--convert-to", "pdf", "--outdir", str(pdf_dir), str(output),
+    ], check=True, capture_output=True, text=True)
+    pdf = pdf_dir / "issue-217-chain.pdf"
+    assert pdf.is_file()
+    # At 72 DPI these windows isolate the six checklist items. The card
+    # covers both shadow and frame replacement, the connector covers its
+    # effect reference and line end, and slide two covers import and slide
+    # replacement. Text antialiasing accounts for the 24-level allowance.
+    windows = (
+        (("outer shadow", (60, 60, 240, 170)),
+         ("connector theme effect", (275, 55, 525, 165)),
+         ("line end", (275, 55, 525, 165)),
+         ("preset geometry", (60, 200, 245, 310)),
+         ("text-frame replacement", (60, 60, 240, 170))),
+        (("cross-deck import", (350, 60, 450, 170)),
+         ("slide replacement", (60, 60, 300, 170))),
+    )
+    for index, slide_windows in enumerate(windows):
+        subprocess.run([
+            "pdftoppm", "-f", str(index + 1), "-l", str(index + 1), "-r", "72",
+            "-png", "-singlefile", str(pdf), str(pdf_dir / f"slide{index + 1}"),
+        ], check=True, capture_output=True)
+        native = Image.open(io.BytesIO(reopened.render_slide_to_png(index, dpi=72.0))).convert("RGB")
+        viewer = Image.open(pdf_dir / f"slide{index + 1}.png").convert("RGB")
+        assert abs(native.width - viewer.width) <= 1 and native.height == viewer.height
+        viewer = viewer.crop((0, 0, native.width, native.height))
+        for label, box in slide_windows:
+            native_bytes = native.crop(box).tobytes()
+            viewer_bytes = viewer.crop(box).tobytes()
+            errors = [abs(left - right) for left, right in zip(native_bytes, viewer_bytes)]
+            close = sum(max(errors[offset:offset + 3]) <= 24 for offset in range(0, len(errors), 3))
+            assert close / (len(errors) / 3) >= 0.97, label
+            assert sum(errors) / len(errors) <= 3.0, label
