@@ -30,7 +30,7 @@ explicit scope decision and fallback for any unsupported operation.
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X156 | Presentation slide and table contribution | L | pending | - |
+| F-X156 | Presentation slide and table contribution | L | in-progress | codex |
 | F-X148 | Complete rpptx Python production checklist | L | pending | - |
 | F-X157 | Complete deck-chain authoring checklist | L | pending | - |
 
