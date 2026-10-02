@@ -16934,3 +16934,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged, all 49 entries matched on the integrated S82 result.
 
 **Notes for future sessions.** `/close-sprint` checks live issue state only after the verified integration reaches `main`. Keep `work/f-x150-codex` until sprint closure.
+
+### F-X159, Word document validity baseline
+
+**Sprint.** S83
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Fresh Word-compatible packages now stamp AppVersion in the `XX.YYYY` form that Word opens. Saving a loaded package repairs an invalid AppVersion, retaining an `rdocx` stamp or removing a foreign invalid value. `Cell::add_table` leaves the required trailing paragraph after an authored nested table.
+
+**Non-obvious choices.** A valid producer AppVersion keeps the application-properties part byte-identical. Repair retains an unmodeled extension subtree exactly. The `rdocx` archive footprint and its README assertion were remeasured from this source tree. The hash baseline moved only for the nested-table paragraph in the feature showcase.
+
+**Deviations from the design plan.** The README archive measurement and its assertion carrier changed after the repository policy gate measured the new package size. The plan anticipated that check but did not list these generated measurements as implementation files.
+
+**Spec sections touched.** `docs/hld/04-opc-and-packaging.md`, "The package" and "Package integrity", and `docs/hld/12-testing-strategy.md`, "The hash harness".
+
+**Tests.** Microsoft Word 16.113.2 opened the source-built `feature_showcase.docx`, including its nested table, without a repair prompt. The worker passed 486 `rdocx` unit, 331 integration, 711 regression and two doc tests using pinned Poppler 26.01.0, LibreOffice 26.2.5.2 and an 8 MiB test-thread stack. Focused AppVersion, extension preservation and nested-table tests passed. Scoped formatting, Clippy, prose, generated-skill and workflow policy checks passed. Microscope pass 2 found zero defects and zero smells. The integrated prefix passed the focused nested-table regression and the 49-entry hash harness. Full sprint verification and sprint review remain due.
+
+**Hash harness.** Exactly `feature_showcase:word/document.xml`, `feature_showcase:pdf/pages` and `feature_showcase:pdf/bytes` changed because of the trailing cell paragraph. All 49 entries matched the reviewed baseline in the worker and integrated prefix.
+
+**Notes for future sessions.** F-X160 can now run against this completed validity prefix. Keep `work/f-x159-codex` through sprint verification and review.
