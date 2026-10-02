@@ -1,8 +1,13 @@
 import importlib.metadata
+import hashlib
+import os
 import re
 import struct
+import subprocess
+import urllib.request
 import zipfile
 import zlib
+from pathlib import Path
 
 import pytest
 
@@ -631,6 +636,7 @@ _MATRIX_TIMESTAMP = "2026-09-27T12:00:00Z"
 _MATRIX_W14 = "{http://schemas.microsoft.com/office/word/2010/wordml}"
 _MATRIX_XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 _MATRIX_IDENTITY_ROWS = (
+    (None, None),
     ("paragraphs", "w:rsidR"),
     ("paragraphs", "w:rsidRDefault"),
     ("paragraphs", "w:rsidP"),
@@ -801,20 +807,32 @@ def test_issue_159_identity_matrix_across_operations(tmp_path, where, attr):
     plain = _matrix_fixture(tmp_path / "plain.docx")
     source = _matrix_fixture(tmp_path / "source.docx", where, attr)
     edited = _matrix_fixture(tmp_path / "edited.docx", where, attr, word="ALPHA")
-    assert _matrix_attribute_count(source, attr) > 0
+    assert len(_MATRIX_IDENTITY_ROWS) == 18
+    assert len(_MATRIX_IDENTITY_ROWS) * 7 == 126
+    if attr is not None:
+        assert _matrix_attribute_count(source, attr) > 0
     if attr == "w:tag":
         assert b'block-2' in _matrix_part(source, "word/document.xml")
     document = rdocx.Document(source)
     assert document.try_replace_text("Body text of section 3.1.", "Body text of section three.") == 1
     saved = tmp_path / "saved.docx"
     document.save(saved)
-    assert _matrix_attribute_count(source, attr) == _matrix_attribute_count(saved, attr)
+    if attr is not None:
+        assert _matrix_attribute_count(source, attr) == _matrix_attribute_count(saved, attr)
+    else:
+        assert _matrix_part(source, "word/document.xml") != _matrix_part(saved, "word/document.xml")
 
     document = rdocx.Document(source)
     assert document.try_replace_text("lorem", "LOREM") == 3
-    document.save(tmp_path / "replaced.docx")
+    replaced = tmp_path / "replaced.docx"
+    document.save(replaced)
+    assert b"LOREM" in _matrix_part(replaced, "word/document.xml")
     assert rdocx.Document(source).rebuild_toc().entry_count == 6
-    assert rdocx.Document(source).update_page_fields() >= 0
+    fields = rdocx.Document(source)
+    fields.update_page_fields()
+    refreshed = tmp_path / "refreshed.docx"
+    fields.save(refreshed)
+    assert len(re.findall(rb'fldCharType="separate"/>(?:</w:r><w:r>)?<w:t>([^<]*)</w:t>', _matrix_part(refreshed, "word/footer1.xml"))) == 2
     assert rdocx.Document(source).to_pdf().startswith(b"%PDF")
     assert _matrix_comparison_count(plain, source) == 0
     assert _matrix_comparison_count(source, edited) == 2
@@ -917,6 +935,9 @@ def test_issue_160_producer_matrix_across_operations_and_picture(tmp_path, trait
     _assert_oracle_version()
     import rdocx
 
+    assert len(_MATRIX_PRODUCER_ROWS) == 11
+    assert len(_MATRIX_PRODUCER_ROWS) * 8 == 88
+
     source = _matrix_rewrite(_matrix_fixture(tmp_path / "source.docx"), trait)
     edited = _matrix_rewrite(_matrix_fixture(tmp_path / "edited.docx", word="ALPHA"), trait)
     document = rdocx.Document(source)
@@ -936,7 +957,7 @@ def test_issue_160_producer_matrix_across_operations_and_picture(tmp_path, trait
     footer = _matrix_part(refreshed, "word/footer1.xml").decode()
     assert len(re.findall(r'fldCharType="separate"/>(?:</w:r><w:r>)?<w:t>([^<]*)</w:t>', footer)) == 2
     assert rdocx.Document(source).to_pdf().startswith(b"%PDF")
-    _matrix_comparison_count(source, refreshed)
+    assert isinstance(_matrix_comparison_count(source, refreshed), int)
     assert _matrix_comparison_count(source, edited) == 2
     assert _matrix_comparison_count(source, replaced) == 2
 
@@ -949,6 +970,139 @@ def test_issue_160_producer_matrix_across_operations_and_picture(tmp_path, trait
     _matrix_assert_trait(pictured_path, trait)
     assert reopened.try_replace_text("alpha", "ALPHA") == 1
     assert reopened.to_pdf().startswith(b"%PDF")
+
+
+_ISSUE158_REPORT_SHA256 = "d05f9c753c00eb804c6e345126ef7a1f7a4fc635d2c9b653b829922030cd875e"
+_ISSUE158_REPORT_URL = "https://github.com/user-attachments/files/32701104/fixture-report.docx"
+
+
+def _issue158_report(tmp_path):
+    source = os.environ.get("RDOCX_ISSUE158_REPORT")
+    if source:
+        data = Path(source).read_bytes()
+    else:
+        with urllib.request.urlopen(_ISSUE158_REPORT_URL, timeout=30) as response:
+            data = response.read()
+    assert hashlib.sha256(data).hexdigest() == _ISSUE158_REPORT_SHA256
+    path = tmp_path / "fixture-report.docx"
+    path.write_bytes(data)
+    return path
+
+
+def test_issue_158_word_fixture_acceptance(tmp_path):
+    _assert_oracle_version()
+    import rdocx
+    from docx import Document as OracleDocument
+
+    assert len(_MATRIX_IDENTITY_ROWS) == 18
+    assert len(_MATRIX_PRODUCER_ROWS) == 11
+    assert (len(_MATRIX_IDENTITY_ROWS) * 7, len(_MATRIX_PRODUCER_ROWS) * 8) == (126, 88)
+    report = _issue158_report(tmp_path)
+    oracle = OracleDocument(report)
+    assert len(oracle.paragraphs) == 90
+    assert [(len(table.rows), len(table.columns)) for table in oracle.tables] == [
+        (57, 6), (8, 5), (6, 2)
+    ]
+    document = rdocx.Document(report)
+    assert [paragraph.text for paragraph in document.paragraphs[:2]] == [
+        "Riverton Footbridge",
+        "Principal inspection and condition survey, 2025",
+    ]
+    assert [len(table.rows) for table in document.tables] == [57, 8, 6]
+
+
+def test_issue_158_complete_word_workflow(tmp_path):
+    _assert_oracle_version()
+    import rdocx
+
+    source = _issue158_report(tmp_path)
+    assert rdocx.Document(source).rebuild_toc().entry_count == 21
+    document = rdocx.Document(source)
+    word = "described"
+    assert sum(paragraph.text.count(word) for paragraph in document.paragraphs) == 1
+    probe = rdocx.Document.from_bytes(document.to_bytes())
+    assert probe.try_replace_text(word, word.upper()) == 1
+    assert document.try_replace_text(word, word.upper()) == 1
+
+    xml = _matrix_part(source, "word/document.xml").decode()
+    controls = re.findall(
+        r'<w:sdt>(?:(?!</w:sdtPr>).)*?<w:tag w:val="([^"]+)"/>.*?</w:sdtPr><w:sdtContent>(.*?)</w:sdtContent>',
+        xml,
+    )
+    assert [tag for tag, _ in controls] == ["goog_rdk_0", "goog_rdk_1"]
+    for _, inner in controls:
+        text = "".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", inner))
+        probe = rdocx.Document.from_bytes(document.to_bytes())
+        assert probe.try_replace_text(text.split(".")[0], "X") == 1
+
+    index = next(i for i, paragraph in enumerate(document.paragraphs) if word.upper() in paragraph.text)
+    body_index = document.find_content_index(document.paragraphs[index])
+    document.clone_content(document.paragraphs[index], body_index + 1)
+    for i, run in enumerate(document.paragraphs[index + 1].runs):
+        run.text = "Inserted paragraph." if i == 0 else ""
+    assert document.paragraphs[index + 1].text == "Inserted paragraph."
+    table = document.tables[0]
+    row_count = len(table.rows)
+    table.clone_row(row_count - 1)
+    for column in range(len(document.tables[0].rows[row_count].cells)):
+        document.tables[0].rows[row_count].cells[column].text = "cloned"
+    document.tables[0].remove_row(row_count)
+    assert len(document.tables[0].rows) == row_count == 57
+
+    first_table = document.find_content_index(document.tables[0])
+    def direct_body_index(paragraph):
+        try:
+            return document.find_content_index(paragraph)
+        except ValueError:
+            return -1
+
+    target_index = next(
+        index for index, paragraph in enumerate(document.paragraphs)
+        if len(paragraph.runs) == 1 and len(paragraph.text) > 60
+        and direct_body_index(paragraph) > first_table
+    )
+    target = document.paragraphs[target_index]
+    text = target.text
+    body_index = document.find_content_index(target)
+    document.split_run(body_index, 0, 30)
+    document.split_run(body_index, 0, 10)
+    assert document.paragraphs[target_index].runs[1].text == text[10:30]
+    bounds = rdocx.RunRange(
+        start=rdocx.RunPosition(body_index=body_index, run_index=1),
+        end=rdocx.RunPosition(body_index=body_index, run_index=2),
+    )
+    comment_id = document.add_comment(bounds, author="Reviewer", text="Comment on a piece of text.", initials="R")
+    document.reply_to(comment_id, author="Reviewer", text="Reply.")
+    document.resolve_comment(comment_id)
+    assert document.paragraphs[target_index].text == text
+
+    drawing = next(
+        item.xml.decode() if isinstance(item.xml, bytes) else item.xml
+        for item in document.story_items
+        if item.xml and "r:embed" in (item.xml.decode() if isinstance(item.xml, bytes) else item.xml)
+    )
+    image_id = re.search(r'r:embed="([^"]+)"', drawing).group(1)
+    document.replace_image(image_id, _matrix_png())
+    assert document.image_data(image_id) == _matrix_png()
+    assert document.update_layout_backed_fields().updated_count == 2
+    assert document.rebuild_toc().entry_count == 21
+    edited = tmp_path / "edited.docx"
+    document.save(edited)
+    assert zipfile.ZipFile(edited).namelist()[0] == "[Content_Types].xml"
+
+    redline = tmp_path / "redline.docx"
+    cli = os.environ.get("RDOCX_CLI")
+    command = [cli] if cli else [
+        "cargo", "run", "--quiet", "--locked", "-p", "rdocx-cli", "--"
+    ]
+    result = subprocess.run(
+        command + ["compare", str(source), str(edited), "--author", "Reviewer",
+                   "--timestamp", _MATRIX_TIMESTAMP, "-o", str(redline)],
+        cwd=Path(__file__).resolve().parents[3], capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(rdocx.Document(redline).revisions) > 0
+    assert rdocx.Document(edited).to_pdf().startswith(b"%PDF")
 
 
 def test_issue_161_rebuilt_toc_compares_and_resolves_both_sides(tmp_path):

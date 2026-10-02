@@ -1825,6 +1825,20 @@ sample identity, dimensions, normalization provenance, or case coverage.
 
 ## The Word corpus
 
+The Issue 158 acceptance gate fetches the original report attachment by its
+SHA-256 digest `d05f9c753c00eb804c6e345126ef7a1f7a4fc635d2c9b653b829922030cd875e`.
+The source-built identity matrix has 18 rows, including the no-attribute
+control, and seven operation columns. The producer matrix has 11 rows and
+eight operation columns. Python parity tests assert the 126 and 88 cells,
+their saved structural effects and comparison counts against
+`python-docx==1.2.0` where its object model can read them. The pinned report
+has 90 ordinary paragraphs, tables of 57 by 6, 8 by 5 and 6 by 2, and a
+21-entry rebuilt table of contents. A separate complete workflow edits that
+same report through Python, saves it, creates a CLI redline, reopens it and
+renders a PDF with bundled fonts. The reporter's 12-step script archive has
+SHA-256 `e448d27c8ed4b060749b1b0cbd2c833cd2e4445d49cda9ad34069b8e80bb7f0c`.
+The binary report and archive live in ignored test storage rather than git.
+
 The modern Word package-class gate source-builds DOCX, DOCM, DOTX, and DOTM
 from one valid WordprocessingML graph. ZIP, `Document`, Flat OPC, and converted
 ZIP round trips must retain the exact class, VBA bytes, relationship scopes,

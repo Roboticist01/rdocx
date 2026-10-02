@@ -1923,6 +1923,11 @@ The native facade stages the main story from package-authoritative XML and
 preserves exact unchanged drawing wrappers even when sibling text in the same
 paragraph, table, cell, or control changes. Accepting and rejecting the result
 retain the drawing payload, relationship graph, and media bytes.
+When edited image bytes replace an existing image relationship payload,
+comparison carries the edited bytes in a distinct media part and owner
+relationship. The drawing run receives a tracked replacement. Acceptance
+resolves the edited relationship and bytes, while rejection retains the
+original relationship and bytes. Unrelated package parts remain unchanged.
 When a matched paragraph changes a comment range, hyperlink, inline control,
 or preserved child boundary, comparison tracks a complete paragraph deletion
 and insertion if its bookmarks remain in place. The rebuilt TOC entry
