@@ -1,6 +1,6 @@
 # F-X162, Per-paragraph section width and pagination
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-X161
@@ -62,11 +62,11 @@ No golden PNG change is expected from this increment.
 
 ## Implementation checklist
 
-- [ ] Rebase and review PR 241's incremental section change after F-X161.
-- [ ] Assign the governing section to every main body item before layout.
-- [ ] Run mixed-section, continuous-break and two-column focused cases.
-- [ ] Review the separate deterministic hash delta.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Rebase and review PR 241's incremental section change after F-X161.
+- [x] Assign the governing section to every main body item before layout.
+- [x] Run mixed-section, continuous-break and two-column focused cases.
+- [x] Review the separate deterministic hash delta.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 
