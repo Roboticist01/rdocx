@@ -534,6 +534,7 @@ defended.
 | F-X160 | S83 | L | 5 | 1 | 2026-10-02 | Accepted producer style, drawing ID and decimal measurement variants with unchanged 49-entry hash output |
 | F-X169 | S84 | L | 5 | 1 | 2026-10-02 | Classified all 31 live PRs and eight issues, tied 19 older PRs to S76 integration commits, and aligned the whole-number roadmap assertion |
 | F-X161 | S84 | L | 5 | 1 | 2026-10-02 | Integrated PR 251's compact Word part serializers and namespace preservation with 20 reviewed Word XML baseline entries |
+| F-X165 | S84 | M | 3 | 1 | 2026-10-02 | Integrated PR 256's Python and CLI accepted or tracked view selectors with pinned PDF text evidence and invalid-selector checks |
 
 ## Velocity
 

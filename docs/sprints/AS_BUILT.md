@@ -17014,3 +17014,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Exactly 20 `word/document.xml`, `word/numbering.xml` and `word/styles.xml` digests changed across the samples. No PDF or PNG entry changed. All 49 entries match the reviewed baseline.
 
 **Notes for future sessions.** F-X162 may start on this completed baseline prefix. Issue 245 and the remaining Issue 160 serialization criteria stay open until the final integrated result reaches main. Keep `work/f-x161-codex` through sprint verification and review.
+
+### F-X165, Python and CLI tracked revision view
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Reconciled PR 256 against the completed intake and Word prefix. Python render methods and the Word CLI now select accepted or tracked revision views, reject invalid selectors and retain the accepted default. The CLI package archive measurement and README assertion were refreshed.
+
+**Non-obvious choices.** The F-X165 branch predates F-X161, so its squash required a manual reconciliation in the shared archive inventory. The integrated assertion keeps F-X161's `rdocx` and `rdocx-oxml` measurements and F-X165's `rdocx-cli` measurement. A separate integration microscope pass checked that conflict.
+
+**Deviations from the design plan.** The CLI archive measurement changed after the policy suite measured the new command surface. No new product API type was introduced.
+
+**Spec sections touched.** `docs/hld/08-rendering-spec.md`, revision view selection, and `docs/hld/10-bindings-spec.md`, Python and CLI signatures and errors.
+
+**Tests.** The worker passed 58 CLI tests, 99 isolated Python core and render tests with pinned Poppler 26.01.0, scoped Clippy, formatting, WASM, 132 repository policy tests, prose and generated-skill checks. Microscope pass 2 found zero defects and zero smells. The integrated reconciliation passed the archive assertion comparison, prose and 49-entry hash harness. Full sprint verification and sprint review remain due.
+
+**Hash harness.** Unchanged from the F-X161 prefix, all 49 entries matched.
+
+**Notes for future sessions.** F-X166 may start. Issue 253 remains open until the accepted-view follow-ups and final integrated Python and CLI gate pass on main. Keep `work/f-x165-codex` through sprint verification and review.
