@@ -16974,3 +16974,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged relative to the completed F-X159 prefix. All 49 entries matched in the worker and integrated result. The only S83 baseline movement remains F-X159's declared three feature-showcase entries.
 
 **Notes for future sessions.** Keep `work/f-x160-codex` through sprint review and closure. Issues 243, 246 and 247 have implementation evidence in the S83 result. Issue state changes belong after the sprint reaches `main`.
+
+### F-X169, Reconcile live contributions and open issue contracts
+
+**Sprint.** S84
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Refreshed the live GitHub intake of 31 PRs and eight open issues. The single S84 plan records each head, review and CI state, stack, overlap, issue coverage and remaining acceptance criterion. All 19 older open PRs have a supersession disposition tied to the S76 integration commits `26b3f880`, `c8975fb4` and `992930ce`. The 12 pending heads remain assigned to F-X161 through F-X167. The existing M23 and M24 roadmap assertion now checks the revised S85 to S90 schedule.
+
+**Non-obvious choices.** The older PR behavior was adopted incrementally in S76, while duplicate ancestors and measurement-only tails were omitted. Supersession is conditional on the final S84 combined gates. The open PR heads have no later revision than the recorded intake. The three hash baseline owners remain separate.
+
+**Deviations from the design plan.** The approved plan was updated to include the existing roadmap assertion after the scoped policy suite exposed its former S89 to S94 expectation. No product source changed.
+
+**Spec sections touched.** None. This is sprint intake and schedule evidence, not a product specification change.
+
+**Tests.** The live GitHub lists matched all 31 PR and eight issue rows. The roadmap assertion failed before its schedule update and passed afterward. The complete repository policy suite, formatting, prose, generated-skill check and scoped 49-entry hash harness passed. Microscope pass 1 found zero defects and zero smells. The integrated prefix passed its focused roadmap and prose checks. Full sprint verification and sprint review remain due after the dependent work.
+
+**Hash harness.** Unchanged, all 49 entries matched the worker's reviewed base.
+
+**Notes for future sessions.** Close no contribution or issue on this intake evidence alone. F-X161, F-X164 and F-X165 may now start. Keep `work/f-x169-codex` through sprint verification and review.
