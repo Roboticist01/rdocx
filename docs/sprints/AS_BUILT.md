@@ -16874,3 +16874,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged. All 49 entries matched on the integrated S81 result.
 
 **Notes for future sessions.** The six-item deck chain is the durable Issue 217 acceptance test. The S80 accepted viewer scope does not claim a PowerPoint observation.
+
+### F-X158, Presentation fixture and workflow acceptance gate
+
+**Sprint.** S82
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** The original seven-slide Issue 158 deck, SHA-256 `8b703c862792470d3732c6eea07d280d3023525f8653cee4c12d9fc9d14c464a`, now runs through a complete Python edit, save, reopen, validation and render gate. The test fetches its pinned bytes into ignored corpus storage when no local fixture path is supplied. It checks the Issue 169 and Issue 217 authoring operations alongside gradient, text-body, notes, media and relationship preservation.
+
+**Non-obvious choices.** The source deck's inherited placeholder geometry is resolved before moving it. An omitted-angle gradient and unmodelled text-body child are injected as preservation sentinels. The pinned LibreOffice 26.2.5.2 PDF omits a hidden slide, so the 72 DPI comparison maps viewer pages to source slide indexes and checks bounded windows for images, the edited slide and gradient background. Python-pptx 1.0.2 reopens the saved structure.
+
+**Deviations from the design plan.** None. The integration commit corrected two HLD wording errors without changing code or the acceptance gate.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md`, "Binding tests".
+
+**Tests.** The worker ran 76 Presentation Python tests, including the no-environment-variable attachment download and viewer comparison. `rpptx validate`, scoped formatting, `rpptx-py` Clippy, WASM, prose, generated-skill, workflow-policy and the 49-entry unchanged hash harness checks passed. Microscope pass 1 found zero defects and zero smells. The integration-only HLD correction passed prose and staged diff checks. Full sprint verification and sprint review remain due after the dependent stories integrate.
+
+**Hash harness.** Unchanged, all 49 entries matched in the worker. No product code changed during integration.
+
+**Notes for future sessions.** F-X150 must reconcile Issues 169, 170, 215, 216 and 217 against this fixture result and every other criterion in the original 22-issue snapshot. Keep `work/f-x158-codex` until sprint closure.
