@@ -518,6 +518,8 @@ defended.
 | F-X152 | S79 | M | 3 | 1 | 2026-10-01 | Integrated PR 236 with every supported story in CLI diff, bounded matching, one count per changed paragraph and incomplete-story reporting |
 | F-X153 | S79 | M | 3 | 1 | 2026-10-01 | Integrated PR 220 with text-anchored CLI comments, inherited numbering validation and atomic native and Python run removal |
 | F-X154 | S80 | M | 3 | 1 | 2026-10-01 | Repaired DrawingML body property preservation and presentation line-separator layout for Issues 215 and 216 |
+| F-X147 | S80 | L | 5 | 1 | 2026-10-02 | Completed the Issue 168 Word Python editing chain with atomic counted replacement, rich footers and a documented lxml package-write fallback |
+| F-X155 | S80 | L | 5 | 1 | 2026-10-02 | Integrated five drawing PRs with slide jumps, line ends, shadows, preset geometry and theme effect control under schema-order and viewer checks |
 
 ## Velocity
 

@@ -40,8 +40,8 @@ regenerated, never hand-edited.
 | M22, Word depth                                | 12 | 12 | 0 | 0  |
 | M23, From-scratch business documents           | 24 | 24 | 0 | 0 |
 | M24, Modern DOCX authoring completeness        | 54 | 12 | 0 | 42 |
-| X, Cross-cutting (opportunistic)              | 178 | 155 | 2 | 17 |
-| **Total** | **503** | **417** | **2** | **80** |
+| X, Cross-cutting (opportunistic)              | 178 | 157 | 0 | 17 |
+| **Total** | **503** | **419** | **0** | **80** |
 <!-- AUTOGEN:backlog-summary END -->
 
 ## All F-IDs
@@ -700,7 +700,7 @@ regenerated, never hand-edited.
 | F-X144 | Identity and producer matrices across operations | S78 | L | done |
 | F-X145 | Comparison options and redline completion | S78 | L | done |
 | F-X146 | Word line height and inline picture spacing | S79 | L | done |
-| F-X147 | Complete rdocx Python production checklist | S80 | L | in-progress |
+| F-X147 | Complete rdocx Python production checklist | S80 | L | done |
 | F-X148 | Complete rpptx Python production checklist | S81 | L | pending |
 | F-X149 | Word fixture and workflow acceptance gate | S82 | L | pending |
 | F-X150 | Reconcile issue closure evidence | S82 | M | pending |
@@ -708,7 +708,7 @@ regenerated, never hand-edited.
 | F-X152 | Full-story CLI diff and count repair | S79 | M | done |
 | F-X153 | Word Python supplemental contribution | S79 | M | done |
 | F-X154 | Presentation text and preservation repair | S80 | M | done |
-| F-X155 | Presentation drawing API contribution | S80 | L | in-progress |
+| F-X155 | Presentation drawing API contribution | S80 | L | done |
 | F-X156 | Presentation slide and table contribution | S81 | L | pending |
 | F-X157 | Complete deck-chain authoring checklist | S81 | L | pending |
 | F-X158 | Presentation fixture and workflow acceptance gate | S82 | L | pending |

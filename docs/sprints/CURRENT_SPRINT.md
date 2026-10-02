@@ -25,9 +25,9 @@ in dependency order, with package validation and cross-viewer evidence.
 
 | F-ID | Title | Size | Status | Owner |
 |------|-------|------|--------|-------|
-| F-X147 | Complete rdocx Python production checklist | L | in-progress | codex |
+| F-X147 | Complete rdocx Python production checklist | L | done | - |
 | F-X154 | Presentation text and preservation repair | M | done | - |
-| F-X155 | Presentation drawing API contribution | L | in-progress | codex |
+| F-X155 | Presentation drawing API contribution | L | done | - |
 
 ## Sequencing note
 

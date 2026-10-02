@@ -16771,6 +16771,46 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 
 **Tests.** The Issue 215 body property and Issue 216 line-feed regression gates passed after save, reopen, validation and rendering. The scoped gate, 64 Presentation Python tests, pinned python-pptx 1.0.2 structure check and LibreOffice 26.2.5.2 three-band text probe passed. The probe differed by at most one vertical pixel against a two-pixel tolerance. The 22-crate package dry run kept every archive below 10 MiB.
 
-**Hash harness.** Unchanged. All 49 entries matched the S79 baseline in worker scoped verification. The final integrated S80 gate remains due.
+**Hash harness.** Unchanged. All 49 entries matched the S79 baseline in worker scoped and integrated S80 verification.
 
-**Notes for future sessions.** F-X155 builds its shape and drawing APIs on this reviewed prefix. The full S80 verification and sprint review remain due after that feature is integrated.
+**Notes for future sessions.** F-X155 built its shape and drawing APIs on this reviewed prefix. The integrated S80 gate passed after that feature was integrated.
+
+### F-X147, Complete rdocx Python production checklist
+
+**Sprint.** S80
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Completed the Issue 168 Python editing chain with table, style, section, bookmark, field, rich footer, counted replacement, paragraph, hyperlink, picture and text-anchored comment operations. A missing paragraph style setter was added. The complete chain saves, reopens, lays out and renders with deterministic fonts.
+
+**Non-obvious choices.** A mismatched three-pair replacement names the offending pair and leaves package bytes and held handles unchanged. Rich footer content moves a typed body paragraph into the section story. Arbitrary XML and package-part writes use the documented external lxml ZIP fallback, exercised on `docProps/app.xml`, instead of an unvalidated typed writer.
+
+**Deviations from the design plan.** The user accepted the documented lxml fallback for arbitrary package-part writes. No typed write API was added for that operation.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md` and `docs/hld/12-testing-strategy.md`.
+
+**Tests.** The complete Issue 168 chain passed after save, reopen, layout and render. The integrated Word Python suite passed 165 tests, and python-docx 1.2.0 read the authored structure and relationships. The pinned Poppler 26.01.0 render oracle, full workspace tests, no-default font path, WASM targets, strict rustdoc, README doctests, 131 workflow tests, Clippy, supply-chain check and 22-crate package dry run passed. All archives remained below 10 MiB.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S80 result.
+
+**Notes for future sessions.** The fallback is documented in the Python README. F-X160 owns tolerant reads for separate Issue 243, 246 and 247 fixtures.
+
+### F-X155, Presentation drawing API contribution
+
+**Sprint.** S80
+**Completed.** 2026-10-02
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reconciled PRs 219, 221, 224, 230 and 234 on the F-X154 prefix. The Presentation facade and Python binding now author slide click jumps, line dash and ends, direct outer shadows, preset geometry changes and a theme effect index that removes connector shadow while retaining its line style. Saved shapes preserve unmodelled XML and schema child order.
+
+**Non-obvious choices.** Slide-target deletion prunes only relationships owned by the removed target. The effect reference uses index zero to suppress inherited connector shadow in LibreOffice. A microscope finding about namespace preservation was fixed before the final review, and the integrated test assertion was corrected to count all three no-action links.
+
+**Deviations from the design plan.** The user accepted pinned LibreOffice 26.2.5.2 rendering and python-pptx 1.0.2 reopening for S80 closure. PowerPoint 16.104 remains unverified and is not claimed as a passing oracle.
+
+**Spec sections touched.** `docs/hld/02-scope-and-non-goals.md`, `docs/hld/05-drawingml-model.md`, `docs/hld/06-presentationml-model.md`, `docs/hld/07-inheritance-and-resolution.md` and `docs/hld/10-bindings-spec.md`.
+
+**Tests.** The integrated Presentation Python suite passed 71 tests, and the `rpptx` integration binary passed 286 active tests. Python-pptx 1.0.2 reopened the SHA-bound authored deck and confirmed its geometry and slide target. At 150 DPI, 99.790149 percent of native and pinned LibreOffice pixels were within a maximum RGB difference of 12, above the 99.7 percent threshold, and each channel mean absolute error was below 0.151 against a 0.2 limit. The full workspace, no-default font, WASM, strict rustdoc, README, workflow, Clippy, supply-chain and 22-crate package gates passed. All archives remained below 10 MiB.
+
+**Hash harness.** Unchanged. All 49 entries matched on the integrated S80 result.
+
+**Notes for future sessions.** Issue 217 remains open for F-X156 slide import and scoped replacement, then F-X157's complete deck-chain acceptance. The authored deck SHA-256 is `5a612c739359ea8f56ff18f797b9df38f56440fedaf64f756d31760516b91344`.
