@@ -1,6 +1,6 @@
 # F-X170, High-level Word style formatting API
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-246, F-X169
@@ -49,9 +49,9 @@ Existing sample output should remain unchanged. A newly authored style example i
 
 ## Implementation checklist
 
-- [ ] Add focused fluent methods without changing the style graph owner.
-- [ ] Add public-only example and round-trip parity tests.
-- [ ] Run scoped verification, the public API riders and microscope.
+- [x] Add focused fluent methods without changing the style graph owner.
+- [x] Add public-only example and round-trip parity tests.
+- [x] Run scoped verification, the public API riders and microscope.
 
 ## Open questions
 

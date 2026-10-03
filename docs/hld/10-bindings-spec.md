@@ -874,6 +874,14 @@ properties including a table style's own row and cell properties, and
 conditional table regions carrying all five property layers. `add_style` is
 fallible in the pre-1.0 API. `set_style`, `remove_style`,
 `set_default_style`, and `validate_style_graph` use the same `Result` boundary.
+For common formatting, the existing builder also offers fluent `alignment`,
+`space_before`, `space_after`, `indent_left`, `font`, `size`, `bold`, and `color`
+methods. Lengths use the paragraph facade's twip conversion and font sizes use
+`HalfPoint::from_pt`. An explicit font fills all four script slots and clears
+their theme references. An explicit colour clears the theme colour, tint, and
+shade. Callers can mix these methods with `paragraph_properties(CT_PPr)` and
+`run_properties(CT_RPr)`, with later calls taking precedence on overlapping
+builder fields. This is an additive native Rust API in unreleased 0.14.0.
 Builder clear operations remove optional links, UI metadata, base properties,
 and conditional regions during a staged update, and
 `remove_conditional_table_style` removes exactly one region while its siblings

@@ -10447,7 +10447,7 @@ fn update_reciprocal_style_link(
 fn merge_style_update(
     existing: &rdocx_oxml::styles::CT_Style,
     authored: &mut rdocx_oxml::styles::CT_Style,
-    cleared: u16,
+    cleared: u32,
     removed_regions: &[rdocx_oxml::styles::TableStyleRegion],
 ) {
     authored.is_default = existing.is_default;
@@ -10491,6 +10491,17 @@ fn merge_style_update(
     if let Some(properties) = &authored.rpr {
         let mut updated = existing.rpr.clone().unwrap_or_default();
         updated.merge_from(properties);
+        if cleared & style::CLEAR_FONT_THEME != 0 {
+            updated.font_ascii_theme = None;
+            updated.font_hansi_theme = None;
+            updated.font_east_asia_theme = None;
+            updated.font_cs_theme = None;
+        }
+        if cleared & style::CLEAR_COLOR_THEME != 0 {
+            updated.color_theme = None;
+            updated.color_theme_tint = None;
+            updated.color_theme_shade = None;
+        }
         authored.rpr = Some(updated);
     } else if cleared & style::CLEAR_RUN_PROPERTIES == 0 {
         authored.rpr = existing.rpr.clone();

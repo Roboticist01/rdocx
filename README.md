@@ -39,7 +39,7 @@ rows are the enforced release-mode bounds plus one dated observation.
 
 | Measurement | Value | Version | Platform | Build mode | Input | Command | Statistic | Measured on |
 |---|---|---|---|---|---|---|---|---|
-| Crates.io archive: rdocx | 1,243,073 compressed bytes, 7,203,689 member bytes, 36 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-10-02 |
+| Crates.io archive: rdocx | 1,244,660 compressed bytes, 7,212,566 member bytes, 36 members | 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | `cargo package --locked --no-verify` | Tracked `rdocx` package inventory | `python3 scripts/readme_doctests.py --record-measurements` | gzip archive bytes, tar member bytes, tar member count | 2026-10-03 |
 | Large-document layout throughput | minimum 250 pages/s, observed 31,019.1 pages/s | rdocx 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | release, one test thread | 1,000 one-page paragraphs with deterministic fonts | `cargo test -p rdocx --test regression_test --release a_thousand_page_document_paginates_and_renders_within_the_declared_limits -- --ignored --exact --nocapture --test-threads=1` | pages per wall-clock second | 2026-09-19 |
 | Large-document layout peak allocation | maximum 64 MiB, observed 29.03 MiB | rdocx 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | release, one test thread | 1,000 one-page paragraphs with deterministic fonts | `cargo test -p rdocx --test regression_test --release a_thousand_page_document_paginates_and_renders_within_the_declared_limits -- --ignored --exact --nocapture --test-threads=1` | peak live allocation | 2026-09-19 |
 | Large-document PDF throughput | minimum 1,000 pages/s, observed 60,058.0 pages/s | rdocx 0.14.0 | macOS 26.6.2, Apple M5 Max, arm64 | release, one test thread | 1,000 deterministic layout pages | `cargo test -p rdocx --test regression_test --release a_thousand_page_document_paginates_and_renders_within_the_declared_limits -- --ignored --exact --nocapture --test-threads=1` | pages per wall-clock second | 2026-09-19 |
@@ -82,6 +82,36 @@ let mut replacements = HashMap::new();
 replacements.insert("{{status}}", "Approved");
 document.replace_all(&replacements);
 document.save("approved.docx")?;
+# Ok::<(), rdocx::Error>(())
+```
+
+### Create and manage styles
+
+```rust,no_run
+use rdocx::{Alignment, Document, Length, StyleBuilder, StyleType};
+
+let mut document = Document::new();
+document.add_style(
+    StyleBuilder::paragraph("Callout", "Callout")
+        .based_on("Normal")
+        .alignment(Alignment::Center)
+        .space_before(Length::inches(0.125))
+        .space_after(Length::inches(0.125))
+        .indent_left(Length::inches(0.25))
+        .font("Aptos")
+        .size(12.0)
+        .bold(true)
+        .color("245A81"),
+)?;
+document.add_paragraph("Important").set_style("Callout");
+assert_eq!(document.style("Callout").unwrap().name(), Some("Callout"));
+assert!(document.styles().iter().any(|style| style.style_id() == "Callout"));
+document.set_style(StyleBuilder::paragraph("Callout", "Callout").size(13.0))?;
+document.set_default_style(StyleType::Paragraph, "Callout")?;
+document.add_style(StyleBuilder::paragraph("Unused", "Unused"))?;
+assert!(document.remove_style("Unused")?);
+
+document.save("styled.docx")?;
 # Ok::<(), rdocx::Error>(())
 ```
 

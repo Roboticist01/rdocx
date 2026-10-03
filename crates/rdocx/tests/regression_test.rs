@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use quick_xml::Reader as XmlReader;
 use quick_xml::events::Event as XmlEvent;
+use rdocx::{Alignment, CT_PPr, CT_RPr, HalfPoint, Twips};
 use rdocx::{
     BarcodeField, BarcodeKind, BodyContentRef, BodyItemRef, BreakKind, CellItemRef, CellRef,
     ChartData, ChartKind, ContentFragment, ContentLocation, CustomProperty, CustomPropertyValue,
@@ -10481,6 +10482,117 @@ fn definitions<'a>(document: &'a Document, style_id: &str) -> Vec<rdocx::Style<'
         .into_iter()
         .filter(|style| style.style_id() == style_id)
         .collect()
+}
+
+#[test]
+fn style_builder_convenience_matches_typed_properties() {
+    let mut document = Document::new();
+    document
+        .add_style(
+            StyleBuilder::paragraph("Convenient", "Convenient")
+                .alignment(Alignment::Center)
+                .space_before(Length::inches(0.125))
+                .space_after(Length::inches(0.25))
+                .indent_left(Length::inches(0.5))
+                .font("Aptos")
+                .size(11.5)
+                .bold(true)
+                .color("123456"),
+        )
+        .unwrap();
+    let style = document.style("Convenient").unwrap();
+    assert_eq!(
+        style.paragraph_properties(),
+        Some(&CT_PPr {
+            jc: Some(rdocx_oxml::shared::ST_Jc::Center),
+            space_before: Some(Twips(180)),
+            space_after: Some(Twips(360)),
+            ind_left: Some(Twips(720)),
+            ..CT_PPr::default()
+        })
+    );
+    assert_eq!(
+        style.run_properties(),
+        Some(&CT_RPr {
+            font_ascii: Some("Aptos".to_owned()),
+            font_hansi: Some("Aptos".to_owned()),
+            font_east_asia: Some("Aptos".to_owned()),
+            font_cs: Some("Aptos".to_owned()),
+            sz: Some(HalfPoint::from_pt(11.5)),
+            sz_cs: Some(HalfPoint::from_pt(11.5)),
+            bold: Some(true),
+            bold_cs: Some(true),
+            color: Some("123456".to_owned()),
+            ..CT_RPr::default()
+        })
+    );
+
+    document
+        .add_style(
+            StyleBuilder::paragraph("Theme", "Theme").run_properties(CT_RPr {
+                font_ascii_theme: Some("majorHAnsi".to_owned()),
+                font_hansi_theme: Some("majorHAnsi".to_owned()),
+                font_east_asia_theme: Some("majorEastAsia".to_owned()),
+                font_cs_theme: Some("majorBidi".to_owned()),
+                color_theme: Some("accent1".to_owned()),
+                color_theme_tint: Some(0x80),
+                color_theme_shade: Some(0x20),
+                ..CT_RPr::default()
+            }),
+        )
+        .unwrap();
+    document
+        .set_style(
+            StyleBuilder::paragraph("Theme", "Theme")
+                .font("Aptos")
+                .color("123456"),
+        )
+        .unwrap();
+    let updated = document.style("Theme").unwrap();
+    let rpr = updated.run_properties().unwrap();
+    assert_eq!(rpr.font_ascii.as_deref(), Some("Aptos"));
+    assert_eq!(rpr.font_ascii_theme, None);
+    assert_eq!(rpr.font_hansi_theme, None);
+    assert_eq!(rpr.font_east_asia_theme, None);
+    assert_eq!(rpr.font_cs_theme, None);
+    assert_eq!(rpr.color.as_deref(), Some("123456"));
+    assert_eq!(rpr.color_theme, None);
+    assert_eq!(rpr.color_theme_tint, None);
+    assert_eq!(rpr.color_theme_shade, None);
+}
+
+#[test]
+fn high_level_style_survives_save_and_reopen() {
+    let mut document = Document::new();
+    document
+        .add_style(
+            StyleBuilder::paragraph("Callout", "Callout")
+                .alignment(Alignment::Center)
+                .font("Aptos")
+                .size(12.0)
+                .bold(true),
+        )
+        .unwrap();
+    document.add_paragraph("A callout").set_style("Callout");
+    let reopened = Document::from_bytes(&document.to_bytes().unwrap()).unwrap();
+    let style = reopened.style("Callout").unwrap();
+    assert_eq!(style.run_properties().unwrap().bold, Some(true));
+    assert_eq!(
+        style.paragraph_properties().unwrap().jc,
+        Some(rdocx_oxml::shared::ST_Jc::Center)
+    );
+    let paragraphs = reopened.paragraphs();
+    let paragraph = &paragraphs[0];
+    assert_eq!(paragraph.style_id(), Some("Callout"));
+    assert_eq!(
+        reopened.effective_paragraph_properties(paragraph).jc,
+        Some(rdocx_oxml::shared::ST_Jc::Center)
+    );
+    let run = paragraph.runs().next().unwrap();
+    let effective = reopened.effective_run_properties(paragraph, &run);
+    assert_eq!(effective.bold, Some(true));
+    assert_eq!(effective.font_ascii.as_deref(), Some("Aptos"));
+    assert_eq!(effective.sz, Some(HalfPoint::from_pt(12.0)));
 }
 
 #[test]

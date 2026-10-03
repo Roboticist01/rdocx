@@ -62,7 +62,7 @@ class ReadmeCase:
 
 
 README_CASES = (
-    ReadmeCase("rdocx", "rdocx", REPO_ROOT / "README.md", 3),
+    ReadmeCase("rdocx", "rdocx", REPO_ROOT / "README.md", 4),
     ReadmeCase(
         "rdocx-opc",
         "rdocx_opc",
@@ -373,7 +373,7 @@ ARCHIVE_REMEASUREMENT_DATES = {
     "oxml-drawing": "2026-10-01",
     "oxml-opc": "2026-10-01",
     "oxml-pdf": "2026-10-01",
-    "rdocx": "2026-10-02",
+    "rdocx": "2026-10-03",
     "rdocx-cli": "2026-10-02",
     "rdocx-layout": "2026-10-01",
     "rdocx-oxml": "2026-10-02",
@@ -397,7 +397,7 @@ ARCHIVE_MEASUREMENTS = {
     "oxml-opc": (99_473, 385_350, 12),
     "oxml-pdf": (73_900, 339_219, 14),
     "oxml-sml": (12_511, 49_803, 6),
-    "rdocx": (1_243_073, 7_203_689, 36),
+    "rdocx": (1_244_660, 7_212_566, 36),
     "rdocx-cli": (68_921, 304_056, 8),
     "rdocx-html": (18_116, 70_742, 11),
     "rdocx-layout": (267_979, 1_433_110, 15),
