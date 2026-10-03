@@ -1,6 +1,6 @@
 # F-X168, Current issue and contribution closure evidence
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: M
 **Depends on**: F-X149, F-X158, F-X160, F-X161, F-X162, F-X163, F-X164, F-X165, F-X166, F-X167, F-X169, F-X170
@@ -53,11 +53,11 @@ step and require zero open PRs and zero open issues through the final refresh.
 | integration | `python3 scripts/hash_harness.py --check`, `/verify --full`, `/sprint-review S84` | The final HEAD has explained baseline changes and a clean integrated review |
 | integration | After `/close-sprint`, compare live GitHub state with the 3 October refresh | All 32 PRs and nine issues are closed with linked evidence |
 
-**Test gate**: integration. Every issue criterion and PR disposition has a
-prepared evidence link or an explicit final integrated check. Complete the
-remaining full verification and sprint review at the S84 boundary. After
-`/close-sprint` merges that result to main, close all nine issues and 32 PRs
-with links to the verified evidence.
+**Test gate**: integration. The worker prepares criterion-level evidence and
+all PR dispositions, runs the scoped gate and records the final integrated
+checks for the sprint integrator. The S84 boundary then runs full verification
+and sprint review. After `/close-sprint` merges the reviewed result to main,
+close all nine issues and 32 PRs with links to the verified evidence.
 
 ## HLD impact
 
@@ -81,14 +81,14 @@ F-X161, F-X162 and F-X163 changes on the final integrated result.
 
 ## Implementation checklist
 
-- [ ] Run both complete fixture workflows and both acceptance matrices.
-- [ ] Run each remaining issue gate, including pinned manual viewer checks.
-- [ ] Adopt and run PR 265's distinct mixed-section regression on integrated F-X162.
-- [ ] Record criterion-level evidence and all PR dispositions on the reviewed
-  sprint result, with no unresolved gap.
-- [ ] Pass scoped verification and a zero-finding microscope for this evidence
-  record, then the final integrated full gate and sprint review.
-- [ ] Prepare individual closure explanations for `/close-sprint` to use only
+- [x] Run both complete fixture workflows and both acceptance matrices.
+- [x] Run each remaining issue gate and inspect the pinned manual viewer evidence.
+- [x] Adopt and run PR 265's distinct mixed-section regression on integrated F-X162.
+- [x] Record criterion-level evidence and all PR dispositions for the sprint
+  integrator, with no unresolved worker gap.
+- [x] Pass scoped verification and a zero-finding microscope for this evidence
+  record, then hand off the final integrated full gate and sprint review.
+- [x] Prepare individual closure explanations for `/close-sprint` to use only
   after the verified result reaches main.
 
 ## Open questions

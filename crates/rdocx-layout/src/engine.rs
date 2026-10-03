@@ -17598,6 +17598,88 @@ mod tests {
     }
 
     #[test]
+    fn mixed_sections_use_their_own_measure_before_pagination() {
+        for in_control in [false, true] {
+            let mut input = make_input_with_text("");
+            let mut mixed_body = String::new();
+            let mut expected = Vec::new();
+            for (index, (width, height, left, right)) in [
+                (12240, 15840, 1440, 1440),
+                (15840, 12240, 720, 1080),
+                (12240, 15840, 1800, 2160),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let sect = format!(
+                    "<w:sectPr><w:pgSz w:w=\"{width}\" w:h=\"{height}\"/>\
+                     <w:pgMar w:top=\"1440\" w:bottom=\"1440\" \
+                     w:left=\"{left}\" w:right=\"{right}\"/></w:sectPr>"
+                );
+                let prose =
+                    format!("Section {index} keeps every word within its margins. ").repeat(24);
+                let paragraph = format!("<w:p><w:r><w:t>{prose}</w:t></w:r></w:p>");
+                let table = format!(
+                    "<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/></w:tblPr>\
+                     <w:tblGrid><w:gridCol w:w=\"0\"/></w:tblGrid><w:tr><w:tc>\
+                     {paragraph}</w:tc></w:tr></w:tbl>"
+                );
+                let blocks = format!("{paragraph}{table}{}", paragraph.repeat(5));
+                let wrap = |body: String| {
+                    if in_control {
+                        format!("<w:sdt><w:sdtContent>{body}</w:sdtContent></w:sdt>")
+                    } else {
+                        body
+                    }
+                };
+                let isolated = format!(
+                    "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+                     <w:body>{}{sect}</w:body></w:document>",
+                    wrap(format!("{blocks}<w:p/>"))
+                );
+                input.document = CT_Document::from_xml(isolated.as_bytes()).expect("section XML");
+                let result = deterministic_layout(&input);
+                assert!(result.pages.len() > 1, "fixture exercises pagination");
+                for page in &result.pages {
+                    assert!(
+                        text_extents(page).iter().all(|(start, end)| {
+                            *start >= f64::from(left) / 20.0 - 0.01
+                                && *end <= f64::from(width - right) / 20.0 + 0.01
+                        }),
+                        "isolated section text fits its margins"
+                    );
+                }
+                expected.extend(result.pages);
+                if index < 2 {
+                    mixed_body.push_str(&wrap(format!("{blocks}<w:p><w:pPr>{sect}</w:pPr></w:p>")));
+                } else {
+                    mixed_body.push_str(&wrap(format!("{blocks}<w:p/>")));
+                    mixed_body.push_str(&sect);
+                }
+            }
+            let xml = format!(
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+                 <w:body>{mixed_body}</w:body></w:document>"
+            );
+            input.document = CT_Document::from_xml(xml.as_bytes()).expect("mixed section XML");
+            let actual = deterministic_layout(&input);
+            assert_eq!(actual.pages.len(), expected.len(), "section pagination");
+            for (page, reference) in actual.pages.iter().zip(&expected) {
+                assert_eq!(
+                    (page.width, page.height),
+                    (reference.width, reference.height)
+                );
+                assert_eq!(
+                    page_text(page),
+                    page_text(reference),
+                    "page text and wrapping"
+                );
+                assert_eq!(text_extents(page), text_extents(reference), "line measure");
+            }
+        }
+    }
+
+    #[test]
     fn layout_simple_document() {
         let input = make_input_with_text("Hello World");
         let result = Engine::new().layout(&input);
