@@ -54,5 +54,5 @@ sequential hash baseline changes. The final full gate runs once.
 - The three hash changes and the golden pixel update are individually labelled
   and reviewed. The fixture workflows, producer and identity matrices, scoped
   checks, final hash harness, `/verify --full` and `/sprint-review` pass.
-- After `/close-sprint` merges the reviewed result to main, all 31 open PRs
+- After `/close-sprint` merges the reviewed result to main, all 32 open PRs
   and nine open issues through the 3 October refresh are closed with evidence links.

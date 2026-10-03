@@ -1728,6 +1728,13 @@ checks every open issue against the final integrated result. Formal
 prerequisites complete through scoped checkpoints before their consumers
 start. These checkpoints do not run the full workspace or sprint review.
 
+PR 265 arrived on 3 October after F-X162 completed. It targets the same section
+ownership defect as PR 241. F-X168 adopts its distinct mixed-orientation,
+multipage table and content-control regression on the integrated F-X162 fix,
+then records a superseded disposition for PR 265. Its head has no CI run and
+reports incomplete local full-gate coverage, so the integrated sprint gate
+supplies the missing evidence.
+
 The ten F-IDs represent about 29 to 38 estimated developer-days, above the
 normal sprint size by request. Keep their approved designs, individual
 microscope reviews and scoped verification. Run the union of risk riders,
@@ -1735,12 +1742,13 @@ source-built round trips, reporter fixtures, the 18 by 7 identity and 11 by 8
 producer matrices, Python and CLI checks, deterministic Word and PowerPoint
 comparisons, the hash harness, `/verify --full` and `/sprint-review` once on
 the final integrated S84 result. After `/close-sprint` merges that result to
-main, close all 31 open PRs and nine open issues through the 3 October refresh
+main, close all 32 open PRs and nine open issues through the 3 October refresh
 with evidence links. Feature work resumes at S85.
 
 #### Live contribution and issue inventory, 2 October 2026
 
-GitHub currently reports 31 open PRs and eight open issues. Every PR targets
+The 2 October intake reported 31 open PRs and eight open issues. Every PR in
+that intake targets
 `main`, has a green latest head CI run, has no submitted review, and is marked
 conflicting with current `main`. PRs #179 and #259 retain failed historical
 runs in the rollup, but their latest checks pass. Head CI does not prove that
@@ -1837,6 +1845,19 @@ still requires raw `CT_PPr` and `CT_RPr` values. F-X170 owns a focused facade
 for common paragraph and run settings, with a save and reopen example. F-X168
 must verify the API before closing #264. The PR count and all recorded heads
 remain unchanged at 31.
+
+The later 3 October refresh found [PR #265](https://github.com/tensorbee/rdocx/pull/265),
+a draft alternate to PR #241. It targets `main` from
+`fix/mixed-section-measure` at `177dd7cbc4`, has no CI jobs or submitted
+reviews, and GitHub reports it mergeable but blocked as a draft. It overlaps
+`crates/rdocx-layout/src/engine.rs` with F-X162 and PR #241, with no stacked
+dependency. Its production section selection is already covered by F-X162's
+`main_story_item_sections` and the section-width tests. F-X168 will adopt the
+new multipage, mixed-orientation table and content-control test on the
+integrated implementation, run it under deterministic fonts, and cite the
+combined gate before closing #265 as superseded. This makes 32 open PRs and
+nine open issues at the latest refresh.
+It addresses no open issue directly.
 
 | New open issue | PR coverage | Remaining acceptance and closure evidence | F-ID |
 |---|---|---|---|

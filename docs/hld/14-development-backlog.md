@@ -6377,7 +6377,7 @@ apply to document content and match their typed property equivalents.
 ### F-X168, Current issue and contribution closure evidence (M)
 
 Reconcile the eight open issues and 31 open PRs from the 2 October GitHub snapshot
-and Issue 264 from the 3 October refresh
+and Issue 264 plus draft PR 265 from the 3 October refresh
 against their full criteria and the integrated S76 to S84 result. Record
 contributor comments and manual viewer checks. After the reviewed sprint is
 merged to main through `/close-sprint`, close every issue and PR only with
@@ -6387,8 +6387,11 @@ closes last after every child criterion passes.
 **Test gate**: integration. Every issue criterion and PR disposition has a
 prepared evidence link or an explicit final integrated check. Complete the
 remaining full verification and sprint review at the S84 boundary. After
-`/close-sprint` merges that result to main, close all nine issues and 31 PRs
+`/close-sprint` merges that result to main, close all nine issues and 32 PRs
 with links to the verified evidence.
+PR 265's section-selection code overlaps the completed F-X162. Adopt its
+distinct multipage mixed-orientation table and content-control regression on
+the integrated implementation before recording a superseded PR disposition.
 
 ### F-X169, Reconcile live contributions and open issue contracts (L)
 
