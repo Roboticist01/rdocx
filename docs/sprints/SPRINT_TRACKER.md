@@ -541,6 +541,7 @@ defended.
 | F-X166 | S84 | L | 5 | 2 | 2026-10-03 | Integrated PRs 257, 258, 260 and 261 with 80 Word for Mac accept and reject outcomes, final-block and picture regressions, and unchanged hashes |
 | F-X170 | S84 | M | 3 | 1 | 2026-10-03 | Added high-level Word style formatting for Issue 264 with public examples, round-trip resolution and unchanged hashes |
 | F-X167 | S84 | L | 5 | 1 | 2026-10-03 | Integrated accepted-view paragraph joins and deleted-row projection across text, CLI JSON, HTML, Markdown and PDF with 175 Python binding cases and unchanged hashes |
+| F-X168 | S84 | M | 3 | 1 | 2026-10-03 | Proved both Issue 158 fixture workflows, the identity and producer matrices, nine issue contracts and PR 265 mixed-section pagination on the integrated repair prefix |
 
 ## Velocity
 

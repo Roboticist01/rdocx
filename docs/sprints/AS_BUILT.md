@@ -17154,3 +17154,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged on the worker and integrated prefix, all 49 entries match.
 
 **Notes for future sessions.** F-X168 may start on this completed prefix. Issue 253 remains open until the complete integrated acceptance matrix is checked on main. Keep `work/f-x167-codex` through sprint verification and review.
+
+### F-X168, Current issue and contribution closure evidence
+
+**Sprint.** S84
+**Completed.** 2026-10-03
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Adopted PR 265's distinct mixed-section pagination regression on the completed F-X162 section implementation. The test compares three multipage portrait and landscape sections, tables, margins and direct or control-owned content with isolated deterministic renders. It fails against the old final-section selection and passes on the integrated code. The nine live issue contracts now have criterion-level evidence in `docs/hld/12-testing-strategy.md`.
+
+**Non-obvious choices.** PR 265's production change overlaps F-X162, so only its independent regression was adopted. The worker reread the comments and reviews for all 32 open PRs and the full bodies and comments for all nine open issues, then prepared individual dispositions for the post-main reconciliation. The separate F-X164 PowerPoint and F-X166 Word observations are retained as manual viewer evidence, without claiming a second-machine animation check that Issue 244 does not require.
+
+**Deviations from the design plan.** The worker checklist was clarified so scoped evidence and closure drafts complete this feature. Full verification, sprint review, main merge and live GitHub closure remain S84 boundary gates, rather than claims made by the worker handoff. The added layout test required a remeasured `rdocx-layout` package archive and assertion carrier.
+
+**Spec sections touched.** `docs/hld/12-testing-strategy.md`, S84 live issue acceptance gate.
+
+**Tests.** Both Issue 158 fixture workflows, the 18 by 7 identity and 11 by 8 producer matrices, and focused gates for Issues 160, 226, 244, 245, 253, 254, 255 and 264 passed on the worker prefix. The worker passed scoped verification, policy, archive inventory and the 49-entry hash harness. Microscope pass 2 found zero defects and zero smells. The PR 265 regression passed again after integration. Final full S84 verification and sprint review remain due.
+
+**Hash harness.** Unchanged on the worker, all 49 entries match. Rerun on the final integrated sprint head.
+
+**Notes for future sessions.** After full verification and clean sprint review, `/close-sprint` must merge to main, then reconcile each of the 32 PRs and nine issues against live GitHub and evidence on main. Close Issue 158 last. Individual closure drafts were saved outside the worker worktree at `/private/tmp/rdocx-s84-closure-drafts.md`. Keep `work/f-x168-codex` through sprint verification and review.
