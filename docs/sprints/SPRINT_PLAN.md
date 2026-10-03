@@ -1839,7 +1839,8 @@ conflicting bases, and the untested combined result block direct PR merges.
 | [#255](https://github.com/tensorbee/rdocx/issues/255) | #258, #260, #261 | All five final-table pairs work at run and word granularities, accept and reject to exact paragraphs, tables and properties, and open in Word with inserted or deleted table marks. | F-X166, F-X168 |
 
 The 3 October refresh found [#264](https://github.com/tensorbee/rdocx/issues/264),
-a new open feature request with no PR or comments. `StyleBuilder` and
+a new open feature request with no PR. A [3 October response](https://github.com/tensorbee/rdocx/issues/264#issuecomment-5967685523)
+explains the active S84 implementation and keeps the issue open. `StyleBuilder` and
 `Document` already create, update and manage styles, but simple style formatting
 still requires raw `CT_PPr` and `CT_RPr` values. F-X170 owns a focused facade
 for common paragraph and run settings, with a save and reopen example. F-X168
