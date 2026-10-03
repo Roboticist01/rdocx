@@ -38,8 +38,9 @@ spreadsheet programme. Four S70 cross-cutting stories add roughly 12 days for
 the confirmed Issue 67 closure and the three independently measured Issue 69
 performance corrections.
 
-F-X137 through F-X168 form a contribution and issue repair programme across
-S76 through S88. The 1 October intake has 77 open PRs and 30 open issues.
+F-X137 through F-X170 form a contribution and issue repair programme across
+S76 through S84. The 2 October intake had 31 open PRs and 8 open issues.
+Issue 264 joined on 2 October after that intake and is included in S84.
 The new tolerance, baseline, revision and accepted-view work continues after
 the original S82 acceptance wave. These are cross-cutting stories, separate
 from the 47 planned M24 feature stories. Their shared files and full issue
@@ -48,14 +49,14 @@ contracts require integrated gates at each sprint boundary.
 M23 closes the five-document from-scratch business-document boundary. M24 then
 classifies and closes the broader modern DOCX authoring surface before M19 may
 begin. The spreadsheet programme remains a business decision and proceeds only
-if F-184 confirms a material gap in the Rust ecosystem at S95.
+if F-184 confirms a material gap in the Rust ecosystem at S91.
 
 The stopping and compression choices are:
 
 - **Stop after M23.** S73 can generate the five private reference documents
   from `Document::new()` through public modeled APIs, with no base template,
   raw OOXML, or LibreOffice field-update pass.
-- **Stop after M24.** S94 provides the complete modern DOCX authoring boundary.
+- **Stop after M24.** S90 provides the complete modern DOCX authoring boundary.
   Every in-scope feature is authorable, readable, mutable, round-trip safe,
   rendered where applicable, and classified across the public bindings.
 - **Archive M19 at its decision gate.** F-184 may still find that the advanced
@@ -1602,7 +1603,7 @@ decision lands.
 OPC, DrawingML, the chart engine, the layout engine and the PDF backend all
 exist and are format-neutral, which lowers the cost of a third family. That is
 not sufficient reason to build one. F-184 must reassess the Rust ecosystem when
-S95 begins. M19 proceeds only if no credible maintained crate provides the
+S91 begins. M19 proceeds only if no credible maintained crate provides the
 combined lifecycle required here: open an existing advanced workbook, preserve
 what is not executed, edit typed features, recalculate formulas and local
 pivots, refresh a declared Power Query subset, automate it through an Office
@@ -1624,7 +1625,7 @@ render to PDF.
 
 ### F-184, Advanced spreadsheet go or no-go (S)
 The go or no-go decision record. Reassess the maintained Rust spreadsheet
-ecosystem at S95, state whether the combined lifecycle gap still exists, and
+ecosystem at S91, state whether the combined lifecycle gap still exists, and
 archive M19 if it does not. If it does, amend `02-scope-and-non-goals.md`, define
 the boundary between `oxml-sml` as chart support and `rxlsx` as a library, and
 publish the preserve, model, and execute classification for every advanced
@@ -2232,7 +2233,7 @@ documents only as anonymous, non-identifying capability families. The audit
 found no duplicate scope, missing owner, dangling dependency, dependency cycle,
 or scheduling conflict in F-243 through F-310. Their boundaries, sizes, and
 dependencies remain authoritative. The current plan places them across S71
-through S94.
+through S90.
 **Capability matrix owner**: `docs/hld/02-scope-and-non-goals.md`, "Modern DOCX
 capability matrix".
 **Test gate**: regression. Every in-scope matrix row has evidence, an owner
@@ -6303,7 +6304,7 @@ rounding and drawing identity behavior.
 Review PR 251 after F-X160. Serialize only changed parts compactly, declare
 `w` once on the root and preserve unknown subtrees and producer attributes.
 Own one labelled and reviewed baseline change for this sprint.
-**Depends on**: F-X144, F-X160.
+**Depends on**: F-X144, F-X160, F-X169.
 **Test gate**: round-trip. Issue 245's edited package retains untouched
 regions and valid namespaces, and its 20 declared hash entries reconcile.
 
@@ -6329,7 +6330,7 @@ leading space or punctuation error, and all expected deltas are reviewed.
 
 Review PR 252 after PRs 207, 230 and 234. Emit an ordered `p:style` for new
 shapes and verify its visible theme fill or line.
-**Depends on**: F-X155.
+**Depends on**: F-X155, F-X169.
 **Test gate**: differential. Source-built shapes reopen in python-pptx and
 PowerPoint and render visibly in PowerPoint, LibreOffice and rpptx.
 
@@ -6337,7 +6338,7 @@ PowerPoint and render visibly in PowerPoint, LibreOffice and rpptx.
 
 Review PR 256 after the S77 revision inventory. Expose accepted and tracked
 views consistently in Python and the CLI, rejecting invalid selectors.
-**Depends on**: F-X143, F-X150.
+**Depends on**: F-X143, F-X150, F-X169.
 **Test gate**: integration. Issue 253's old and new text appears in the
 selected PDF and CLI output under pinned Poppler, with Python parity.
 
@@ -6360,16 +6361,51 @@ paragraph and row visibility without losing retained content.
 **Test gate**: regression. Every accepted-view output agrees after save and
 reopen, and the Python bindings gate that fails on PR 259 is green.
 
+### F-X170, High-level Word style formatting API (M)
+
+Address Issue 264 with convenient paragraph and run formatting methods on the
+existing `StyleBuilder`. Keep `Document` style create, update, lookup, default
+selection and removal as the management surface. Demonstrate a custom style
+that sets alignment, spacing, indentation, font, size, bold and colour without
+constructing `CT_PPr` or `CT_RPr` directly. Preserve the typed property escape
+hatch and imported unmodelled XML. Save, reopen and resolve the effective style
+against the authored paragraph and run.
+**Depends on**: F-246, F-X169.
+**Test gate**: round-trip. The convenient settings survive save and reopen,
+apply to document content and match their typed property equivalents.
+
 ### F-X168, Current issue and contribution closure evidence (M)
 
-Reconcile all 30 issues and 77 open PRs from the 1 October GitHub snapshot
-against their full criteria and the integrated S76 to S88 result. Record
-contributor comments, manual viewer checks, unresolved criteria and specific
-follow-up F-IDs. Issue 158 closes last if every child criterion passes.
-**Depends on**: F-X149, F-X158, F-X160 through F-X167.
-**Test gate**: integration. Every criterion has linked evidence on main or
-remains open with a named follow-up. Full verification and sprint review pass
-before any closure action.
+Reconcile the eight open issues and 31 open PRs from the 2 October GitHub snapshot
+and Issue 264 plus draft PR 265 from the 3 October refresh
+against their full criteria and the integrated S76 to S84 result. Record
+contributor comments and manual viewer checks. After the reviewed sprint is
+merged to main through `/close-sprint`, close every issue and PR only with
+its complete acceptance and contributor disposition evidence. Issue 158
+closes last after every child criterion passes.
+**Depends on**: F-X149, F-X158, F-X160 through F-X167, F-X169, F-X170.
+**Test gate**: integration. Every issue criterion and PR disposition has a
+prepared evidence link or an explicit final integrated check. Complete the
+remaining full verification and sprint review at the S84 boundary. After
+`/close-sprint` merges that result to main, close all nine issues and 32 PRs
+with links to the verified evidence.
+PR 265's section-selection code overlaps the completed F-X162. Adopt its
+distinct multipage mixed-orientation table and content-control regression on
+the integrated implementation before recording a superseded PR disposition.
+
+### F-X169, Reconcile live contributions and open issue contracts (L)
+
+Audit the 31 open PRs and eight open issues from the 2 October GitHub intake
+against integrated main. Classify each older PR as patch-equivalent, requiring
+incremental replay, or needing a contributor rebase. Record the current stack
+order, overlapping files, review state, latest head CI and issue coverage.
+Keep open issues and PRs open until their full integrated acceptance evidence
+and contributor disposition are recorded. This is a planning and evidence
+story, with no source changes or baseline update.
+**Depends on**: F-X160.
+**Test gate**: integration. Every open PR and issue has a current disposition,
+every stacked dependency has an order, and the sprint plan agrees with the
+backlog and live GitHub inventory.
 
 ### F-X021, The hash harness should cover PDF output (M)
 The output-stability harness records `page1.png` and three `word/*.xml` parts

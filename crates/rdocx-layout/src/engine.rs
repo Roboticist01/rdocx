@@ -114,6 +114,46 @@ fn main_story_layout_items(document: &CT_Document) -> Vec<MainStoryLayoutItem<'_
     items
 }
 
+fn join_accepted_layout_paragraphs(prefix: CT_P, paragraph: &CT_P) -> Result<CT_P> {
+    let mut result = paragraph.clone();
+    for (index, run) in prefix.runs.into_iter().enumerate() {
+        if !result.insert_unwrapped_run(index, run) {
+            return Err(LayoutError::Layout(
+                "could not align a joined paragraph's run boundaries".to_owned(),
+            ));
+        }
+    }
+    result.hyperlinks.extend(prefix.hyperlinks);
+    Ok(result)
+}
+
+/// The section properties that govern each main-story item, index for index.
+///
+/// A paragraph's `w:sectPr` ends its section, so it applies to that paragraph
+/// and to every item since the previous break. The body `w:sectPr` applies to
+/// the items after the last paragraph break (ECMA-376 17.6.17 and 17.6.18).
+fn main_story_item_sections<'a>(
+    items: &[MainStoryLayoutItem<'a>],
+    final_section: &'a CT_SectPr,
+) -> Vec<&'a CT_SectPr> {
+    let mut sections = Vec::with_capacity(items.len());
+    let mut open = 0;
+    for item in items {
+        open += 1;
+        if let MainStoryLayoutItem::Paragraph(paragraph, _) = item
+            && let Some(section) = paragraph
+                .properties
+                .as_ref()
+                .and_then(|properties| properties.sect_pr.as_ref())
+        {
+            sections.extend(std::iter::repeat_n(section, open));
+            open = 0;
+        }
+    }
+    sections.extend(std::iter::repeat_n(final_section, open));
+    sections
+}
+
 fn collect_body_control_layout_items<'a>(
     control: &'a CT_Sdt,
     path: &[usize],
@@ -387,6 +427,36 @@ fn project_paragraph_runs(para: &CT_P, view: RevisionView) -> Vec<ProjectedRun<'
         }
     }
     projected
+}
+
+/// Whether the accepted view of `para` has nothing to lay out: no text, tab,
+/// break, picture, field, symbol, special character or note reference, no
+/// equation and no bookmark start.
+///
+/// A bookmark start keeps the paragraph, because a PAGEREF or REF field
+/// reads the page, number and text of the paragraph that holds it, and
+/// moving it onto the next paragraph, as accepting does, is not modeled.
+fn accepted_paragraph_is_blank(para: &CT_P) -> bool {
+    para.accepted_text().is_empty()
+        && para.equations.is_empty()
+        && !para.bookmark_markers.iter().any(|marker| marker.is_start())
+        && project_paragraph_runs(para, RevisionView::Accepted)
+            .iter()
+            .all(|projected| {
+                projected.run.alt_drawings.is_empty()
+                    && projected.run.content.iter().all(|content| match content {
+                        RunContent::Text(text) => text.text.is_empty(),
+                        RunContent::DeletedText(_) | RunContent::CommentReference { .. } => true,
+                        RunContent::Tab
+                        | RunContent::Break(_)
+                        | RunContent::Drawing(_)
+                        | RunContent::Field(_)
+                        | RunContent::FootnoteRef { .. }
+                        | RunContent::EndnoteRef { .. }
+                        | RunContent::Symbol { .. }
+                        | RunContent::SpecialCharacter(_) => false,
+                    })
+            })
 }
 
 enum ProjectedParagraphOwner<'a> {
@@ -1984,18 +2054,37 @@ impl Engine {
         // Build sections: each section has blocks + geometry + header/footer
         let mut sections: Vec<paginator::SharedSection> = Vec::new();
         let mut current_blocks: Vec<SharedLayoutBlock> = Vec::new();
-        let mut current_sect_pr: Option<CT_SectPr> = None; // Will be set from paragraph sect_pr
+        let items = main_story_layout_items(&input.document);
+        let item_sections = main_story_item_sections(&items, &final_sect_pr);
 
-        for content in main_story_layout_items(&input.document) {
+        let mut carried: Option<CT_P> = None;
+        for (content, sect_pr_for_layout) in items.into_iter().zip(item_sections) {
             match content {
+                // Accepting a deleted or moved-away paragraph mark joins the
+                // paragraph to the next one, so one with no accepted content
+                // leaves no block, spacing or list number behind.
+                MainStoryLayoutItem::Paragraph(para, path)
+                    if input.revision_view == RevisionView::Accepted
+                        && path.len() == 1
+                        && input.document.body.accepted_paragraph_joins_next(path[0])
+                        && para.equations.is_empty()
+                        && para.bookmark_markers.is_empty() =>
+                {
+                    if !accepted_paragraph_is_blank(para) {
+                        carried = Some(match carried.take() {
+                            Some(prefix) => join_accepted_layout_paragraphs(prefix, para)?,
+                            None => para.accepted_view().into_owned(),
+                        });
+                    }
+                }
                 MainStoryLayoutItem::Paragraph(para, path) => {
+                    let joined = carried
+                        .take()
+                        .map(|prefix| join_accepted_layout_paragraphs(prefix, para))
+                        .transpose()?;
+                    let para = joined.as_ref().unwrap_or(para);
                     // Check if this paragraph ends a section (has sect_pr)
-                    let para_sect_pr = para.properties.as_ref().and_then(|p| p.sect_pr.clone());
-
-                    let sect_pr_for_layout = para_sect_pr
-                        .as_ref()
-                        .or(current_sect_pr.as_ref())
-                        .unwrap_or(&final_sect_pr);
+                    let para_sect_pr = para.properties.as_ref().and_then(|p| p.sect_pr.as_ref());
                     let geometry = sect_pr_to_geometry(sect_pr_for_layout);
 
                     let source = sources.and_then(|sources| {
@@ -2060,14 +2149,14 @@ impl Engine {
                     // If this paragraph has sect_pr, it ends a section
                     if let Some(sect_pr) = para_sect_pr {
                         let geometry = section_page_geometry(
-                            &sect_pr,
+                            sect_pr,
                             input,
                             &mut self.font_manager,
                             &mut diagnostics,
                         );
                         let header_footer = layout_header_footer(
                             self,
-                            &sect_pr,
+                            sect_pr,
                             input,
                             styles,
                             &media,
@@ -2086,16 +2175,19 @@ impl Engine {
                             header_footer,
                             header_footer_semantics,
                             title_pg,
-                            page_number_start: section_page_number_start(&sect_pr),
+                            page_number_start: section_page_number_start(sect_pr),
                         });
-                        current_sect_pr = Some(sect_pr);
                         if let Some(numbering) = input.numbering.as_ref() {
                             num_state.restart_after_section_break(numbering);
                         }
                     }
                 }
+                // Accepting every tracked change removes a table whose rows
+                // are all deleted, so it leaves no block or spacing behind.
+                MainStoryLayoutItem::Table(tbl, _)
+                    if input.revision_view == RevisionView::Accepted
+                        && tbl.accepted_view_removes() => {}
                 MainStoryLayoutItem::Table(tbl, path) => {
-                    let sect_pr_for_layout = current_sect_pr.as_ref().unwrap_or(&final_sect_pr);
                     let geometry = sect_pr_to_geometry(sect_pr_for_layout);
 
                     let mut table_block = self.layout_body_table(
@@ -3632,6 +3724,9 @@ fn table_is_cache_safe(table: &CT_Tbl, styles: &CT_Styles) -> bool {
                 .iter()
                 .all(|(position, raw)| CT_Row::raw_is_root_attributes(*position, raw))
                 && row.content_controls.is_empty()
+                // A row the accepted view leaves out has no block row to
+                // pair with on a cache hit.
+                && !row.accepted_view_removes()
                 && row.properties.as_ref().is_none_or(|properties| {
                     properties.revision_markers.is_empty() && properties.revision_xml.is_empty()
                 })
@@ -7435,56 +7530,62 @@ fn document_has_page_ref(input: &LayoutInput, name: &str) -> bool {
     page_ref_id(input, name).is_some()
 }
 
+/// Visit every paragraph of the main story. The accepted view leaves out the
+/// rows that `CT_Row::accepted_view_removes` reports, as accepting does.
 fn visit_document_paragraphs<'a>(input: &'a LayoutInput, visit: &mut impl FnMut(&'a CT_P)) {
+    let accepted = input.revision_view == RevisionView::Accepted;
     for content in &input.document.body.content {
         match content {
             BodyContent::Paragraph(paragraph) => visit(paragraph),
-            BodyContent::Table(table) => visit_table_paragraphs(table, visit),
+            BodyContent::Table(table) => visit_table_paragraphs(table, accepted, visit),
             BodyContent::ContentControl(control) => {
-                visit_control_paragraphs(control, BlockControlOwner::Body, visit)
+                visit_control_paragraphs(control, BlockControlOwner::Body, accepted, visit)
             }
             BodyContent::RawXml(_) => {}
         }
     }
 }
 
-fn visit_table_paragraphs<'a>(table: &'a CT_Tbl, visit: &mut impl FnMut(&'a CT_P)) {
+fn visit_table_paragraphs<'a>(table: &'a CT_Tbl, accepted: bool, visit: &mut impl FnMut(&'a CT_P)) {
     for boundary in 0..=table.rows.len() {
         for (_, _, control) in table
             .content_controls
             .iter()
             .filter(|(position, _, _)| *position == boundary)
         {
-            visit_control_paragraphs(control, BlockControlOwner::Table, visit);
+            visit_control_paragraphs(control, BlockControlOwner::Table, accepted, visit);
         }
         if let Some(row) = table.rows.get(boundary) {
-            visit_row_paragraphs(row, visit);
+            visit_row_paragraphs(row, accepted, visit);
         }
     }
 }
 
-fn visit_row_paragraphs<'a>(row: &'a CT_Row, visit: &mut impl FnMut(&'a CT_P)) {
+fn visit_row_paragraphs<'a>(row: &'a CT_Row, accepted: bool, visit: &mut impl FnMut(&'a CT_P)) {
+    if accepted && row.accepted_view_removes() {
+        return;
+    }
     for boundary in 0..=row.cells.len() {
         for (_, _, control) in row
             .content_controls
             .iter()
             .filter(|(position, _, _)| *position == boundary)
         {
-            visit_control_paragraphs(control, BlockControlOwner::Row, visit);
+            visit_control_paragraphs(control, BlockControlOwner::Row, accepted, visit);
         }
         if let Some(cell) = row.cells.get(boundary) {
-            visit_cell_paragraphs(cell, visit);
+            visit_cell_paragraphs(cell, accepted, visit);
         }
     }
 }
 
-fn visit_cell_paragraphs<'a>(cell: &'a CT_Tc, visit: &mut impl FnMut(&'a CT_P)) {
+fn visit_cell_paragraphs<'a>(cell: &'a CT_Tc, accepted: bool, visit: &mut impl FnMut(&'a CT_P)) {
     for content in &cell.content {
         match content {
             CellContent::Paragraph(paragraph) => visit(paragraph),
-            CellContent::Table(table) => visit_table_paragraphs(table, visit),
+            CellContent::Table(table) => visit_table_paragraphs(table, accepted, visit),
             CellContent::ContentControl(control) => {
-                visit_control_paragraphs(control, BlockControlOwner::Cell, visit)
+                visit_control_paragraphs(control, BlockControlOwner::Cell, accepted, visit)
             }
         }
     }
@@ -7493,6 +7594,7 @@ fn visit_cell_paragraphs<'a>(cell: &'a CT_Tc, visit: &mut impl FnMut(&'a CT_P)) 
 fn visit_control_paragraphs<'a>(
     control: &'a CT_Sdt,
     owner: BlockControlOwner,
+    accepted: bool,
     visit: &mut impl FnMut(&'a CT_P),
 ) {
     for content in &control.content {
@@ -7502,12 +7604,16 @@ fn visit_control_paragraphs<'a>(
                 SdtContent::Paragraph(paragraph),
             ) => visit(paragraph),
             (BlockControlOwner::Body | BlockControlOwner::Cell, SdtContent::Table(table)) => {
-                visit_table_paragraphs(table, visit)
+                visit_table_paragraphs(table, accepted, visit)
             }
-            (BlockControlOwner::Table, SdtContent::Row(row)) => visit_row_paragraphs(row, visit),
-            (BlockControlOwner::Row, SdtContent::Cell(cell)) => visit_cell_paragraphs(cell, visit),
+            (BlockControlOwner::Table, SdtContent::Row(row)) => {
+                visit_row_paragraphs(row, accepted, visit)
+            }
+            (BlockControlOwner::Row, SdtContent::Cell(cell)) => {
+                visit_cell_paragraphs(cell, accepted, visit)
+            }
             (_, SdtContent::ContentControl(control)) => {
-                visit_control_paragraphs(control, owner, visit)
+                visit_control_paragraphs(control, owner, accepted, visit)
             }
             _ => {}
         }
@@ -10279,6 +10385,49 @@ mod tests {
             projected_paragraph_text(paragraph, RevisionView::Tracked),
             "control inserted deleted tail"
         );
+    }
+
+    #[test]
+    fn a_paragraph_section_governs_the_items_that_precede_it() {
+        // Each paragraph carries its own text, and each section its own page
+        // width, so the resolution reads as pairs. The table and the paragraph
+        // inside the block control take the section they sit in, not the one
+        // the previous break closed.
+        let xml = br#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+            <w:p><w:r><w:t>a</w:t></w:r></w:p>
+            <w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>
+            <w:p><w:pPr><w:sectPr><w:pgSz w:w="1000" w:h="15840"/></w:sectPr></w:pPr><w:r><w:t>b</w:t></w:r></w:p>
+            <w:sdt><w:sdtContent><w:p><w:r><w:t>c</w:t></w:r></w:p></w:sdtContent></w:sdt>
+            <w:p><w:pPr><w:sectPr><w:pgSz w:w="2000" w:h="15840"/></w:sectPr></w:pPr><w:r><w:t>d</w:t></w:r></w:p>
+            <w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>
+            <w:p><w:r><w:t>e</w:t></w:r></w:p>
+            <w:sectPr><w:pgSz w:w="3000" w:h="15840"/></w:sectPr>
+        </w:body></w:document>"#;
+        let document = rdocx_oxml::CT_Document::from_xml(xml).expect("section document parses");
+        let items = main_story_layout_items(&document);
+        let final_section = document.body.sect_pr.as_ref().expect("body section");
+        let resolved = main_story_item_sections(&items, final_section)
+            .into_iter()
+            .zip(&items)
+            .map(|(section, item)| {
+                let label = match item {
+                    MainStoryLayoutItem::Paragraph(paragraph, _) => paragraph.text(),
+                    MainStoryLayoutItem::Table(..) => "table".to_owned(),
+                };
+                (label, section.page_width.map(|width| width.0))
+            })
+            .collect::<Vec<_>>();
+        let expected = [
+            ("a", 1000),
+            ("table", 1000),
+            ("b", 1000),
+            ("c", 2000),
+            ("d", 2000),
+            ("table", 3000),
+            ("e", 3000),
+        ]
+        .map(|(label, width)| (label.to_owned(), Some(width)));
+        assert_eq!(resolved, expected);
     }
 
     #[test]
@@ -17449,6 +17598,88 @@ mod tests {
     }
 
     #[test]
+    fn mixed_sections_use_their_own_measure_before_pagination() {
+        for in_control in [false, true] {
+            let mut input = make_input_with_text("");
+            let mut mixed_body = String::new();
+            let mut expected = Vec::new();
+            for (index, (width, height, left, right)) in [
+                (12240, 15840, 1440, 1440),
+                (15840, 12240, 720, 1080),
+                (12240, 15840, 1800, 2160),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let sect = format!(
+                    "<w:sectPr><w:pgSz w:w=\"{width}\" w:h=\"{height}\"/>\
+                     <w:pgMar w:top=\"1440\" w:bottom=\"1440\" \
+                     w:left=\"{left}\" w:right=\"{right}\"/></w:sectPr>"
+                );
+                let prose =
+                    format!("Section {index} keeps every word within its margins. ").repeat(24);
+                let paragraph = format!("<w:p><w:r><w:t>{prose}</w:t></w:r></w:p>");
+                let table = format!(
+                    "<w:tbl><w:tblPr><w:tblW w:w=\"5000\" w:type=\"pct\"/></w:tblPr>\
+                     <w:tblGrid><w:gridCol w:w=\"0\"/></w:tblGrid><w:tr><w:tc>\
+                     {paragraph}</w:tc></w:tr></w:tbl>"
+                );
+                let blocks = format!("{paragraph}{table}{}", paragraph.repeat(5));
+                let wrap = |body: String| {
+                    if in_control {
+                        format!("<w:sdt><w:sdtContent>{body}</w:sdtContent></w:sdt>")
+                    } else {
+                        body
+                    }
+                };
+                let isolated = format!(
+                    "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+                     <w:body>{}{sect}</w:body></w:document>",
+                    wrap(format!("{blocks}<w:p/>"))
+                );
+                input.document = CT_Document::from_xml(isolated.as_bytes()).expect("section XML");
+                let result = deterministic_layout(&input);
+                assert!(result.pages.len() > 1, "fixture exercises pagination");
+                for page in &result.pages {
+                    assert!(
+                        text_extents(page).iter().all(|(start, end)| {
+                            *start >= f64::from(left) / 20.0 - 0.01
+                                && *end <= f64::from(width - right) / 20.0 + 0.01
+                        }),
+                        "isolated section text fits its margins"
+                    );
+                }
+                expected.extend(result.pages);
+                if index < 2 {
+                    mixed_body.push_str(&wrap(format!("{blocks}<w:p><w:pPr>{sect}</w:pPr></w:p>")));
+                } else {
+                    mixed_body.push_str(&wrap(format!("{blocks}<w:p/>")));
+                    mixed_body.push_str(&sect);
+                }
+            }
+            let xml = format!(
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+                 <w:body>{mixed_body}</w:body></w:document>"
+            );
+            input.document = CT_Document::from_xml(xml.as_bytes()).expect("mixed section XML");
+            let actual = deterministic_layout(&input);
+            assert_eq!(actual.pages.len(), expected.len(), "section pagination");
+            for (page, reference) in actual.pages.iter().zip(&expected) {
+                assert_eq!(
+                    (page.width, page.height),
+                    (reference.width, reference.height)
+                );
+                assert_eq!(
+                    page_text(page),
+                    page_text(reference),
+                    "page text and wrapping"
+                );
+                assert_eq!(text_extents(page), text_extents(reference), "line measure");
+            }
+        }
+    }
+
+    #[test]
     fn layout_simple_document() {
         let input = make_input_with_text("Hello World");
         let result = Engine::new().layout(&input);
@@ -19072,13 +19303,17 @@ mod tests {
         }
     }
 
-    /// The x origin and right edge of every body text run, by line.
+    /// The x origin and right edge of the body text ink, by line. A space
+    /// hanging past the end of a line is not ink.
     fn text_extents(page: &oxml_layout::output::PageFrame) -> Vec<(f64, f64)> {
         let mut by_line: Vec<(f64, f64, f64)> = Vec::new();
         for element in compatibility_page_elements(page) {
             let PositionedElement::Text(run) = element else {
                 continue;
             };
+            if run.text.trim().is_empty() {
+                continue;
+            }
             let right = run.origin.x + run.advances.iter().sum::<f64>();
             if let Some(entry) = by_line
                 .iter_mut()
