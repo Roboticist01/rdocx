@@ -17114,3 +17114,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged on the worker and integrated prefix, all 49 entries match.
 
 **Notes for future sessions.** F-X167 may start on this prefix. Issues 254 and 255 remain open until F-X168 checks the complete integrated criteria and `/close-sprint` reaches main. Keep `work/f-x166-codex` through sprint verification and review.
+
+### F-X170, High-level Word style formatting API
+
+**Sprint.** S84
+**Completed.** 2026-10-03
+**Size.** M, estimated 3 days, actual 1 day
+
+**What was built.** Added fluent `StyleBuilder` methods for alignment, space before and after, left indent, font, size, bold and colour. Existing `Document` style creation, update, removal, lookup and default selection remain the management surface. A public README example and regression tests prove common formatting survives save and reopen and resolves on document content for Issue 264.
+
+**Non-obvious choices.** Setting an explicit font fills all four script slots and clears inherited theme font references. Setting an explicit colour clears the theme colour, tint and shade. The builder's clear mask widened to hold those two clear operations while preserving typed property methods. The F-X166 integration later remeasured the combined `rdocx` archive, so the current README measurement covers both stories.
+
+**Deviations from the design plan.** None. No new crate, module, trait, generic or feature flag was introduced.
+
+**Spec sections touched.** `docs/hld/10-bindings-spec.md`, native style builder convenience formatting.
+
+**Tests.** The worker passed 486 Word unit, 333 integration and 724 regression tests, scoped Clippy, formatting, README doctests, 132 policy tests, package dry run, prose and generated-skill checks. Microscope pass 1 found zero defects and zero smells. The combined S84 prefix passed both style regressions, the README package inventory and four public examples, and the 49-entry hash harness. Full verification and sprint review remain due.
+
+**Hash harness.** Unchanged on the worker and combined prefix, all 49 entries match.
+
+**Notes for future sessions.** Issue 264 remains open until F-X168 checks the API criterion on the complete S84 result and `/close-sprint` reaches main. Keep `work/f-x170-codex` through sprint verification and review.

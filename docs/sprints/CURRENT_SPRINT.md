@@ -33,7 +33,7 @@ then run one full verification and sprint review over the combined result.
 | F-X165 | Python and CLI tracked revision view | M | done | - |
 | F-X166 | Picture and final-block comparison revisions | L | done | - |
 | F-X167 | Accepted-view exporters and readers | L | in-progress | codex |
-| F-X170 | High-level Word style formatting API | M | in-progress | codex |
+| F-X170 | High-level Word style formatting API | M | done | - |
 | F-X168 | Current issue and contribution closure evidence | M | pending | - |
 
 ## Sequencing note
