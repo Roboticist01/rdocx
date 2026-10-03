@@ -18826,6 +18826,193 @@ fn document_text_reports_the_accepted_view_of_tracked_changes() {
 }
 
 #[test]
+fn accepted_exporters_match_resolved_deleted_paragraph_after_reopen() {
+    let xml = wrap_word_body(concat!(
+        r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#,
+        r#"<w:p><w:pPr><w:rPr><w:del w:id="91" w:author="Ada"/></w:rPr></w:pPr><w:del w:id="92" w:author="Ada"><w:r><w:delText>Gone</w:delText></w:r></w:del></w:p>"#,
+        r#"<w:p><w:r><w:t>Omega</w:t></w:r></w:p>"#,
+    ));
+    let mut source = document_with_content_controls(&xml);
+    let bytes = source.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+}
+
+#[test]
+fn accepted_nonempty_deleted_mark_matches_resolved_pdf_geometry() {
+    let xml = wrap_word_body(concat!(
+        r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#,
+        r#"<w:p><w:pPr><w:rPr><w:del w:id="91" w:author="Ada"/></w:rPr></w:pPr><w:r><w:t xml:space="preserve">Joined </w:t></w:r></w:p>"#,
+        r#"<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:bookmarkStart w:id="17" w:name="joined"/><w:sdt><w:sdtContent><w:r><w:t>Omega</w:t></w:r></w:sdtContent></w:sdt><w:bookmarkEnd w:id="17"/></w:p>"#,
+    ));
+    let mut source = document_with_content_controls(&xml);
+    let bytes = source.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+    let geometry = |document: &Document| {
+        let result = document.layout_deterministic().unwrap();
+        let mut text = Vec::new();
+        for page in &result.layout.pages {
+            oxml_layout::walk(&page.elements, &mut |element, _| {
+                if let oxml_layout::PositionedElement::Text(run) = element
+                    && !run.text.trim().is_empty()
+                {
+                    text.push((
+                        run.text.trim().to_owned(),
+                        (run.origin.y * 100.0).round() / 100.0,
+                    ));
+                }
+            });
+        }
+        text
+    };
+    assert_eq!(geometry(&reopened), geometry(&accepted));
+}
+
+#[test]
+fn accepted_deleted_row_exports_match_resolved_after_reopen() {
+    let mut original = Document::new();
+    original.add_paragraph("Alpha");
+    let mut table = original.add_table(2, 1);
+    table.cell(0, 0).unwrap().set_text("KEEP");
+    table.cell(1, 0).unwrap().set_text("GONE");
+    original.add_paragraph("Omega");
+    let mut edited = Document::new();
+    edited.add_paragraph("Alpha");
+    edited.add_table(1, 1).cell(0, 0).unwrap().set_text("KEEP");
+    edited.add_paragraph("Omega");
+    original
+        .compare(&edited, "Ada", "2026-09-30T00:00:00Z")
+        .unwrap();
+    let bytes = original.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+    assert_eq!(reopened.word_count(), accepted.word_count());
+    let fragments = |document: &Document| {
+        let result = document.layout_deterministic().unwrap();
+        (0..document.content_count())
+            .map(|index| {
+                result
+                    .body_layout_fragments(index)
+                    .unwrap()
+                    .iter()
+                    .map(|fragment| (fragment.y * 100.0).round() / 100.0)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(fragments(&reopened), fragments(&accepted));
+}
+
+#[test]
+fn accepted_deleted_table_and_nested_row_match_resolved_after_reopen() {
+    let xml = wrap_word_body(concat!(
+        r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#,
+        r#"<w:tbl><w:tr><w:trPr><w:del w:id="1" w:author="Ada"/></w:trPr><w:tc><w:p><w:r><w:t>GONE</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+        r#"<w:p><w:r><w:t>Omega</w:t></w:r></w:p>"#,
+    ));
+    let mut source = document_with_content_controls(&xml);
+    let bytes = source.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+    assert!(!reopened.to_html_fragment().contains("table"));
+    let layout = reopened.layout_deterministic().unwrap();
+    assert!(layout.body_layout_fragments(1).unwrap().is_empty());
+    let last_y = |document: &Document| {
+        let result = document.layout_deterministic().unwrap();
+        let mut y = None;
+        for page in &result.layout.pages {
+            oxml_layout::walk(&page.elements, &mut |element, _| {
+                if let oxml_layout::PositionedElement::Text(run) = element
+                    && run.text.contains("Omega")
+                {
+                    y = Some(run.origin.y);
+                }
+            });
+        }
+        y
+    };
+    assert_eq!(last_y(&reopened), last_y(&accepted));
+}
+
+#[test]
+fn accepted_nested_and_control_rows_match_resolved_after_reopen() {
+    let xml = wrap_word_body(concat!(
+        r#"<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>"#,
+        r#"<w:tr><w:tc><w:p><w:r><w:t>KEEP</w:t></w:r></w:p>"#,
+        r#"<w:tbl><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid>"#,
+        r#"<w:tr><w:tc><w:p><w:r><w:t>INNER</w:t></w:r></w:p></w:tc></w:tr>"#,
+        r#"<w:tr><w:trPr><w:del w:id="1" w:author="Ada"/></w:trPr><w:tc><w:p><w:r><w:t>INNER-GONE</w:t></w:r></w:p></w:tc></w:tr>"#,
+        r#"</w:tbl><w:p/></w:tc></w:tr>"#,
+        r#"<w:sdt><w:sdtContent><w:tr><w:trPr><w:del w:id="2" w:author="Ada"/></w:trPr><w:tc><w:p><w:r><w:t>CONTROL-GONE</w:t></w:r></w:p></w:tc></w:tr></w:sdtContent></w:sdt>"#,
+        r#"</w:tbl>"#,
+    ));
+    let mut source = document_with_content_controls(&xml);
+    let bytes = source.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+    assert!(!reopened.text().contains("GONE"));
+    let geometry = |document: &Document| {
+        let result = document.layout_deterministic().unwrap();
+        let mut text = Vec::new();
+        for page in &result.layout.pages {
+            oxml_layout::walk(&page.elements, &mut |element, _| {
+                if let oxml_layout::PositionedElement::Text(run) = element
+                    && !run.text.trim().is_empty()
+                {
+                    text.push((
+                        run.text.trim().to_owned(),
+                        (run.origin.x * 100.0).round() / 100.0,
+                        (run.origin.y * 100.0).round() / 100.0,
+                    ));
+                }
+            });
+        }
+        text
+    };
+    assert_eq!(geometry(&reopened), geometry(&accepted));
+}
+
+#[test]
+fn accepted_table_with_only_control_owned_rows_matches_resolved() {
+    let xml = wrap_word_body(concat!(
+        r#"<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>"#,
+        r#"<w:sdt><w:sdtContent><w:tr><w:tc><w:p><w:r><w:t>KEEP</w:t></w:r></w:p></w:tc></w:tr></w:sdtContent></w:sdt>"#,
+        r#"<w:sdt><w:sdtContent><w:tr><w:trPr><w:del w:id="1" w:author="Ada"/></w:trPr><w:tc><w:p><w:r><w:t>GONE</w:t></w:r></w:p></w:tc></w:tr></w:sdtContent></w:sdt>"#,
+        r#"</w:tbl>"#,
+    ));
+    let mut source = document_with_content_controls(&xml);
+    let bytes = source.to_bytes().unwrap();
+    let reopened = Document::from_bytes(&bytes).unwrap();
+    let mut accepted = Document::from_bytes(&bytes).unwrap();
+    accepted.accept_all().unwrap();
+    assert_eq!(reopened.text(), accepted.text());
+    assert_eq!(reopened.to_html_fragment(), accepted.to_html_fragment());
+    assert_eq!(reopened.to_markdown(), accepted.to_markdown());
+}
+
+#[test]
 fn targetless_revision_only_hyperlinks_keep_sibling_order_when_resolved() {
     let xml = wrap_word_body(
         r#"<w:p><w:hyperlink><w:ins w:id="21" w:author="Ada"><w:r><w:t>H</w:t></w:r></w:ins></w:hyperlink><w:del w:id="22" w:author="Ben"><w:r><w:delText>B</w:delText></w:r></w:del><w:ins w:id="23" w:author="Cy"><w:r><w:t>C</w:t></w:r></w:ins><w:hyperlink><w:del w:id="24" w:author="Dee"><w:r><w:delText>D</w:delText></w:r></w:del></w:hyperlink></w:p>"#,

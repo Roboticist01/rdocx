@@ -1528,6 +1528,16 @@ wrapper it flattens or leaves out, and reports the losses of the content it
 writes as it does outside them.
 Each paragraph contributes the same accepted-view text as paragraph text, so
 tracked insertions are included and tracked deletions are left out.
+The OOXML model owns accepted structural visibility. A deleted or moved-away
+body paragraph mark joins its paragraph to the next direct body paragraph
+unless a section break or intervening block prevents that join. Text omits the
+joining newline, while HTML and Markdown emit one block with the following
+paragraph's block properties. Accepted layout omits an empty joining
+paragraph and lays out retained joined content in the following block.
+Deleted or moved-away table rows are absent from accepted text, JSON, HTML,
+Markdown, MHTML picture traversal and layout. A table whose rows are all
+removed contributes no accepted block or spacing. Source model rows and
+editing indices remain intact, and tracked layout still shows them.
 The WASM binding uses `Document::text` for its existing `getText` method and
 otherwise owns one complete `Document`. It never reaches into
 `rdocx-oxml` or maintains a second package representation.

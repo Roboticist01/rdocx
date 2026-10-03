@@ -1469,6 +1469,17 @@ sides. It forces single underline on insertion and move destination text and
 single strike on deletion and move source text while retaining the remaining
 resolved formatting.
 
+In the accepted view, a body paragraph whose mark is deleted or moved away
+joins the next direct body paragraph when no section break or intervening
+block prevents the join. A joining paragraph with no accepted content leaves
+no line, list label, outline entry, page break or spacing. Retained content
+is laid out with the following paragraph's properties and shares its line.
+The tracked view retains both paragraphs. Accepted table layout leaves out
+deleted or moved-away rows, including nested rows and rows inside controls,
+and leaves out a table whose rows are all removed. Remaining row source paths
+keep their model indices. Warm layout does not reuse a table cache when a row
+is removed from its accepted projection.
+
 A compared picture replacement holds deleted and inserted drawings in the
 tracked view. The accepted view shows the edited media and the rejected
 document shows the original media. A final table followed by a paragraph
