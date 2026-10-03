@@ -17134,3 +17134,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** Unchanged on the worker and combined prefix, all 49 entries match.
 
 **Notes for future sessions.** Issue 264 remains open until F-X168 checks the API criterion on the complete S84 result and `/close-sprint` reaches main. Keep `work/f-x170-codex` through sprint verification and review.
+
+### F-X167, Accepted-view exporters and readers
+
+**Sprint.** S84
+**Completed.** 2026-10-03
+**Size.** L, estimated 5 days, actual 1 day
+
+**What was built.** Reconciled PRs 259, 262 and 263 on the F-X165 and F-X166 prefix. Accepted text, CLI JSON, HTML, Markdown and PDF layout now join a paragraph whose mark was deleted or moved away to the next direct paragraph. Deleted and moved-away table rows are omitted across those outputs and media traversal. The source model and editing indices remain intact.
+
+**Non-obvious choices.** A joining paragraph with no accepted content contributes no layout block or spacing. Retained content uses the following paragraph's block properties. Rows inside table content controls follow the same visibility rule, and a table with no retained rows contributes no block. The worker added regressions for these nested cases after microscope findings. Package archive measurements cover the final source.
+
+**Deviations from the design plan.** The final CLI JSON review found a nonempty deleted-mark paragraph still emitted separately. The worker fixed it and added saved and reopened parity against `accept_all()` before the zero-finding third review.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, accepted structural visibility, and `docs/hld/08-rendering-spec.md`, accepted layout and table rows.
+
+**Tests.** The worker passed 175 Python binding tests, 132 policy tests, the affected Rust crates, README and package gates, scoped Clippy and formatting. Microscope pass 3 found zero defects and zero smells. The integrated sprint tree passed the CLI JSON parity regression, prose and skill checks, and the 49-entry hash harness. Full S84 verification and sprint review remain due.
+
+**Hash harness.** Unchanged on the worker and integrated prefix, all 49 entries match.
+
+**Notes for future sessions.** F-X168 may start on this completed prefix. Issue 253 remains open until the complete integrated acceptance matrix is checked on main. Keep `work/f-x167-codex` through sprint verification and review.

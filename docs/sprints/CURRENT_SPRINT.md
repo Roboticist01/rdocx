@@ -2,7 +2,7 @@
 
 **Milestone**: X, contribution intake and issue repair.
 
-**Goal**: finish the live contributor queue and all eight open issue contracts
+**Goal**: finish the live contributor queue and all nine open issue contracts
 in one integrated repair sprint. Complete each F-ID's scoped checks and review,
 then run one full verification and sprint review over the combined result.
 
@@ -32,7 +32,7 @@ then run one full verification and sprint review over the combined result.
 | F-X164 | Added shape theme style | M | done | - |
 | F-X165 | Python and CLI tracked revision view | M | done | - |
 | F-X166 | Picture and final-block comparison revisions | L | done | - |
-| F-X167 | Accepted-view exporters and readers | L | in-progress | codex |
+| F-X167 | Accepted-view exporters and readers | L | done | - |
 | F-X170 | High-level Word style formatting API | M | done | - |
 | F-X168 | Current issue and contribution closure evidence | M | pending | - |
 
