@@ -17094,3 +17094,23 @@ closure. The 18-page Word SSIM trend is advisory and below its target.
 **Hash harness.** The worker's 49 Word entries matched. Presentation pins were re-recorded in a separate worker commit. The combined S84 gate must rerun all hashes and affected visual baselines.
 
 **Notes for future sessions.** Issue 244 remains open until the second-machine animation and final integrated evidence gate pass. Keep `work/f-x164-codex` through sprint verification and review.
+
+### F-X166, Picture and final-block comparison revisions
+
+**Sprint.** S84
+**Completed.** 2026-10-03
+**Size.** L, estimated 5 days, actual 2 days
+
+**What was built.** Reconciled PRs 257, 258, 260 and 261 against the F-X165 prefix. Comparison now tracks picture replacements by media payload and preserves both accept and reject relationships. Final table and paragraph changes carry marks on the right row, cell and paragraph owners. Acceptance and rejection preserve the correct paragraph and mark properties after save and reopen.
+
+**Non-obvious choices.** The F-X163 and F-X166 regression tails were both retained during integration. The F-X170 and F-X166 package measurements were replaced with one remeasurement of the combined archive. Word for Mac 16.113.2 accepted and rejected every generated redline, with 80 saved outcomes audited against the original and edited source packages. Word normalizes explicit false paragraph-mark bold values to absent values without changing their effect.
+
+**Deviations from the design plan.** The combined README archive measurement changed after F-X170 integration. The source behavior and HLD impact stayed within the approved plan.
+
+**Spec sections touched.** `docs/hld/03-architecture.md`, property and final-block revision ownership, `docs/hld/04-opc-and-packaging.md`, picture media preservation, and `docs/hld/08-rendering-spec.md`, tracked and resolved views.
+
+**Tests.** The worker passed the rdocx unit, integration and regression suites, 84 Python core tests, scoped Clippy, formatting, README doctests, policy, prose and generated-skill gates. Microscope pass 3 found zero defects and zero smells. Word for Mac passed 24 of 24 picture, 40 of 40 core final-block and 16 of 16 styled accept and reject outcomes. The integrated prefix passed eight focused Issue 254 and 255 regressions with an 8 MiB Rust test thread stack, both F-X170 style tests, README package inventory and four root examples, formatting, prose, skill sync and the hash harness. Full S84 verification and sprint review remain due.
+
+**Hash harness.** Unchanged on the worker and integrated prefix, all 49 entries match.
+
+**Notes for future sessions.** F-X167 may start on this prefix. Issues 254 and 255 remain open until F-X168 checks the complete integrated criteria and `/close-sprint` reaches main. Keep `work/f-x166-codex` through sprint verification and review.

@@ -31,7 +31,7 @@ then run one full verification and sprint review over the combined result.
 | F-X163 | Plain-line trailing-space fit | M | done | - |
 | F-X164 | Added shape theme style | M | done | - |
 | F-X165 | Python and CLI tracked revision view | M | done | - |
-| F-X166 | Picture and final-block comparison revisions | L | in-progress | codex |
+| F-X166 | Picture and final-block comparison revisions | L | done | - |
 | F-X167 | Accepted-view exporters and readers | L | pending | - |
 | F-X170 | High-level Word style formatting API | M | in-progress | codex |
 | F-X168 | Current issue and contribution closure evidence | M | pending | - |
