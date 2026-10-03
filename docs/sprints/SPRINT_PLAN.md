@@ -1708,6 +1708,7 @@ on the combined result.
 | F-X165 | Python and CLI tracked revision view | M |
 | F-X166 | Picture and final-block comparison revisions | L |
 | F-X167 | Accepted-view exporters and readers | L |
+| F-X170 | High-level Word style formatting API | M |
 | F-X168 | Current issue and contribution closure evidence | M |
 
 F-X169 classifies all 31 open PRs against integrated main before implementation.
@@ -1721,19 +1722,20 @@ F-X163 follows F-X162 with PR 242, its separate hash delta and golden pixel
 manifest. The three baseline changes are exclusive and reviewed in order.
 F-X164 reviews PR 252 independently after intake, with python-pptx and viewer
 checks. F-X165 reviews PR 256, then F-X166 reconciles PRs 257, 258, 260 and
-261. F-X167 follows F-X165 and F-X166 with PRs 259, 262 and 263. F-X168
+261. F-X167 follows F-X165 and F-X166 with PRs 259, 262 and 263. F-X170
+addresses Issue 264, opened after the 2 October intake, independently. F-X168
 checks every open issue against the final integrated result. Formal
 prerequisites complete through scoped checkpoints before their consumers
 start. These checkpoints do not run the full workspace or sprint review.
 
-The nine F-IDs represent about 26 to 35 estimated developer-days, above the
+The ten F-IDs represent about 29 to 38 estimated developer-days, above the
 normal sprint size by request. Keep their approved designs, individual
 microscope reviews and scoped verification. Run the union of risk riders,
 source-built round trips, reporter fixtures, the 18 by 7 identity and 11 by 8
 producer matrices, Python and CLI checks, deterministic Word and PowerPoint
 comparisons, the hash harness, `/verify --full` and `/sprint-review` once on
 the final integrated S84 result. After `/close-sprint` merges that result to
-main, close all 31 open PRs and eight open issues from the 2 October intake
+main, close all 31 open PRs and nine open issues through the 3 October refresh
 with evidence links. Feature work resumes at S85.
 
 #### Live contribution and issue inventory, 2 October 2026
@@ -1828,10 +1830,18 @@ conflicting bases, and the untested combined result block direct PR merges.
 | [#254](https://github.com/tensorbee/rdocx/issues/254) | #257 | All three picture cases work at run and word granularities, retain both media parts, and accept or reject to the correct image, caption and size. Repeat the contributor's Word for Mac check on the integrated result. | F-X166, F-X168 |
 | [#255](https://github.com/tensorbee/rdocx/issues/255) | #258, #260, #261 | All five final-table pairs work at run and word granularities, accept and reject to exact paragraphs, tables and properties, and open in Word with inserted or deleted table marks. | F-X166, F-X168 |
 
+The 3 October refresh found [#264](https://github.com/tensorbee/rdocx/issues/264),
+a new open feature request with no PR or comments. `StyleBuilder` and
+`Document` already create, update and manage styles, but simple style formatting
+still requires raw `CT_PPr` and `CT_RPr` values. F-X170 owns a focused facade
+for common paragraph and run settings, with a save and reopen example. F-X168
+must verify the API before closing #264. The PR count and all recorded heads
+remain unchanged at 31.
+
 An issue without a direct PR is #158, the umbrella acceptance contract. All
-eight issues stay open until every criterion passes on integrated main. The
+eight issues from the 2 October intake stay open until every criterion passes on integrated main. The
 S84 consolidation exceeds one normal sprint. F-X169 records live intake,
-F-X161 through F-X167 implement the remaining slices, and F-X168 closes the
+F-X161 through F-X167 and F-X170 implement the remaining slices, and F-X168 closes the
 evidence ledger last.
 Each F-ID requires focused tests, applicable oracle and risk checks, scoped
 verification and a zero-finding microscope. After all increments integrate,

@@ -33,14 +33,15 @@ then run one full verification and sprint review over the combined result.
 | F-X165 | Python and CLI tracked revision view | M | done | - |
 | F-X166 | Picture and final-block comparison revisions | L | in-progress | codex |
 | F-X167 | Accepted-view exporters and readers | L | pending | - |
+| F-X170 | High-level Word style formatting API | M | pending | - |
 | F-X168 | Current issue and contribution closure evidence | M | pending | - |
 
 ## Sequencing note
 
 F-X169 completes intake first. F-X161, F-X164 and F-X165 depend on it.
 F-X162 follows F-X161, then F-X163 follows F-X162. F-X166 follows F-X165,
-and F-X167 follows both F-X165 and F-X166. F-X168 checks all completed work
-last. Use scoped dependency-prefix checkpoints so consumers start only after
+and F-X167 follows both F-X165 and F-X166. F-X170 addresses new Issue 264
+independently. F-X168 checks all completed work last. Use scoped dependency-prefix checkpoints so consumers start only after
 their prerequisites complete. F-X161, F-X162 and F-X163 own three separate,
 sequential hash baseline changes. The final full gate runs once.
 
@@ -48,10 +49,10 @@ sequential hash baseline changes. The final full gate runs once.
 
 - Every open PR has a reviewed incremental disposition against integrated
   main, including stacked commits and shared-file reconciliation.
-- Issues 158, 160, 226, 244, 245 and 253 through 255 meet every acceptance
+- Issues 158, 160, 226, 244, 245, 253 through 255 and 264 meet every acceptance
   criterion on the integrated result, with viewer evidence where required.
 - The three hash changes and the golden pixel update are individually labelled
   and reviewed. The fixture workflows, producer and identity matrices, scoped
   checks, final hash harness, `/verify --full` and `/sprint-review` pass.
 - After `/close-sprint` merges the reviewed result to main, all 31 open PRs
-  and eight open issues in the 2 October intake are closed with evidence links.
+  and nine open issues through the 3 October refresh are closed with evidence links.

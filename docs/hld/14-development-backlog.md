@@ -38,8 +38,9 @@ spreadsheet programme. Four S70 cross-cutting stories add roughly 12 days for
 the confirmed Issue 67 closure and the three independently measured Issue 69
 performance corrections.
 
-F-X137 through F-X169 form a contribution and issue repair programme across
-S76 through S84. The 2 October intake has 31 open PRs and 8 open issues.
+F-X137 through F-X170 form a contribution and issue repair programme across
+S76 through S84. The 2 October intake had 31 open PRs and 8 open issues.
+Issue 264 joined on 2 October after that intake and is included in S84.
 The new tolerance, baseline, revision and accepted-view work continues after
 the original S82 acceptance wave. These are cross-cutting stories, separate
 from the 47 planned M24 feature stories. Their shared files and full issue
@@ -6360,19 +6361,33 @@ paragraph and row visibility without losing retained content.
 **Test gate**: regression. Every accepted-view output agrees after save and
 reopen, and the Python bindings gate that fails on PR 259 is green.
 
+### F-X170, High-level Word style formatting API (M)
+
+Address Issue 264 with convenient paragraph and run formatting methods on the
+existing `StyleBuilder`. Keep `Document` style create, update, lookup, default
+selection and removal as the management surface. Demonstrate a custom style
+that sets alignment, spacing, indentation, font, size, bold and colour without
+constructing `CT_PPr` or `CT_RPr` directly. Preserve the typed property escape
+hatch and imported unmodelled XML. Save, reopen and resolve the effective style
+against the authored paragraph and run.
+**Depends on**: F-246, F-X169.
+**Test gate**: round-trip. The convenient settings survive save and reopen,
+apply to document content and match their typed property equivalents.
+
 ### F-X168, Current issue and contribution closure evidence (M)
 
 Reconcile the eight open issues and 31 open PRs from the 2 October GitHub snapshot
+and Issue 264 from the 3 October refresh
 against their full criteria and the integrated S76 to S84 result. Record
 contributor comments and manual viewer checks. After the reviewed sprint is
 merged to main through `/close-sprint`, close every issue and PR only with
 its complete acceptance and contributor disposition evidence. Issue 158
 closes last after every child criterion passes.
-**Depends on**: F-X149, F-X158, F-X160 through F-X167, F-X169.
+**Depends on**: F-X149, F-X158, F-X160 through F-X167, F-X169, F-X170.
 **Test gate**: integration. Every issue criterion and PR disposition has a
 prepared evidence link or an explicit final integrated check. Complete the
 remaining full verification and sprint review at the S84 boundary. After
-`/close-sprint` merges that result to main, close all eight issues and 31 PRs
+`/close-sprint` merges that result to main, close all nine issues and 31 PRs
 with links to the verified evidence.
 
 ### F-X169, Reconcile live contributions and open issue contracts (L)
