@@ -1838,6 +1838,10 @@ for common paragraph and run settings, with a save and reopen example. F-X168
 must verify the API before closing #264. The PR count and all recorded heads
 remain unchanged at 31.
 
+| New open issue | PR coverage | Remaining acceptance and closure evidence | F-ID |
+|---|---|---|---|
+| [#264](https://github.com/tensorbee/rdocx/issues/264) | None | Show convenient style creation and management through the existing `Document` surface, configure common paragraph and run formatting without constructing `CT_PPr` or `CT_RPr`, and prove that an applied style survives save and reopen. | F-X170, F-X168 |
+
 An issue without a direct PR is #158, the umbrella acceptance contract. All
 eight issues from the 2 October intake stay open until every criterion passes on integrated main. The
 S84 consolidation exceeds one normal sprint. F-X169 records live intake,
