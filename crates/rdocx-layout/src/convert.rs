@@ -77,6 +77,7 @@ pub(crate) fn underline(value: Option<ST_Underline>) -> Option<Underline> {
         ST_Underline::DotDash => Some(Underline::DotDash),
         ST_Underline::DotDotDash => Some(Underline::DotDotDash),
         ST_Underline::Wave => Some(Underline::Wave),
+        ST_Underline::DottedHeavy => Some(Underline::DottedHeavy),
     })
 }
 

@@ -88,6 +88,7 @@ pub enum ST_Underline {
     DotDash,
     DotDotDash,
     Wave,
+    DottedHeavy
 }
 
 impl ST_Underline {
@@ -103,6 +104,7 @@ impl ST_Underline {
             "dotDash" => Ok(ST_Underline::DotDash),
             "dotDotDash" => Ok(ST_Underline::DotDotDash),
             "wave" => Ok(ST_Underline::Wave),
+            "dottedHeavy" => Ok(ST_Underline::DottedHeavy),
             _ => Err(OxmlError::InvalidValue(format!(
                 "invalid ST_Underline: {s}"
             ))),
@@ -121,6 +123,7 @@ impl ST_Underline {
             ST_Underline::DotDash => "dotDash",
             ST_Underline::DotDotDash => "dotDotDash",
             ST_Underline::Wave => "wave",
+            ST_Underline::DottedHeavy => "dottedHeavy",
         }
     }
 }

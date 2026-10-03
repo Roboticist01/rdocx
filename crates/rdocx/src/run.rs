@@ -446,6 +446,7 @@ fn underline_to_code(value: ST_Underline) -> i32 {
         ST_Underline::DotDash => 9,
         ST_Underline::DotDotDash => 10,
         ST_Underline::Wave => 11,
+        ST_Underline::DottedHeavy => 12,
     }
 }
 

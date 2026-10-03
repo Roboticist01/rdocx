@@ -59,6 +59,7 @@ pub enum Underline {
     DotDash,
     DotDotDash,
     Wave,
+    DottedHeavy,
 }
 
 /// Line height rule.
