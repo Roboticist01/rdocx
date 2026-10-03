@@ -1,6 +1,6 @@
 # F-X166, Picture and final-block comparison revisions
 
-**Status**: approved
+**Status**: completed
 **Sprint**: S84
 **Size**: L
 **Depends on**: F-X145, F-X165
@@ -67,10 +67,10 @@ harness, declare the exact entries before recording a separate baseline commit.
 
 ## Implementation checklist
 
-- [ ] Review and reconcile PRs 257, 258, 260 and 261 in stack order.
-- [ ] Preserve picture media and final-block revision ownership.
-- [ ] Verify the complete Issue 254 and 255 matrices in Word for Mac.
-- [ ] Pass focused tests, risk riders, scoped verification and microscope.
+- [x] Review and reconcile PRs 257, 258, 260 and 261 in stack order.
+- [x] Preserve picture media and final-block revision ownership.
+- [x] Verify the complete Issue 254 and 255 matrices in Word for Mac.
+- [x] Pass focused tests, risk riders, scoped verification and microscope.
 
 ## Open questions
 

@@ -1367,8 +1367,14 @@ package's main-document bytes are authoritative. Exact source spans flow through
 body items, paragraphs, tables, rows, cells, controls, and runs, including when
 another child of the same owner changes. An unchanged drawing-bearing run keeps
 its complete wrapper, local namespace declarations, extended drawing children,
-and relationship identifier. Policy
-projection removes only the selected comparison facts. Ignored formatting,
+and relationship identifier. Compared pictures align by the bytes of their
+relationship targets. A changed picture keeps the original media for rejection
+and carries the edited media only when tracked content references it. A
+repeated image may use a new relationship to an existing media part, so the
+redline keeps one part per distinct payload. Imported media retains the edited
+content type, and the complete package is reopened before either resolution is
+checked. Policy projection removes only the selected comparison facts. Ignored
+formatting,
 textual whitespace, fields, comments, and story categories retain the original
 bytes. Character and word alignment carries source ownership and raw-child
 boundaries, keeps non-text content atomic, and emits each preserved child once.

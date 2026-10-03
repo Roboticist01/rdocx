@@ -1469,6 +1469,13 @@ sides. It forces single underline on insertion and move destination text and
 single strike on deletion and move source text while retaining the remaining
 resolved formatting.
 
+A compared picture replacement holds deleted and inserted drawings in the
+tracked view. The accepted view shows the edited media and the rejected
+document shows the original media. A final table followed by a paragraph
+keeps row, cell text, and paragraph-mark revisions on their owning elements.
+Resolving either side preserves the paragraph and mark properties of the
+paragraph before the change, including after a final paragraph move.
+
 Provenance ranges are local to this selected projection. The field model's
 `Field::projected_text` decision is the single owner of whether a field cache
 advances a run's projection offset, which prevents repeated cached and literal
